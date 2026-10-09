@@ -7,15 +7,29 @@ DeviceFilter::DeviceFilter(QObject *parent) : QSortFilterProxyModel(parent)
 }
 void DeviceFilter::setQuery(const QString &query, bool deep)
 {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
+    beginFilterChange();
+#endif
     query_ = query;
     deep_ = deep;
     matches_.clear();
+#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
+    endFilterChange(Direction::Rows);
+#else
     invalidateFilter();
+#endif
 }
 void DeviceFilter::addMatches(const QVector<SearchMatch> &matches)
 {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
+    beginFilterChange();
+#endif
     for (const SearchMatch &match : matches) matches_.insert(match.path, match);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
+    endFilterChange(Direction::Rows);
+#else
     invalidateFilter();
+#endif
 }
 bool DeviceFilter::filterAcceptsRow(int row, const QModelIndex &parent) const
 {

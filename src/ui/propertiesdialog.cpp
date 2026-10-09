@@ -1,4 +1,5 @@
 #include "propertiesdialog.h"
+#include "devicelabel.h"
 #include <QApplication>
 #include <QCheckBox>
 #include <QClipboard>
