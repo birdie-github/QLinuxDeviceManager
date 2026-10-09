@@ -46,3 +46,37 @@ preferred to generic shared USB model labels. CPU models are matched to the
 numeric processor record in /proc/cpuinfo, not inferred from the first CPU or
 from global board fields. An unavailable or oversized file preserves readable
 kernel-name fallbacks and explicit read states.
+
+## Function descriptions for unresolved devices
+
+The naming priority remains direct device identity/model metadata first, then
+selected direct sysfs strings, exact standard ACPI/PNP IDs, optional module
+descriptions, and existing kernel/driver fallbacks. Function labels are stored
+as untranslated text and translated by the UI. Raw kernel names accompany them.
+No name lookup changes record IDs, category, driver binding or visibility.
+
+`ModuleNames` owns its libkmod context in the enumeration worker. It reads the
+running kernel's installed module indexes without modprobe.d overrides or
+commands. The refresh-scoped cache contains at most 512 entries, including
+misses; each description is capped at 4096 bytes. A new context/cache on every
+refresh allows installed module metadata to be updated without retaining stale
+labels across refreshes. Repeated devices sharing a module reuse the cached
+result. No subprocess, module insertion/removal or root access is involved.
+
+A `driver/module` link establishes which module owns the device's direct driver.
+Absent that link, modalias lookup can produce only an installed-module candidate;
+multiple matches are deliberately rejected. An absent module link never proves
+a built-in driver. Installed metadata can differ from code already loaded in
+the kernel, and a candidate is not evidence that any driver is loaded or bound.
+
+`libkmod >= 30` is optional. Missing library support, missing kernel modules,
+missing built-in metadata, no description and access errors preserve other
+naming methods and usable basic viewing. Neither ACPI vendor-prefix guesses nor
+recursive sysfs reads are used. Firmware `_STR` methods are not evaluated to
+manufacture names for unknown vendor-specific firmware objects.
+
+References:
+- https://kmod-project.github.io/kmod/libkmod-libkmod-module.html
+- https://github.com/kmod-project/kmod/blob/master/libkmod/libkmod.h
+- https://github.com/open-acpica/acpica/blob/master/source/common/ahids.c
+- https://github.com/torvalds/linux/blob/master/sound/hda/core/sysfs.c

@@ -30,3 +30,22 @@ serial numbers, MAC addresses or unrelated personal data. They cover multiple
 ports, a second real storage controller and unrelated PCI bridges as safeguards
 against over-aggressive grouping. The fixtures are included but not executed,
 in accordance with the requested static-only verification workflow.
+
+## Remaining names shown in the follow-up screenshots
+
+Standard identifiers resolve embedded controllers, ACPI power/battery/fan/button/
+lid/WMI functions, motherboard resources, the system timer and the display
+sensor. `INT340E`/`INTC109D` have a standard `PNP0C02` compatible ID and `INT33D3`
+has `PNP0C60`, so their labels do not require guessing Intel-specific meanings.
+Direct HDA codec metadata can identify a codec rather than merely the family
+of its driver. Module descriptions can explain functions behind names such as
+`idma64`, `intel_pmc_core`, `iTCO_wdt`, `hp-wmi`, `pmt_telemetry` and PCIe services,
+when descriptions are installed for the running kernel. These optional lookups
+have not been run against the user's module directory and need live validation.
+
+Some generic/faux kernel devices and vendor-specific firmware identities still
+have no reliable descriptive metadata. They remain raw fallbacks. Serial-base
+controller/port objects receive generic function captions; the patch does not
+claim that each such object represents a physical serial connector. Existing
+classification/visibility is unchanged; naming alone cannot resolve tree noise
+or the separate PCI/card audio representations shown in the screenshots.

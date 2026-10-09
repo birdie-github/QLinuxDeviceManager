@@ -1,5 +1,6 @@
 #include "devicemodel.h"
 #include <QApplication>
+#include <QCoreApplication>
 #include <QIcon>
 #include <QStyle>
 #include <QStringList>
@@ -46,7 +47,10 @@ QVariant DeviceModel::data(const QModelIndex &i, int role) const
     if (role == Qt::DisplayRole) {
         if (!d) return categoryLabel(n->category);
         if (d->name == d->sysname || d->nameSource == "direct kernel driver and kernel name") return d->name;
-        return d->name + QStringLiteral(" [%1]").arg(d->sysname);
+        QString name = d->nameTranslated
+            ? QCoreApplication::translate("DeviceFunctions", d->name.toUtf8().constData()) : d->name;
+        if (d->nameCandidate) name = tr("%1 (module candidate)").arg(name);
+        return name + QStringLiteral(" [%1]").arg(d->sysname);
     }
     if (role == Qt::DecorationRole)
         return QIcon::fromTheme(categoryIcon(n->category), QApplication::style()->standardIcon(

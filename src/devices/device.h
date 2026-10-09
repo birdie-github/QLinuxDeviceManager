@@ -23,6 +23,8 @@ struct Device {
     QHash<QString, Attribute> attributes;
     QString name;
     QString nameSource;
+    bool nameTranslated = false; // Static function caption; translate only in the view.
+    bool nameCandidate = false;  // An installed-module alias match, not a binding claim.
     QString representedByPath; // Presentation grouping only, never a new ownership edge.
     QHash<QString, QString> propertySources;
     QString category;         // Stable, untranslated application category ID.

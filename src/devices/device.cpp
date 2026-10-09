@@ -1,6 +1,8 @@
 #include "device.h"
+#include "functionnames.h"
 
 #include <QCoreApplication>
+#include <cstring>
 
 const QVector<Category> &categories()
 {
@@ -98,6 +100,8 @@ void classify(Device &d)
 }
 void nameDevice(Device &d)
 {
+    d.nameTranslated = false;
+    d.nameCandidate = false;
     const auto attributeName = [&d](const QString &key) {
         const auto it = d.attributes.constFind(key);
         if (it == d.attributes.cend() || it->state != ReadState::Available || it->value.isEmpty()) return false;
@@ -125,7 +129,19 @@ void nameDevice(Device &d)
         if (!name.isEmpty()) { d.name = name; d.nameSource = "udev: ID_V4L_PRODUCT"; return; }
     }
     if (d.subsystem == "nvme" && attributeName("model")) return;
+    if (d.subsystem == "hdaudio") {
+        const auto chip = d.attributes.value("chip_name");
+        const auto vendor = d.attributes.value("vendor_name");
+        if (chip.state == ReadState::Available && !chip.value.isEmpty()) {
+            d.name = chip.value;
+            if (vendor.state == ReadState::Available && !vendor.value.isEmpty()) d.name.prepend(vendor.value + ' ');
+            d.nameSource = QStringLiteral("sysfs: %1/chip_name and available vendor_name").arg(d.path);
+            return;
+        }
+    }
     for (const char *key : {"ID_MODEL_FROM_DATABASE", "ID_MODEL", "NAME"}) {
+        if (std::strcmp(key, "ID_MODEL") == 0 && d.subsystem == "usb"
+            && d.devtype == "usb_device" && attributeName("product")) return;
         const QString value = d.properties.value(QLatin1String(key));
         if (!value.isEmpty()) {
             d.name = value;
@@ -135,6 +151,13 @@ void nameDevice(Device &d)
     }
     if (d.subsystem == "sound" && attributeName("id")) return;
     if (d.subsystem == "power_supply" && attributeName("model_name")) return;
+    const FunctionName function = knownFunctionName(d);
+    if (!function.label.isEmpty()) {
+        d.name = function.label;
+        d.nameSource = function.source;
+        d.nameTranslated = true;
+        return;
+    }
     d.name = d.sysname.isEmpty() ? d.path : d.sysname;
     d.nameSource = "kernel name";
     // Describe unresolved bound functions using real binding evidence, without

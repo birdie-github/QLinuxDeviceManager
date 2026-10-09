@@ -1,6 +1,7 @@
 #include "enumerator.h"
 #include "cpumetadata.h"
 #include "devicepresentation.h"
+#include "modulenames.h"
 
 #include <libudev.h>
 #include <memory>
@@ -72,6 +73,7 @@ void Enumerator::run()
     }
     // hwdb is an optional local naming database, still accessed through libudev.
     std::unique_ptr<udev_hwdb, decltype(&udev_hwdb_unref)> hwdb(udev_hwdb_new(context.get()), &udev_hwdb_unref);
+    ModuleNames moduleNames; // Worker-owned context and per-refresh lookup cache.
     Attribute cpuInfo;
     QHash<int, QString> cpuModels;
     bool cpuInfoRead = false;
@@ -141,8 +143,14 @@ void Enumerator::run()
         else if (d.subsystem == "sound" && d.sysname.startsWith("card")) attribute = "id";
         else if (d.subsystem == "power_supply") attribute = "model_name";
         else if (d.subsystem == "nvme") attribute = "model";
+        else if (d.subsystem == "usb" && d.devtype == "usb_device") attribute = "product";
+        if (d.subsystem == "hdaudio") {
+            d.attributes.insert("vendor_name", readAttribute(d.path + "/vendor_name"));
+            d.attributes.insert("chip_name", readAttribute(d.path + "/chip_name"));
+        }
         if (!attribute.isEmpty()) d.attributes.insert(attribute, readAttribute(d.path + '/' + attribute));
         nameDevice(d);
+        moduleNames.supplement(d);
         struct stat after {};
         if (stat(path.constData(), &after) != 0 || after.st_dev != info.st_dev || after.st_ino != info.st_ino) {
             ++result.skipped;

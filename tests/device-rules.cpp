@@ -2,6 +2,7 @@
 #include "device.h"
 #include "cpumetadata.h"
 #include "devicepresentation.h"
+#include "functionnames.h"
 #include <cstdio>
 
 static int failures = 0;
@@ -146,5 +147,50 @@ int main()
     for (auto &d : behindBridge) classify(d);
     refinePresentation(behindBridge);
     check(!behindBridge[1].hidden, "A PCI bridge is not an NVMe controller duplicate");
+    Device embedded;
+    embedded.subsystem = "platform";
+    embedded.sysname = "PNP0C09:00";
+    embedded.properties.insert("MODALIAS", "acpi:PNP0C09:");
+    nameDevice(embedded);
+    check(embedded.name == "ACPI embedded controller" && embedded.nameTranslated,
+          "A standard ACPI identity must have a readable translated function caption");
+    embedded.properties.insert("MODALIAS", "acpi:INT340E:PNP0C02:");
+    nameDevice(embedded);
+    check(embedded.name == "Motherboard resources" && embedded.nameSource.endsWith("PNP0C02"),
+          "Compatible ACPI identities must provide a caption without guessing the vendor ID");
+    embedded.properties.insert("MODALIAS", "acpi:UNKNOWNPNP0C02:");
+    nameDevice(embedded);
+    check(embedded.name == embedded.sysname && !embedded.nameTranslated,
+          "Substring resemblance must never resolve an unknown identifier");
+    embedded.properties.insert("MODALIAS", "acpi:PNP0C09:");
+    embedded.properties.insert("ID_MODEL_FROM_DATABASE", "Actual model");
+    nameDevice(embedded);
+    check(embedded.name == "Actual model" && !embedded.nameTranslated,
+          "A function caption must not replace available model metadata");
+    Device ps2;
+    ps2.subsystem = "pnp";
+    ps2.properties.insert("MODALIAS", "pnp:dPNP0303");
+    nameDevice(ps2);
+    check(ps2.name == "PS/2 keyboard interface", "PNP modalias identifier parsing");
+    Device codec;
+    codec.subsystem = "hdaudio";
+    Attribute chip;
+    chip.state = ReadState::Available;
+    chip.value = "ALC-test";
+    codec.attributes.insert("chip_name", chip);
+    Attribute vendor;
+    vendor.state = ReadState::PermissionDenied;
+    vendor.value = "Stale vendor";
+    codec.attributes.insert("vendor_name", vendor);
+    nameDevice(codec);
+    check(codec.name == "ALC-test", "Codec name must not use failed vendor metadata");
+    Device usbProduct;
+    usbProduct.subsystem = "usb";
+    usbProduct.devtype = "usb_device";
+    usbProduct.properties.insert("ID_MODEL", "Generic_Model");
+    chip.value = "Readable USB product";
+    usbProduct.attributes.insert("product", chip);
+    nameDevice(usbProduct);
+    check(usbProduct.name == chip.value, "Direct USB product must supersede an encoded generic model");
     return failures ? 1 : 0;
 }

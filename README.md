@@ -32,6 +32,17 @@ labels to distinguish identical models. Missing metadata has a readable
 fallback; failed attribute reads retain an explicit state and error separately.
 No parent vendor, model or driver is silently attributed to a child.
 
+Additional naming uses exact standard ACPI/PNP identifiers (including compatible
+IDs), direct HDA codec `chip_name`/`vendor_name`, and USB `product` text.
+Standard function labels are translated in the view; raw IDs remain visible.
+An optional libkmod fallback reads installed module descriptions through native
+APIs in the enumeration worker. Bound modules are identified through that
+device's actual `driver/module` link. When only a modalias is available, exactly
+one matching module is required and the label is marked **module candidate**.
+Descriptions explain a software/kernel function, not a hardware marketing
+model, health, binding status or the version of loaded code. Tooltips record the
+naming basis. Missing or ambiguous metadata keeps the previous fallback label.
+
 Application categories are deterministic groupings, not kernel device classes:
 
 | Records | Group and default visibility |
@@ -66,13 +77,15 @@ multifunction video devices, firmware/platform devices and unusual buses.
 
 Required: Linux, CMake >= 3.19, a C++17 compiler, pkg-config, Qt >= 6.2 Widgets
 and libudev development headers. Optional: Qt Linguist tools for translation
-catalog generation. QtDBus, libkmod, UDisks2 and journal libraries are not used
+catalog generation and libkmod >= 30 for module-description fallback names.
+Use `-DQLDM_WITH_KMOD=OFF` to explicitly omit libkmod; CMake reports whether
+module naming is enabled. QtDBus, UDisks2 and journal libraries are not used
 in this phase. No particular desktop environment is required.
 
 Fedora packages: `gcc-c++ cmake make pkgconf-pkg-config qt6-qtbase-devel
-systemd-devel`; optional `qt6-qttools-devel`.
+systemd-devel`; optional `qt6-qttools-devel` and `kmod-devel`.
 Debian/Ubuntu packages: `g++ cmake make pkg-config qt6-base-dev libudev-dev`;
-optional `qt6-tools-dev qt6-tools-dev-tools`.
+optional `qt6-tools-dev qt6-tools-dev-tools libkmod-dev`.
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -104,7 +117,8 @@ fallbacks. Further desktop integration and UI polish belong to Phase 9.
 ## Source layout
 
 - `src/devices/`: inventory records, classification, bounded CPU metadata,
-  ancestry-based presentation grouping and the enumeration worker.
+  ancestry-based presentation grouping, standard function labels, optional
+  module-description naming and the enumeration worker.
 - `src/ui/`: tree model, window, actions and UI state.
 - `src/main.cpp`: application startup and translation loading.
 - `resources/embedded/`: build-time metadata header template.
