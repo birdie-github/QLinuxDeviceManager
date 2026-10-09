@@ -2,15 +2,16 @@
 #include "propertytext.h"
 #include <QApplication>
 #include <QClipboard>
-#include <QDateTime>
 #include <QDialogButtonBox>
-#include <QFormLayout>
+#include <QGridLayout>
+#include <QSizePolicy>
 #include <QGroupBox>
 #include <QLabel>
 #include <QLocale>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QVBoxLayout>
+#include <QVector>
 #include <utility>
 
 SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
@@ -18,31 +19,37 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
     setWindowTitle(tr("System Information"));
     resize(680, 650);
     auto *layout = new QVBoxLayout(this);
-    status_ = new QLabel(this);
-    status_->setTextFormat(Qt::PlainText);
-    status_->setWordWrap(true);
-    layout->addWidget(status_);
     auto *scroll = new QScrollArea(this);
     scroll->setWidgetResizable(true);
     auto *page = new QWidget(scroll);
     auto *groups = new QVBoxLayout(page);
+    groups->setSizeConstraint(QLayout::SetMinAndMaxSize);
+    QVector<QGridLayout *> forms;
+    QVector<QLabel *> names;
     const auto group = [&](const QString &title) {
         auto *box = new QGroupBox(title, page);
-        auto *form = new QFormLayout(box);
-        form->setFieldGrowthPolicy(QFormLayout::ExpandingFieldsGrow);
-        form->setRowWrapPolicy(QFormLayout::WrapLongRows);
+        auto *form = new QGridLayout(box);
+        form->setColumnStretch(1, 1);
+        forms.append(form);
         groups->addWidget(box);
         return form;
     };
-    const auto field = [&](QFormLayout *form, const QString &key, const QString &caption) {
+    const auto field = [&](QGridLayout *form, const QString &key, const QString &caption) {
         auto *name = new QLabel(caption, page);
         name->setTextFormat(Qt::PlainText);
+        names.append(name);
         auto *value = new QLabel(tr("Not collected"), page);
         value->setTextFormat(Qt::PlainText);
         value->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
+        QSizePolicy policy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        policy.setHeightForWidth(true);
+        value->setSizePolicy(policy);
         value->setWordWrap(true);
+        value->setAlignment(Qt::AlignLeading | Qt::AlignTop);
         value->setMinimumWidth(120);
-        form->addRow(name, value);
+        const int row = form->count() / 2;
+        form->addWidget(name, row, 0, Qt::AlignLeading | Qt::AlignTop);
+        form->addWidget(value, row, 1);
         fields_.insert(key, value);
         captions_.insert(key, caption);
         order_.append(key);
@@ -71,6 +78,10 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
     field(processor, "logical", tr("Logical CPUs present"));
     field(processor, "online", tr("Logical CPUs online"));
     field(processor, "caches", tr("CPU caches (online CPUs)"));
+    // Use one font-derived caption width for every section, so values align.
+    int captionWidth = 0;
+    for (const QLabel *name : names) captionWidth = qMax(captionWidth, name->sizeHint().width());
+    for (QGridLayout *form : forms) form->setColumnMinimumWidth(0, captionWidth);
     groups->addStretch();
     scroll->setWidget(page);
     layout->addWidget(scroll, 1);
@@ -86,7 +97,7 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
 void SystemDialog::setBusy(bool busy)
 {
     refresh_->setEnabled(!busy);
-    if (busy) status_->setText(tr("Collecting system information…"));
+    refresh_->setText(busy ? tr("Refreshing…") : tr("Refresh"));
 }
 QString SystemDialog::displayValue(const QString &key, const Attribute &value) const
 {
@@ -129,8 +140,6 @@ void SystemDialog::acceptResult(SystemProperties result)
     }
     setBusy(false);
     copy_->setEnabled(true);
-    status_->setText(tr("Snapshot collected at %1. Values reflect this process's system view.")
-        .arg(QLocale().toString(QDateTime::currentDateTime(), QLocale::ShortFormat)));
 }
 void SystemDialog::copyAll()
 {

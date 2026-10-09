@@ -21,7 +21,6 @@ private:
     QStringList order_;
     QHash<QString, QString> captions_;
     SystemProperties snapshot_;
-    QLabel *status_ = nullptr;
     QPushButton *refresh_ = nullptr;
     QPushButton *copy_ = nullptr;
 };
