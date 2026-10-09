@@ -347,3 +347,14 @@ Primary references:
 - https://www.freedesktop.org/software/systemd/man/latest/os-release.html
 - https://docs.kernel.org/admin-guide/cputopology.html
 - https://github.com/torvalds/linux/blob/master/Documentation/ABI/testing/sysfs-devices-system-cpu
+
+Installed RAM uses `udev_device_new_from_subsystem_sysname(..., "dmi", "id")`
+and selected cached MEMORY_ARRAY_NUM_DEVICES / MEMORY_DEVICE_n_SIZE, PRESENT and
+NON_VOLATILE_SIZE properties in the system worker. Slot count is checked before
+bounded copying. The pure parser requires complete advertised records, checks
+unsigned-decimal input and sum overflow, accepts explicitly empty slots, and
+refuses known persistent-memory capacity. Unknown optional nonvolatile size does
+not invalidate known installed sizes. Physical and usable capacity remain separate
+raw byte values; only SystemDialog formats GiB and the nonnegative MiB difference.
+No guessed total, cgroup adjustment or detailed reservation attribution is made.
+The system-properties fixture target now links the existing libudev dependency.

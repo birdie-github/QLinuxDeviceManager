@@ -106,6 +106,6 @@ if(BUILD_TESTING)
         src/devices/systemproperties.cpp src/devices/systemproperties.h
         src/devices/cpumetadata.cpp src/devices/cpumetadata.h)
     target_include_directories(system-properties-test PRIVATE src/devices)
-    target_link_libraries(system-properties-test PRIVATE Qt6::Core)
+    target_link_libraries(system-properties-test PRIVATE Qt6::Core PkgConfig::UDEV)
     add_test(NAME system-properties COMMAND system-properties-test)
 endif()

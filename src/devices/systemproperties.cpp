@@ -1,6 +1,8 @@
 #include "systemproperties.h"
 #include "cpumetadata.h"
 #include <QDir>
+#include <libudev.h>
+#include <memory>
 #include <QMap>
 #include <QStringList>
 #include <QSysInfo>
@@ -51,6 +53,45 @@ bool number(const Attribute &value, qlonglong &result)
     bool ok = false;
     result = value.value.toLongLong(&ok);
     return value.state == ReadState::Available && ok && result >= 0;
+}
+bool unsignedDecimal(const QString &text, qulonglong &value)
+{
+    if (text.isEmpty() || text.size() > 20) return false;
+    for (QChar c : text) if (c < QLatin1Char('0') || c > QLatin1Char('9')) return false;
+    bool ok = false;
+    value = text.toULongLong(&ok);
+    return ok;
+}
+Attribute installedMemory()
+{
+    std::unique_ptr<udev, decltype(&udev_unref)> context(udev_new(), &udev_unref);
+    if (!context) return failed(ENOMEM);
+    errno = 0;
+    std::unique_ptr<udev_device, decltype(&udev_device_unref)> device(
+        udev_device_new_from_subsystem_sysname(context.get(), "dmi", "id"), &udev_device_unref);
+    if (!device) return errno ? failed(errno) : Attribute();
+    QHash<QString, QString> properties;
+    const auto copy = [&](const QString &key) {
+        const char *raw = udev_device_get_property_value(device.get(), key.toUtf8().constData());
+        if (!raw) return true;
+        const size_t length = strnlen(raw, 65);
+        if (length > 64) return false;
+        properties.insert(key, QString::fromUtf8(raw, static_cast<int>(length)));
+        return true;
+    };
+    const QString countKey = "MEMORY_ARRAY_NUM_DEVICES";
+    if (!copy(countKey)) return failed(EOVERFLOW);
+    qulonglong count = 0;
+    if (!properties.contains(countKey)) return {};
+    if (!unsignedDecimal(properties.value(countKey), count)) return failed(EINVAL);
+    if (count > 4096) return failed(EOVERFLOW);
+    for (qulonglong slot = 0; slot < count; ++slot) {
+        if (QThread::currentThread()->isInterruptionRequested()) return failed(ECANCELED);
+        const QString prefix = QStringLiteral("MEMORY_DEVICE_%1_").arg(slot);
+        for (const char *suffix : {"SIZE", "PRESENT", "NON_VOLATILE_SIZE"})
+            if (!copy(prefix + QLatin1String(suffix))) return failed(EOVERFLOW);
+    }
+    return parseInstalledMemory(properties);
 }
 void cpuTopology(SystemProperties &result)
 {
@@ -212,6 +253,38 @@ bool parseCpuList(const QString &text, QSet<int> &cpus)
     cpus = std::move(parsed);
     return true;
 }
+Attribute parseInstalledMemory(const QHash<QString, QString> &properties)
+{
+    const QString countKey = "MEMORY_ARRAY_NUM_DEVICES";
+    if (!properties.contains(countKey)) return {};
+    qulonglong count = 0, total = 0;
+    if (!unsignedDecimal(properties.value(countKey), count)) return failed(EINVAL);
+    if (count > 4096) return failed(EOVERFLOW);
+    for (qulonglong slot = 0; slot < count; ++slot) {
+        const QString prefix = QStringLiteral("MEMORY_DEVICE_%1_").arg(slot);
+        const QString present = properties.value(prefix + "PRESENT");
+        const QString size = properties.value(prefix + "SIZE");
+        if (present == "0") {
+            if (!size.isEmpty() && size != "0") return failed(EINVAL);
+            continue; // Explicitly empty slots do not require a capacity.
+        }
+        if (!present.isEmpty() && present != "1") return failed(EINVAL);
+        qulonglong bytes = 0;
+        if (size.isEmpty()) return {}; // Unknown slot invalidates the entire total.
+        if (!unsignedDecimal(size, bytes)) return failed(EINVAL);
+        if (!bytes) return {};
+        const QString persistent = properties.value(prefix + "NON_VOLATILE_SIZE");
+        qulonglong nonVolatile = 0;
+        if (!persistent.isEmpty() && persistent != "Unknown") {
+            if (!unsignedDecimal(persistent, nonVolatile)) return failed(EINVAL);
+            // SIZE may include persistent capacity; do not call that installed RAM.
+            if (nonVolatile) return {ReadState::Unsupported, {}, 0};
+        }
+        if (total > std::numeric_limits<qulonglong>::max() - bytes) return failed(EOVERFLOW);
+        total += bytes;
+    }
+    return total ? available(QString::number(total)) : Attribute();
+}
 SystemProperties collectSystemProperties()
 {
     SystemProperties result;
@@ -238,6 +311,8 @@ SystemProperties collectSystemProperties()
     models.removeDuplicates(); models.sort(Qt::CaseInsensitive);
     put("cpu", cpu.state == ReadState::Available ? models.isEmpty() ? Attribute() : available(models.join('\n')) : cpu, "/proc/cpuinfo: per-processor model fields");
     cpuTopology(result);
+    put("physical_memory", installedMemory(),
+        "libudev: dmi/id MEMORY_ARRAY_NUM_DEVICES and MEMORY_DEVICE_n_SIZE/PRESENT; firmware-reported installed RAM");
     const Attribute memory = readText("/proc/meminfo", 65536);
     Attribute total = memory.state == ReadState::Available ? Attribute() : memory;
     for (const QString &line : memory.value.split('\n')) {

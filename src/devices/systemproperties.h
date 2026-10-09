@@ -10,6 +10,7 @@ struct SystemProperties {
 
 // Pure parsers shared with fixtures; no commands or shell evaluation.
 Attribute parseOsName(const QString &text);
+Attribute parseInstalledMemory(const QHash<QString, QString> &properties);
 bool parseCpuList(const QString &text, QSet<int> &cpus);
 SystemProperties collectSystemProperties();
 

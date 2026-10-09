@@ -70,7 +70,8 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
     field(hardware, "board_model", tr("Motherboard model"));
     field(hardware, "firmware", tr("Firmware version"));
     field(hardware, "firmware_date", tr("Firmware date (reported)"));
-    field(hardware, "memory", tr("Usable physical memory"));
+    field(hardware, "physical_memory", tr("Physical RAM"));
+    field(hardware, "memory", tr("Usable RAM"));
     auto *processor = group(tr("Processor"));
     field(processor, "cpu", tr("CPU model(s)"));
     field(processor, "sockets", tr("Sockets (reported topology)"));
@@ -108,8 +109,21 @@ QString SystemDialog::displayValue(const QString &key, const Attribute &value) c
         return value.value == "uefi" ? tr("UEFI")
             : tr("UEFI not exposed (legacy boot or restricted environment)");
     if (key == "virtualization") return tr("Reported hypervisor: %1").arg(value.value);
-    if (key == "memory")
-        return tr("%1 GiB").arg(QLocale().toString(value.value.toULongLong() / (1024.0 * 1024 * 1024), 'f', 2));
+    if (key == "memory" || key == "physical_memory") {
+        constexpr qulonglong gib = 1024ULL * 1024 * 1024;
+        constexpr qulonglong mib = 1024ULL * 1024;
+        const qulonglong bytes = value.value.toULongLong();
+        const int precision = key == "physical_memory" && bytes % gib == 0 ? 0 : 2;
+        QString text = tr("%1 GiB").arg(QLocale().toString(bytes / static_cast<double>(gib), 'f', precision));
+        const Attribute physical = snapshot_.values.value("physical_memory");
+        if (key == "memory" && physical.state == ReadState::Available) {
+            const qulonglong installed = physical.value.toULongLong();
+            if (installed >= bytes)
+                text += tr(" (%1 MiB is system reserved)")
+                    .arg(QLocale().toString((installed - bytes) / static_cast<double>(mib), 'f', 0));
+        }
+        return text;
+    }
     if (key == "uptime") {
         const qulonglong seconds = value.value.toULongLong();
         return tr("%1 days, %2 hours, %3 minutes").arg(seconds / 86400).arg(seconds / 3600 % 24).arg(seconds / 60 % 60);
@@ -136,7 +150,12 @@ void SystemDialog::acceptResult(SystemProperties result)
     snapshot_ = std::move(result);
     for (const QString &key : order_) {
         fields_.value(key)->setText(displayValue(key, snapshot_.values.value(key)));
-        fields_.value(key)->setToolTip(snapshot_.sources.value(key).toHtmlEscaped());
+        QString source = snapshot_.sources.value(key);
+        if (key == "memory")
+            source += '\n' + tr("System reserved is reported physical RAM minus Linux MemTotal. "
+                                 "It includes all memory unavailable to Linux, not just firmware reservations. "
+                                 "It is omitted if physical capacity is unavailable or smaller than usable RAM.");
+        fields_.value(key)->setToolTip(source.toHtmlEscaped());
     }
     setBusy(false);
     copy_->setEnabled(true);

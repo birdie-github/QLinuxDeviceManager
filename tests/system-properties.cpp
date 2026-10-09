@@ -1,6 +1,7 @@
 #include "systemproperties.h"
 #include <QCoreApplication>
 #include <cstdio>
+#include <cerrno>
 
 int main(int argc, char **argv)
 {
@@ -25,5 +26,31 @@ int main(int argc, char **argv)
     check(!parseCpuList("0-500000", cpus), "CPU list expansion is bounded");
     check(!parseCpuList("0,", cpus) && !parseCpuList("-1", cpus) && !parseCpuList("word", cpus),
           "Invalid CPU identifiers never become CPU zero");
+    QHash<QString, QString> memory {
+        {"MEMORY_ARRAY_NUM_DEVICES", "2"},
+        {"MEMORY_DEVICE_0_SIZE", "17179869184"},
+        {"MEMORY_DEVICE_1_SIZE", "17179869184"}
+    };
+    check(parseInstalledMemory(memory).value == "34359738368", "Two 16 GiB devices report 32 GiB installed");
+    memory["MEMORY_ARRAY_NUM_DEVICES"] = "3";
+    memory["MEMORY_DEVICE_2_PRESENT"] = "0";
+    check(parseInstalledMemory(memory).value == "34359738368", "Explicitly empty slot does not invalidate total");
+    memory.remove("MEMORY_DEVICE_2_PRESENT");
+    check(parseInstalledMemory(memory).state == ReadState::Unavailable, "Unknown slot never produces a partial total");
+    memory["MEMORY_DEVICE_2_SIZE"] = "garbage";
+    check(parseInstalledMemory(memory).state == ReadState::Error, "Malformed capacity is a read error");
+    memory["MEMORY_DEVICE_2_SIZE"] = "18446744073709551615";
+    check(parseInstalledMemory(memory).error == EOVERFLOW, "Installed capacity sum checks overflow");
+    memory["MEMORY_DEVICE_2_PRESENT"] = "0";
+    check(parseInstalledMemory(memory).state == ReadState::Error, "Nonzero size conflicts with empty slot evidence");
+    memory.remove("MEMORY_DEVICE_2_SIZE");
+    memory["MEMORY_DEVICE_0_NON_VOLATILE_SIZE"] = "0";
+    memory["MEMORY_DEVICE_1_NON_VOLATILE_SIZE"] = "Unknown";
+    check(parseInstalledMemory(memory).value == "34359738368", "Unknown optional nonvolatile field preserves known capacities");
+    memory["MEMORY_DEVICE_0_NON_VOLATILE_SIZE"] = "17179869184";
+    check(parseInstalledMemory(memory).state == ReadState::Unsupported, "Persistent capacity is not silently counted as RAM");
+    memory["MEMORY_ARRAY_NUM_DEVICES"] = "4097";
+    check(parseInstalledMemory(memory).error == EOVERFLOW, "Memory slot count is bounded");
+    check(parseInstalledMemory({}).state == ReadState::Unavailable, "Missing firmware data is not zero RAM");
     return failures ? 1 : 0;
 }

@@ -282,7 +282,7 @@ Copy all, Refresh and Close. Reopening reuses its last snapshot; Refresh collect
 new values. Hardware enumeration and device Properties remain usable.
 
 The dialog shows hostname, OS name, kernel architecture/release/build, CPU models,
-sockets/cores, present/online logical CPUs, usable physical RAM in GiB, uptime,
+sockets/cores, present/online logical CPUs, physical and usable RAM in GiB, uptime,
 system and motherboard manufacturer/model, firmware version/date, boot-mode
 evidence, reported hypervisor identity and unique CPU cache totals by level/type.
 Missing or restricted metadata stays explicitly unavailable; absent virtualization
@@ -305,3 +305,20 @@ are bounded and shutdown cooperatively cancels collection. In a container, OS,
 hostname, /proc and sysfs may reflect different namespace scopes; the overview
 reports this process's exposed system view rather than promising host identity.
 Serial numbers, machine IDs and live utilization are not collected.
+
+Physical RAM sums firmware-reported capacities from the DMI device's udev
+properties, using libudev and the existing system-information worker. Usable RAM
+still comes from MemTotal. Its system-reserved annotation is their byte difference,
+rounded to MiB; the tooltip explains that this covers all RAM unavailable to Linux,
+not a detailed firmware-reservation map. Copy all includes both rows and the same
+annotation. The difference is omitted when physical capacity is unavailable or
+smaller than usable capacity; missing firmware data never causes rounding MemTotal
+up to guess an installed size.
+
+All advertised memory records must have a valid capacity or explicit empty-slot
+marker. Missing capacity makes the total unavailable; malformed data, conflicting
+empty markers and overflow produce errors. Known nonvolatile capacity is unsupported
+rather than silently included as RAM. Up to 4096 records and 64 bytes per selected
+property are accepted. This uses cached udev metadata and depends on firmware and
+the distribution's memory-identification rule; no SMBIOS parsing, subprocess,
+extra dependency or elevation is added to the application.
