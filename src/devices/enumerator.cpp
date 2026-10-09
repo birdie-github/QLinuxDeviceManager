@@ -191,6 +191,8 @@ void Enumerator::run()
     std::unique_ptr<udev, decltype(&udev_unref)> context(udev_new(), &udev_unref);
     Monitor monitor(nullptr, &udev_monitor_unref);
     MonitorState events;
+    DeviceEventHistory history;
+    bool historyGapPending = false;
     QElapsedTimer clock;
     clock.start();
     qint64 retryAt = 0;
@@ -204,6 +206,8 @@ void Enumerator::run()
     QString monitorNote;
     const auto failed = [&] {
         monitor.reset();
+        history.lose();
+        historyGapPending = true;
         events.lose();
         pending = true;
         retryAt = clock.elapsed() + 2000;
@@ -243,6 +247,27 @@ void Enumerator::run()
             }
             const QString action = text(udev_device_get_action(event.get()));
             const QString path = text(udev_device_get_syspath(event.get()));
+            DeviceEvent observation;
+            observation.observed = QDateTime::currentDateTime();
+            observation.elapsedMs = clock.elapsed();
+            observation.sequence = udev_device_get_seqnum(event.get());
+            observation.path = path;
+            observation.action = action;
+            observation.subsystem = text(udev_device_get_subsystem(event.get()));
+            observation.devtype = text(udev_device_get_devtype(event.get()));
+            observation.driver = text(udev_device_get_driver(event.get()));
+            observation.initialized = text(udev_device_get_property_value(event.get(), "USEC_INITIALIZED"));
+            // Do not read sysfs contents during event reception. An inode hint
+            // is usable only while this path is still present; removals use the
+            // already-observed instance, never a newly reused path's inode.
+            struct stat identity {};
+            if (action != "remove" && stat(path.toUtf8().constData(), &identity) == 0)
+                observation.incarnation = QStringLiteral("%1:%2:%3")
+                    .arg(static_cast<qulonglong>(identity.st_dev)).arg(static_cast<qulonglong>(identity.st_ino))
+                    .arg(observation.initialized);
+            const QString previous = text(udev_device_get_property_value(event.get(), "DEVPATH_OLD"));
+            if (previous.startsWith("/devices/")) observation.oldPath = "/sys" + previous;
+            history.observe(std::move(observation));
             events.observe(path, action == "remove");
             if (path.startsWith("/sys/devices/")) {
                 lastEvent = clock.elapsed();
@@ -287,12 +312,18 @@ void Enumerator::run()
             inventory.removedPaths = events.removed;
             inventory.identityLost = events.lost;
             inventory.monitorNote = monitorNote;
+            // MonitorState can also detect bounded-hint loss independently of
+            // socket failure. It must end event associations as well as GUI generations.
+            if (inventory.identityLost && !initial && !historyGapPending) history.lose();
+            history.reconcile(inventory.devices);
+            inventory.events = history.snapshot(static_cast<bool>(monitor));
             if (events.dirty && inventory.monitorNote.isEmpty())
                 inventory.monitorNote = tr("Changing device branches are being reconciled");
             handledRequest = inventory.request;
             pending = events.dirty;
             events.removed.clear();
             events.lost = false;
+            historyGapPending = false;
             initial = false;
             firstEvent = pending ? clock.elapsed() : -1;
             lastEvent = clock.elapsed();

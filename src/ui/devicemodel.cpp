@@ -20,7 +20,7 @@ bool sameMetadata(const Device &a, const Device &b)
         || a.name != b.name || a.nameSource != b.nameSource || a.nameTranslated != b.nameTranslated
         || a.nameCandidate != b.nameCandidate || a.representedByPath != b.representedByPath
         || a.propertySources != b.propertySources || a.category != b.category
-        || a.incarnation != b.incarnation || a.hidden != b.hidden || a.attributes.size() != b.attributes.size()
+        || a.eventInstance != b.eventInstance || a.incarnation != b.incarnation || a.hidden != b.hidden || a.attributes.size() != b.attributes.size()
         || !sameDeviceResources(a.resources, b.resources))
         return false;
     for (auto it = a.attributes.cbegin(); it != a.attributes.cend(); ++it) {

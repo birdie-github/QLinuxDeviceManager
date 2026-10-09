@@ -68,6 +68,14 @@ int main()
     next.append(twin);
     reconcile(next, first, counter);
     check(next[0].generation != next[1].generation, "Equal model metadata must not merge different devices");
+    QVector<Device> eventBefore {keyboard};
+    eventBefore[0].eventInstance = 10;
+    reconcile(eventBefore, {}, counter);
+    QVector<Device> eventAfter = eventBefore;
+    eventAfter[0].eventInstance = 11;
+    reconcile(eventAfter, eventBefore, counter);
+    check(eventAfter[0].generation != eventBefore[0].generation,
+          "Retired live-event identity cannot keep an old GUI instance generation");
     const auto cpuModels = parseCpuModels(QStringLiteral(
         "processor : 1\nmodel name : Different CPU\n\n"
         "processor : 0\nmodel name : Intel(R) Core(TM) Ultra X7 358H\n\n"

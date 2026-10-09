@@ -81,4 +81,5 @@ private:
     QString selectedNodeKey_;
     quint64 selectedGeneration_ = 0;
     QString scanNote_;
+    DeviceEventsSnapshot events_;
 };

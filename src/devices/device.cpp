@@ -186,7 +186,7 @@ void reconcile(QVector<Device> &next, const QVector<Device> &previous, quint64 &
     for (const auto &d : previous) old.insert(d.path, &d);
     for (auto &d : next) {
         const Device *before = old.value(d.path, nullptr);
-        d.generation = before && before->incarnation == d.incarnation
+        d.generation = before && before->incarnation == d.incarnation && before->eventInstance == d.eventInstance
             ? before->generation : ++generation;
     }
 }

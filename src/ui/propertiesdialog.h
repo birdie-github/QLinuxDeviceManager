@@ -24,6 +24,7 @@ public:
     void reconcileInstance(const Device *current); // Borrowed only for this call.
     void setBusy(bool busy);
     void markRemoved();
+    void updateEvents(const DeviceEventsSnapshot &history, const QString &monitorNote);
 signals:
     void reloadRequested();
 private:
@@ -35,6 +36,8 @@ private:
     void copyResources(bool selectedOnly);
     void showDetail();
     void copyAll();
+    void showEvent();
+    void copyEvents(bool selectedOnly);
     DeviceProperties snapshot_;
     QVector<PropertyEntry> entries_;
     QLabel *banner_ = nullptr;
@@ -53,5 +56,10 @@ private:
     QLabel *source_ = nullptr;
     QCheckBox *advanced_ = nullptr;
     QPushButton *reload_ = nullptr;
+    QLabel *eventsNotice_ = nullptr;
+    QTableWidget *eventsTable_ = nullptr;
+    QPlainTextEdit *eventDetails_ = nullptr;
+    QVector<DeviceEvent> displayedEvents_;
+    QString eventScope_;
     bool removed_ = false;
 };

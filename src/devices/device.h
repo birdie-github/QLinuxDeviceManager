@@ -1,4 +1,5 @@
 #pragma once
+#include "deviceevents.h"
 
 #include <QHash>
 #include <QMetaType>
@@ -34,6 +35,7 @@ struct Device {
     QHash<QString, QString> propertySources;
     QString category;         // Stable, untranslated application category ID.
     QString incarnation;      // Directory identity plus optional udev initialization stamp.
+    quint64 eventInstance = 0; // Session-local live-event association token; zero is unassociated.
     quint64 generation = 0;   // Assigned by the GUI's inventory reconciliation.
     bool hidden = false;
     std::shared_ptr<const DeviceResources> resources; // Immutable resource snapshot; worker-collected.
@@ -47,6 +49,7 @@ struct Inventory {
     QSet<QString> removedPaths; // Includes descendants when an ancestor was removed.
     bool identityLost = false; // Event loss: no old generation can be trusted.
     QString monitorNote;
+    DeviceEventsSnapshot events; // Owned, bounded snapshot from the monitor worker.
 };
 Q_DECLARE_METATYPE(Inventory)
 

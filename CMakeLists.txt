@@ -29,6 +29,7 @@ add_executable(qlinuxdevicemanager
     src/main.cpp src/devices/device.h src/devices/device.cpp
     src/devices/enumerator.h src/devices/enumerator.cpp
     src/devices/monitorstate.h src/devices/monitorstate.cpp
+    src/devices/deviceevents.h src/devices/deviceevents.cpp
     src/devices/deviceproperties.h src/devices/deviceproperties.cpp
     src/devices/storageproperties.h src/devices/storageproperties.cpp
     src/devices/deviceresources.h src/devices/deviceresources.cpp
@@ -89,6 +90,11 @@ if(BUILD_TESTING)
     target_include_directories(monitor-state-test PRIVATE src/devices)
     target_link_libraries(monitor-state-test PRIVATE Qt6::Core)
     add_test(NAME monitor-state COMMAND monitor-state-test)
+    add_executable(device-events-test tests/device-events.cpp
+        src/devices/deviceevents.cpp src/devices/deviceevents.h)
+    target_include_directories(device-events-test PRIVATE src/devices)
+    target_link_libraries(device-events-test PRIVATE Qt6::Core)
+    add_test(NAME device-events COMMAND device-events-test)
     add_executable(device-rules-test tests/device-rules.cpp
         src/devices/device.cpp src/devices/device.h
         src/devices/cpumetadata.cpp src/devices/cpumetadata.h

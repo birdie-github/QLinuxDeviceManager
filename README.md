@@ -4,7 +4,7 @@ A lightweight Linux hardware viewer using C++17, Qt6 Widgets and libudev,
 with a conventional desktop interface inspired by Windows Device Manager.
 Licensed under GPLv3 (see LICENSE).
 
-## Current scope: Phase 6
+## Current scope: Phases 6 and 8
 
 Five live device inventory views and two resource views (see below), a read-only **Refresh (F5)** action, selection, themed icons,
 and persistent window geometry, toolbar visibility and visibility settings.
@@ -436,3 +436,49 @@ snapshot rather than an atomic kernel/service transaction. Deep search collects
 native storage metadata only, avoiding a full service request per searched record.
 SATA, NVMe, USB, encrypted/LVM and multi-drive RAID behavior require real-machine
 validation; this phase was statically reviewed, not compiled or run.
+
+## Device events and diagnostics (Phase 8)
+
+Properties → **Events** shows live udev observations received during this
+application session: receipt timestamp (local time with UTC offset), raw event
+type, translated description and selectable details. Details include monotonic
+elapsed time, udev sequence, exact kernel path, subsystem, device type, event
+payload driver, optional initialization stamp and the local instance token.
+Missing payload data is labelled unavailable. Copy selection and Copy all events
+include the scope/coverage notice. Event observation does not establish hardware
+health or prove that a reported driver transition succeeded permanently.
+
+The existing monitor worker maintains a ring of at most **1024 events globally**;
+a dialog shows the latest **256** for its exact device instance, newest first.
+Oldest records are evicted with a visible global count. The instance registry is
+bounded to 16384 paths and pruned against published inventory snapshots. Events
+with uncertain association are withheld from device tabs and counted in the
+coverage notice. Ordinary inventory scans do not manufacture add/change events.
+Hidden/internal records are monitored too; related devices retain separate event
+histories. EFI variables have no libudev value-change history.
+
+Session-local association tokens complement the existing kernel identity and GUI
+generation. A removal retires the device and descendant associations; replugging
+at a reused path does not inherit old events. Conflicting inode/initialization
+hints remain unassociated. Reordered/duplicate sequence numbers do not modify the
+current path association; global sequence gaps are normal and not treated as loss. Monitor failure/event loss retires associations and
+reports an incomplete-coverage notice. Event history follows the same owned,
+acknowledged worker-to-GUI snapshot flow as inventory; no new polling thread,
+queued signal flood or persistent log is added. A removed Properties dialog keeps
+its retained event snapshot, accepts any late observations for the old token only,
+and cannot follow the replacement device.
+
+This phase implements **live history only**, not a Windows-style persistent
+per-device log. Journal and kernel-log retrieval remain unimplemented: a reusable
+path or a text substring alone cannot reliably attribute historical records to
+this instance, even within one boot. No log access, journal dependency, elevation,
+external command or diagnostic daemon is required, so ordinary viewing and live
+observations work regardless of system-log permissions. Missing monitoring leaves
+retained observations readable and is explicit; no events is not a healthy verdict.
+Undetected event loss and kernel path/inode reuse without distinguishing metadata
+remain limitations of observation-based identity. Live timestamps describe when
+the application received an event; wall-clock adjustments may change them, while
+elapsed time retains observation order.
+
+Phase 7 privileged operations remain unimplemented. Phase 8 was statically
+reviewed only; the instance/eviction fixture checks were added but not executed.

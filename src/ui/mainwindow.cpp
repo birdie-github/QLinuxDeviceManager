@@ -239,6 +239,10 @@ void MainWindow::acceptInventory(const Inventory &inventory)
 {
     worker_.acknowledge();
     if (closing_) return;
+    events_ = inventory.events;
+    // Update before marking a removed dialog so its final removal observation
+    // stays in the read-only snapshot. Future instances cannot enter that tab.
+    if (propertiesDialog_) propertiesDialog_->updateEvents(events_, inventory.monitorNote);
     const bool manualRefresh = busy_ && inventory.request >= requested_;
     busy_ = inventory.request < requested_;
     if (!inventory.error.isEmpty()) {
@@ -392,6 +396,7 @@ void MainWindow::openProperties()
     if (propertiesDialog_) propertiesDialog_->close();
     auto *dialog = new PropertiesDialog(*record, this);
     propertiesDialog_ = dialog;
+    dialog->updateEvents(events_, scanNote_);
     connect(dialog, &PropertiesDialog::reloadRequested, this, &MainWindow::requestProperties);
     connect(dialog, &QDialog::finished, this, [this, dialog] {
         if (propertiesDialog_ != dialog) return;
