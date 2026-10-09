@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="994" height="960" viewBox="144 170 994 960" role="img" aria-labelledby="iconTitle iconDesc">
+  <title id="iconTitle">Hardware device manager</title>
+  <desc id="iconDesc">A dark-framed application window with a hardware device tree, monitor, processor, disk and USB icons, alongside a large blue gear.</desc>
+  <defs>
+    <linearGradient id="window-frame" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#354352"/><stop offset=".46" stop-color="#283341"/><stop offset="1" stop-color="#202832"/>
+    </linearGradient>
+    <linearGradient id="window-face" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#fbfcfd"/><stop offset=".55" stop-color="#f4f6f8"/><stop offset="1" stop-color="#f6f7f9"/>
+    </linearGradient>
+    <linearGradient id="graph-line" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#8093a8"/><stop offset="1" stop-color="#a5b2c2"/>
+    </linearGradient>
+    <linearGradient id="graph-node" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#71879c"/><stop offset="1" stop-color="#889db0"/>
+    </linearGradient>
+    <linearGradient id="small-bars" x1="0" y1="0" x2="1" y2=".3">
+      <stop stop-color="#a3a7ae"/><stop offset=".58" stop-color="#bfc2c7"/><stop offset="1" stop-color="#adb1b9"/>
+    </linearGradient>
+    <linearGradient id="monitor-frame" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#063879"/><stop offset=".42" stop-color="#004d9c"/><stop offset="1" stop-color="#07316d"/>
+    </linearGradient>
+    <linearGradient id="monitor-screen" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#45a3fd"/><stop offset="1" stop-color="#0074ed"/>
+    </linearGradient>
+    <linearGradient id="chip-legs" x1="0" y1="0" x2="1" y2=".6">
+      <stop stop-color="#2cbb82"/><stop offset="1" stop-color="#059967"/>
+    </linearGradient>
+    <linearGradient id="chip-body" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#116f53"/><stop offset=".6" stop-color="#004f39"/><stop offset="1" stop-color="#0a6a48"/>
+    </linearGradient>
+    <linearGradient id="chip-core" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#28ae80"/><stop offset="1" stop-color="#139c6d"/>
+    </linearGradient>
+    <linearGradient id="disk-case" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#526173"/><stop offset=".48" stop-color="#2c3747"/><stop offset="1" stop-color="#47556a"/>
+    </linearGradient>
+    <linearGradient id="disk-platter" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#cfd9e4"/><stop offset=".6" stop-color="#aabacd"/><stop offset="1" stop-color="#d6e1ed"/>
+    </linearGradient>
+    <linearGradient id="usb-blue" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#0b66dc"/><stop offset=".62" stop-color="#0060cf"/><stop offset="1" stop-color="#0345aa"/>
+    </linearGradient>
+    <linearGradient id="gear-blue" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#2090f2"/><stop offset=".49" stop-color="#1074df"/><stop offset="1" stop-color="#0062cb"/>
+    </linearGradient>
+    <linearGradient id="gear-gloss" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#b4d0eb"/><stop offset=".5" stop-color="#a3c4eb"/><stop offset="1" stop-color="#81b4ed"/>
+    </linearGradient>
+    <linearGradient id="gear-shadow" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#034dbe" stop-opacity=".12"/><stop offset="1" stop-color="#003588" stop-opacity=".43"/>
+    </linearGradient>
+    <linearGradient id="red-dot" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#ff6a6f"/><stop offset="1" stop-color="#ff455d"/>
+    </linearGradient>
+    <linearGradient id="yellow-dot" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#ffd65b"/><stop offset="1" stop-color="#ffbb39"/>
+    </linearGradient>
+    <linearGradient id="green-dot" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#54e67d"/><stop offset="1" stop-color="#30cb69"/>
+    </linearGradient>
+    <filter id="soft-shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feGaussianBlur stdDeviation="2"/>
+    </filter>
+    <path id="gear-outline" d="M864 666 H930 Q943 666 948 678 L962 716 L994 732 L1027 711 Q1038 704 1047 715 L1088 756 Q1098 764 1091 777 L1068 811 L1081 839 L1118 851 Q1130 855 1130 867 V929 Q1130 939 1119 943 L1082 955 L1068 983 L1091 1018 Q1099 1028 1089 1039 L1047 1079 Q1037 1088 1027 1081 L994 1061 L962 1075 L948 1112 Q944 1122 931 1122 H866 Q854 1122 850 1112 L836 1076 L805 1061 L771 1082 Q762 1088 753 1079 L709 1038 Q700 1028 708 1017 L729 985 L715 955 L678 944 Q667 941 667 930 V867 Q667 855 678 851 L715 839 L730 811 L707 779 Q700 767 709 758 L752 714 Q762 706 772 712 L804 733 L836 716 L850 679 Q854 666 864 666 Z"/>
+    <clipPath id="gear-clip"><use href="#gear-outline"/></clipPath>
+    <mask id="hole" maskUnits="userSpaceOnUse" x="0" y="0" width="1254" height="1254">
+      <rect x="0" y="0" width="1254" height="1254" fill="white"/>
+      <circle cx="897.5" cy="898.5" r="70.5" fill="black"/>
+    </mask>
+  </defs>
+
+  <g mask="url(#hole)">
+    <!-- Window with a dark title bar and a softly tinted white content area. -->
+    <rect x="152.5" y="178.5" width="830" height="895" rx="79" fill="#101824" opacity=".20"/>
+    <rect x="154" y="179" width="827" height="894" rx="78" fill="url(#window-frame)"/>
+    <path d="M166 319 H968 V992 Q968 1061 898 1061 H235 Q166 1061 166 992 Z" fill="url(#window-face)"/>
+    <circle cx="244" cy="260" r="25.5" fill="url(#red-dot)"/>
+    <circle cx="328" cy="260" r="25.5" fill="url(#yellow-dot)"/>
+    <circle cx="409.5" cy="260" r="25.5" fill="url(#green-dot)"/>
+
+    <!-- Hardware tree connectors and nodes. -->
+    <rect x="243.5" y="397" width="16" height="563" fill="url(#graph-line)"/>
+    <path d="M258 398 H324 V413 H258 Z M258 595 H327 V610 H258 Z M258 774 H327 V789 H258 Z M258 952 H327 V968 H258 Z" fill="url(#graph-line)"/>
+    <g fill="url(#graph-node)">
+      <rect x="228" y="382" width="47" height="47" rx="10"/>
+      <rect x="228" y="577" width="47" height="47" rx="10"/>
+      <rect x="228" y="757" width="47" height="47" rx="10"/>
+      <rect x="228" y="935" width="47" height="47" rx="10"/>
+    </g>
+
+    <!-- Monitor: bezel, screen, reflective highlight and stand. -->
+    <rect x="341" y="361" width="166" height="121" rx="16" fill="url(#monitor-frame)"/>
+    <rect x="357" y="378" width="134" height="88" fill="url(#monitor-screen)"/>
+    <path d="M357 378 H475 L392 466 H357 Z" fill="#64b8ff" opacity=".57"/>
+    <path d="M409 481 H439 V491 H459 Q466 491 466 499 Q466 508 458 508 H391 Q382 508 382 500 Q382 491 391 491 H409 Z" fill="url(#monitor-frame)"/>
+    <g fill="url(#small-bars)">
+      <rect x="541" y="387" width="279" height="34" rx="17"/>
+      <rect x="541" y="441" width="183" height="33" rx="16.5"/>
+    </g>
+
+    <!-- Integrated circuit icon. -->
+    <g fill="url(#chip-legs)">
+      <rect x="393" y="538" width="13" height="45" rx="6.5"/>
+      <rect x="417" y="538" width="13" height="45" rx="6.5"/>
+      <rect x="442" y="538" width="13" height="45" rx="6.5"/>
+      <rect x="393" y="637" width="13" height="46" rx="6.5"/>
+      <rect x="417" y="637" width="13" height="46" rx="6.5"/>
+      <rect x="442" y="637" width="13" height="46" rx="6.5"/>
+      <rect x="351" y="579" width="48" height="14" rx="7"/>
+      <rect x="351" y="605" width="48" height="14" rx="7"/>
+      <rect x="351" y="630" width="48" height="14" rx="7"/>
+      <rect x="449" y="579" width="48" height="14" rx="7"/>
+      <rect x="449" y="605" width="48" height="14" rx="7"/>
+      <rect x="449" y="630" width="48" height="14" rx="7"/>
+    </g>
+    <rect x="370" y="556" width="108" height="109" rx="13" fill="url(#chip-body)"/>
+    <rect x="390" y="575" width="68" height="70" rx="8" fill="url(#chip-core)"/>
+    <g fill="url(#small-bars)">
+      <rect x="541" y="571" width="252" height="34" rx="17"/>
+      <rect x="541" y="624" width="169" height="32" rx="16"/>
+    </g>
+
+    <!-- Drive housing and platter. -->
+    <rect x="357" y="709" width="132" height="152" rx="17" fill="url(#disk-case)"/>
+    <circle cx="423" cy="775" r="48" fill="url(#disk-platter)"/>
+    <circle cx="423.5" cy="775.5" r="13.5" fill="#414d5f"/>
+    <rect x="375" y="832" width="39" height="13" rx="6.5" fill="#73859b" opacity=".62"/>
+    <circle cx="464" cy="838" r="10.5" fill="#f4f7fb"/>
+    <g fill="url(#small-bars)">
+      <rect x="541" y="749" width="144" height="32" rx="16"/>
+      <rect x="541" y="802" width="118" height="32" rx="16"/>
+    </g>
+
+    <!-- Three-ended USB trident. -->
+    <path d="M420 888 Q424 888 427 893 L438 907 Q442 917 432 918 H428 V983 Q442 972 449 955 V932 Q449 925 456 925 H475 Q482 925 482 933 V951 Q482 959 474 959 H467 Q456 981 427 996 V1008 Q438 1016 438 1026 Q438 1044 420 1044 Q401 1044 401 1026 Q401 1017 411 1008 V1003 Q388 992 375 978 Q360 976 361 959 Q362 942 379 942 Q396 942 396 960 Q396 967 389 973 Q402 986 413 990 V918 H408 Q398 918 403 908 L413 892 Q416 887 420 888 Z" fill="url(#usb-blue)"/>
+    <g fill="url(#small-bars)">
+      <rect x="541" y="929" width="118" height="31" rx="15.5"/>
+      <rect x="541" y="978" width="118" height="32" rx="16"/>
+    </g>
+
+    <!-- Large foreground settings gear with a translucent diagonal facet. -->
+    <use href="#gear-outline" fill="url(#gear-blue)"/>
+    <g clip-path="url(#gear-clip)">
+      <path d="M1073 736 L1200 846 V1190 H674 Z" fill="url(#gear-shadow)"/>
+      <path d="M704 1083 L1073 736" fill="none" stroke="#2f93ef" stroke-opacity=".17" stroke-width="2"/>
+    </g>
+    <circle cx="897.5" cy="898.5" r="118" fill="url(#gear-gloss)"/>
+    <path d="M813 980 Q765 938 782 868 Q791 820 826 801 L989 967 Q925 1038 844 999 Z" fill="#b9d5f0" opacity=".22"/>
+  </g>
+</svg>
