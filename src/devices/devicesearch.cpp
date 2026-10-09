@@ -129,6 +129,7 @@ void DeepSearchWorker::setRequest(QVector<SearchRecord> records, QString query, 
 }
 void DeepSearchWorker::run()
 {
+    Q_ASSERT(isCurrentThread());
     if (revision_ != cachedRevision_) {
         cache_.clear(); cacheBytes_ = 0; cachedRevision_ = revision_;
     }

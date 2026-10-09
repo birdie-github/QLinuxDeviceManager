@@ -1,6 +1,6 @@
 #include "systemproperties.h"
 #include "cpumetadata.h"
-#include <QDir>
+#include "directoryscan.h"
 #include <libudev.h>
 #include <memory>
 #include <QMap>
@@ -151,10 +151,11 @@ void cpuTopology(SystemProperties &result)
         const int cacheFd = open(path.toUtf8().constData(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
         if (cacheFd < 0) { cacheError = failed(errno); complete = false; break; }
         close(cacheFd);
-        const QStringList indexes = QDir(path).entryList({"index*"}, QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
-        if (indexes.isEmpty()) { complete = false; break; }
-        for (const QString &index : indexes) {
-            if (++entries > 16384) { cacheError = failed(EOVERFLOW); complete = false; break; }
+        const DirectoryNames indexes = boundedDirectoryNames(path, 16384 - entries, {"index*"});
+        if (indexes.error) { cacheError = failed(indexes.error); complete = false; break; }
+        if (indexes.names.isEmpty()) { complete = false; break; }
+        for (const QString &index : indexes.names) {
+            ++entries;
             const QString prefix = path + '/' + index + '/';
             const Attribute level = readText(prefix + "level"), type = readText(prefix + "type"),
                 size = readText(prefix + "size"), sharing = readText(prefix + "shared_cpu_list");

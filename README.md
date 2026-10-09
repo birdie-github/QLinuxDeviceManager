@@ -152,7 +152,7 @@ toggle. Neither reading sysfs presence nor binding a driver establishes health.
 
 ## Build and install
 
-Required: Linux, CMake >= 3.19, a C++17 compiler, pkg-config, Qt >= 6.2 Widgets
+Required: Linux, CMake >= 3.19, a C++17 compiler, pkg-config, Qt >= 6.8 Widgets
 and libudev development headers. Optional: Qt Linguist tools for translation
 catalog generation and libkmod >= 30 for module-description fallback names and
 installed module properties.
@@ -161,7 +161,13 @@ module naming is enabled. Optional QtDBus enables cached UDisks2 storage metadat
 when an already-running UDisks2 service is accessible. Use
 `-DUDISKS2=OFF` for a native-only build. Basic viewing requires neither
 QtDBus nor UDisks2; journal libraries are not used. No particular desktop
-environment is required.
+environment is required. The optional Qt components must also be version 6.8
+or newer. Project executables and tests enable Qt strict API checks through 6.8.
+Directory scans collect bounded, sorted results using QDirListing, preserving
+sysfs links to directories and checking cancellation during enumeration. Debug
+builds assert the GUI/worker thread boundaries when delivering snapshots.
+Older distribution Qt packages (for example Ubuntu 24.04's Qt 6.4) require a newer
+Qt installation to build this application.
 
 Fedora packages: `gcc-c++ cmake make pkgconf-pkg-config qt6-qtbase-devel
 systemd-devel`; optional `qt6-qttools-devel` and `kmod-devel`.

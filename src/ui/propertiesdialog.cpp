@@ -2,6 +2,7 @@
 #include "propertiesdialog.h"
 #include "devicelabel.h"
 #include <QApplication>
+#include <QThread>
 #include <QCoreApplication>
 #include <QCheckBox>
 #include <QClipboard>
@@ -294,6 +295,7 @@ void PropertiesDialog::setBusy(bool busy)
 }
 void PropertiesDialog::acceptResult(DeviceProperties result)
 {
+    Q_ASSERT(QThread::isMainThread());
     if (removed_ || result.device.path != device().path || result.device.generation != device().generation) return;
     setBusy(false);
     if (result.state == ReadState::Removed) { markRemoved(); return; }
@@ -522,6 +524,7 @@ void PropertiesDialog::showHealth()
 
 void PropertiesDialog::updateEvents(const DeviceEventsSnapshot &history, const QString &monitorNote)
 {
+    Q_ASSERT(QThread::isMainThread());
     // A late removal observation may arrive after a property read detected removal.
     // Accept only the old token, retaining its rows even after global eviction.
     eventScope_ = tr("Live udev events since %1. Receipt times; exact device instance only. "

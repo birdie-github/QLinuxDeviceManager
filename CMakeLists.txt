@@ -13,11 +13,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
-find_package(Qt6 6.2 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Widgets)
 # Optional read-only UDisks2 cache access. Native storage viewing still works without it.
 option(UDISKS2 "Use optional QtDBus for cached UDisks2 storage metadata" ON)
 if(UDISKS2)
-    find_package(Qt6 6.2 QUIET COMPONENTS DBus)
+    find_package(Qt6 6.8 QUIET COMPONENTS DBus)
 endif()
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(UDEV REQUIRED IMPORTED_TARGET libudev)
@@ -32,6 +32,7 @@ add_executable(qlinuxdevicemanager
     src/devices/deviceevents.h src/devices/deviceevents.cpp
     src/devices/deviceproperties.h src/devices/deviceproperties.cpp
     src/devices/storageproperties.h src/devices/storageproperties.cpp
+    src/devices/directoryscan.h
     src/devices/storagepresentation.h src/devices/storagepresentation.cpp
     src/devices/deviceresources.h src/devices/deviceresources.cpp
     src/devices/resourceformat.h src/devices/resourceformat.cpp
@@ -73,7 +74,7 @@ install(FILES packaging/io.github.birdie-github.QLinuxDeviceManager.desktop
     DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 install(FILES project.json DESTINATION ${CMAKE_INSTALL_DATADIR}/QLinuxDeviceManager)
 # Optional tools: basic viewing never requires Linguist.
-find_package(Qt6 6.2 QUIET COMPONENTS LinguistTools)
+find_package(Qt6 6.8 QUIET COMPONENTS LinguistTools)
 if(TARGET Qt6::lupdate)
     add_custom_target(update-translations
         COMMAND Qt6::lupdate ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -86,6 +87,10 @@ if(TARGET Qt6::lrelease)
 endif()
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(directory-scan-test tests/directory-scan.cpp src/devices/directoryscan.h)
+    target_include_directories(directory-scan-test PRIVATE src/devices)
+    target_link_libraries(directory-scan-test PRIVATE Qt6::Core)
+    add_test(NAME directory-scan COMMAND directory-scan-test)
     add_executable(monitor-state-test tests/monitor-state.cpp
         src/devices/monitorstate.cpp src/devices/monitorstate.h)
     target_include_directories(monitor-state-test PRIVATE src/devices)
@@ -143,3 +148,12 @@ if(BUILD_TESTING)
     target_link_libraries(system-properties-test PRIVATE Qt6::Core PkgConfig::UDEV)
     add_test(NAME system-properties COMMAND system-properties-test)
 endif()
+
+# Apply Qt's 6.8 API checks only to project executables, including fixture targets.
+foreach(qldm_target IN ITEMS qlinuxdevicemanager monitor-state-test device-events-test
+        device-rules-test device-resources-test device-search-test system-properties-test
+        directory-scan-test)
+    if(TARGET ${qldm_target})
+        target_compile_definitions(${qldm_target} PRIVATE QT_ENABLE_STRICT_MODE_UP_TO=0x060800)
+    endif()
+endforeach()

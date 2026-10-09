@@ -1,4 +1,5 @@
 #include "storageproperties.h"
+#include "directoryscan.h"
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -284,11 +285,12 @@ StorageProperties collectStorageProperties(const Device &device, bool cachedServ
     if (!result.applicable) return result;
     std::unique_ptr<udev, decltype(&udev_unref)> context(udev_new(), &udev_unref);
     const QDir directory("/sys/class/block");
-    const QStringList names = directory.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
-    if (names.size() > recordLimit) {
-        field(result.notes, "limit", QT_TRANSLATE_NOOP("Storage", "Storage inventory"), failure(EOVERFLOW), "/sys/class/block");
+    const DirectoryNames scanned = boundedDirectoryNames(directory.path(), recordLimit);
+    if (scanned.error) {
+        field(result.notes, "limit", QT_TRANSLATE_NOOP("Storage", "Storage inventory"), failure(scanned.error), "/sys/class/block");
         return result;
     }
+    const QStringList &names = scanned.names;
     QMap<QString, QString> paths;
     for (const QString &name : names) {
         const QString path = QFileInfo(directory.filePath(name)).canonicalFilePath();
@@ -307,7 +309,12 @@ StorageProperties collectStorageProperties(const Device &device, bool cachedServ
             nativeLinks.append({path, QFileInfo(path).dir().canonicalPath(), QT_TRANSLATE_NOOP("Storage", "Partition of"), path + "/partition (kernel ancestry)"});
         for (const auto &pair : {qMakePair("slaves", QT_TRANSLATE_NOOP("Storage", "Backed by")), qMakePair("holders", QT_TRANSLATE_NOOP("Storage", "Used by"))}) {
             const QDir links(path + '/' + QLatin1String(pair.first));
-            for (const QString &name : links.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name)) {
+            const DirectoryNames related = boundedDirectoryNames(links.path(), recordLimit);
+            if (related.error) {
+                field(result.notes, "limit", QT_TRANSLATE_NOOP("Storage", "Storage relationships"), failure(related.error), links.path());
+                return result;
+            }
+            for (const QString &name : related.names) {
                 const QString target = QFileInfo(links.filePath(name)).canonicalFilePath();
                 if (allPaths.contains(target)) nativeLinks.append({path, target, pair.second, links.filePath(name)});
                 if (nativeLinks.size() > recordLimit * 4) {

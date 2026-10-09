@@ -187,6 +187,7 @@ Inventory Enumerator::collect()
 
 void Enumerator::run()
 {
+    Q_ASSERT(isCurrentThread());
     using Monitor = std::unique_ptr<udev_monitor, decltype(&udev_monitor_unref)>;
     std::unique_ptr<udev, decltype(&udev_unref)> context(udev_new(), &udev_unref);
     Monitor monitor(nullptr, &udev_monitor_unref);

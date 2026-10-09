@@ -9,6 +9,7 @@
 #include <QActionGroup>
 #include <functional>
 #include <QApplication>
+#include <QThread>
 #include <QCloseEvent>
 #include <QCheckBox>
 #include <QHBoxLayout>
@@ -237,6 +238,7 @@ void MainWindow::refresh()
 }
 void MainWindow::acceptInventory(const Inventory &inventory)
 {
+    Q_ASSERT(QThread::isMainThread());
     worker_.acknowledge();
     if (closing_) return;
     events_ = inventory.events;
@@ -425,6 +427,7 @@ void MainWindow::requestProperties()
 }
 void MainWindow::acceptProperties()
 {
+    Q_ASSERT(QThread::isMainThread());
     propertiesWorker_.wait(); // Join final thread-local cleanup before reusing it.
     DeviceProperties result = propertiesWorker_.takeResult();
     propertiesBusy_ = false;
@@ -483,6 +486,7 @@ void MainWindow::startSearch()
 }
 void MainWindow::acceptSearchBatch(const SearchBatch &batch)
 {
+    Q_ASSERT(QThread::isMainThread());
     if (closing_ || batch.request != searchRequest_ || !filter_->active() || !deepSearch_->isChecked()) return;
     filter_->addMatches(batch.matches);
     searchDone_ = batch.done;
@@ -522,6 +526,7 @@ void MainWindow::requestSystemInformation()
 }
 void MainWindow::acceptSystemInformation()
 {
+    Q_ASSERT(QThread::isMainThread());
     systemWorker_.wait();
     systemBusy_ = false;
     if (closing_) { close(); return; }

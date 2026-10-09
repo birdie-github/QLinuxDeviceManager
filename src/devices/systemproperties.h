@@ -19,7 +19,11 @@ public:
     using QThread::QThread;
     SystemProperties takeResult(); // After finished and wait.
 protected:
-    void run() override { result_ = collectSystemProperties(); }
+    void run() override
+    {
+        Q_ASSERT(isCurrentThread());
+        result_ = collectSystemProperties();
+    }
 private:
     SystemProperties result_;
 };

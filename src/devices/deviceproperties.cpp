@@ -315,6 +315,7 @@ DeviceProperties collectDeviceProperties(const Device &device, bool cachedStorag
 
 void PropertiesReader::run()
 {
+    Q_ASSERT(isCurrentThread());
     result_ = collectDeviceProperties(device_);
     result_.request = request_;
 }

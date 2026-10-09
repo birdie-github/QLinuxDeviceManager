@@ -1,6 +1,7 @@
 #include "systemdialog.h"
 #include "propertytext.h"
 #include <QApplication>
+#include <QThread>
 #include <QClipboard>
 #include <QDialogButtonBox>
 #include <QGridLayout>
@@ -147,6 +148,7 @@ QString SystemDialog::displayValue(const QString &key, const Attribute &value) c
 }
 void SystemDialog::acceptResult(SystemProperties result)
 {
+    Q_ASSERT(QThread::isMainThread());
     snapshot_ = std::move(result);
     for (const QString &key : order_) {
         fields_.value(key)->setText(displayValue(key, snapshot_.values.value(key)));
