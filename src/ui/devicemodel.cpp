@@ -2,6 +2,7 @@
 #include <QApplication>
 #include <QIcon>
 #include <QStyle>
+#include <QStringList>
 #include <algorithm>
 #include <utility>
 
@@ -42,17 +43,27 @@ QVariant DeviceModel::data(const QModelIndex &i, int role) const
     if (role == CategoryRole) return n->category;
     if (role == PathRole) return d ? QVariant(d->path) : QVariant();
     if (role == GenerationRole) return d ? QVariant::fromValue(d->generation) : QVariant();
-    if (role == Qt::DisplayRole)
-        return d ? d->name + QStringLiteral(" [%1]").arg(d->sysname) : categoryLabel(n->category);
+    if (role == Qt::DisplayRole) {
+        if (!d) return categoryLabel(n->category);
+        if (d->name == d->sysname || d->nameSource == "direct kernel driver and kernel name") return d->name;
+        return d->name + QStringLiteral(" [%1]").arg(d->sysname);
+    }
     if (role == Qt::DecorationRole)
         return QIcon::fromTheme(categoryIcon(n->category), QApplication::style()->standardIcon(
             d ? QStyle::SP_ComputerIcon : QStyle::SP_DirIcon));
     if (role == Qt::ToolTipRole) {
         if (!d) return categoryLabel(n->category).toHtmlEscaped();
         // Escaping prevents device-controlled strings being interpreted as markup.
-        const QString tooltip = QStringLiteral("%1\n%2\n%3: %4\n%5: %6")
-            .arg(d->name, d->path, tr("Subsystem"), d->subsystem, tr("Name source"), d->nameSource).toHtmlEscaped();
-        return QStringLiteral("<qt>%1</qt>").arg(QString(tooltip).replace('\n', "<br>"));
+        QString tooltip = QStringLiteral("%1\n%2\n%3: %4\n%5: %6")
+            .arg(d->name, d->path, tr("Subsystem"), d->subsystem, tr("Name source"), d->nameSource);
+        if (!d->representedByPath.isEmpty())
+            tooltip += QStringLiteral("\n%1: %2").arg(tr("Represented by"), d->representedByPath);
+        QStringList grouped;
+        for (const auto &record : devices_)
+            if (record.representedByPath == d->path) grouped.append(record.path);
+        if (!grouped.isEmpty())
+            tooltip += QStringLiteral("\n%1:\n%2").arg(tr("Grouped records"), grouped.join('\n'));
+        return QStringLiteral("<qt>%1</qt>").arg(tooltip.toHtmlEscaped().replace('\n', "<br>"));
     }
     return {};
 }

@@ -1,4 +1,6 @@
 #include "enumerator.h"
+#include "cpumetadata.h"
+#include "devicepresentation.h"
 
 #include <libudev.h>
 #include <memory>
@@ -68,6 +70,11 @@ void Enumerator::run()
         finish();
         return;
     }
+    // hwdb is an optional local naming database, still accessed through libudev.
+    std::unique_ptr<udev_hwdb, decltype(&udev_hwdb_unref)> hwdb(udev_hwdb_new(context.get()), &udev_hwdb_unref);
+    Attribute cpuInfo;
+    QHash<int, QString> cpuModels;
+    bool cpuInfoRead = false;
     udev_list_entry *entry = nullptr;
     udev_list_entry_foreach(entry, udev_enumerate_get_list_entry(scan.get())) {
         if (isInterruptionRequested()) break;
@@ -84,12 +91,43 @@ void Enumerator::run()
         if (auto *parent = udev_device_get_parent(raw.get()))
             d.parentPath = text(udev_device_get_syspath(parent));
         // Explicit allowlist: no recursive sysfs reads, binary resources or hardware queries.
-        for (const char *key : {"ID_MODEL_FROM_DATABASE", "ID_MODEL", "NAME", "PCI_CLASS",
+        for (const char *key : {"ID_MODEL_FROM_DATABASE", "ID_MODEL", "NAME", "ID_V4L_PRODUCT", "MODALIAS", "PCI_CLASS",
                               "PCI_ID", "ID_VENDOR_FROM_DATABASE", "ID_VENDOR", "ID_BUS",
                               "ID_INPUT_KEYBOARD", "ID_INPUT_MOUSE", "ID_INPUT_TOUCHPAD",
                               "ID_INPUT_POINTINGSTICK", "USEC_INITIALIZED"}) {
             const char *value = udev_device_get_property_value(raw.get(), key);
             if (value) d.properties.insert(QLatin1String(key), text(value));
+        }
+        if (hwdb && (d.subsystem == "pci" || d.subsystem == "usb")
+            && d.properties.value("ID_MODEL_FROM_DATABASE").isEmpty()) {
+            const QByteArray alias = d.properties.value("MODALIAS").toUtf8();
+            if (!alias.isEmpty()) {
+                udev_list_entry *property = nullptr;
+                udev_list_entry_foreach(property, udev_hwdb_get_properties_list_entry(hwdb.get(), alias.constData(), 0)) {
+                    const QString key = text(udev_list_entry_get_name(property));
+                    if ((key == "ID_MODEL_FROM_DATABASE" || key == "ID_VENDOR_FROM_DATABASE")
+                        && d.properties.value(key).isEmpty()) {
+                        d.properties.insert(key, text(udev_list_entry_get_value(property)));
+                        d.propertySources.insert(key, QStringLiteral("hwdb: %1 (%2)").arg(key, d.properties.value("MODALIAS")));
+                    }
+                }
+            }
+        }
+        if (d.subsystem == "cpu") {
+            if (!cpuInfoRead) {
+                cpuInfo = readCpuInfo();
+                if (cpuInfo.state == ReadState::Available) cpuModels = parseCpuModels(cpuInfo.value);
+                cpuInfoRead = true;
+                cpuInfo.value.clear(); // Keep only the selected per-processor model fields.
+            }
+            Attribute model;
+            model.state = cpuInfo.state;
+            model.error = cpuInfo.error;
+            bool valid = false;
+            const int number = d.sysname.startsWith("cpu") ? d.sysname.mid(3).toInt(&valid) : -1;
+            if (valid && cpuModels.contains(number)) model.value = cpuModels.value(number);
+            else if (model.state == ReadState::Available) model.state = ReadState::Unavailable;
+            d.attributes.insert("cpu_model", model);
         }
         struct stat info {};
         const QByteArray path = d.path.toUtf8();
@@ -102,15 +140,9 @@ void Enumerator::run()
         if (d.subsystem == "input" || d.subsystem == "video4linux") attribute = "name";
         else if (d.subsystem == "sound" && d.sysname.startsWith("card")) attribute = "id";
         else if (d.subsystem == "power_supply") attribute = "model_name";
+        else if (d.subsystem == "nvme") attribute = "model";
         if (!attribute.isEmpty()) d.attributes.insert(attribute, readAttribute(d.path + '/' + attribute));
         nameDevice(d);
-        if (d.nameSource == "kernel name" && !attribute.isEmpty()) {
-            const auto value = d.attributes.value(attribute);
-            if (value.state == ReadState::Available && !value.value.isEmpty()) {
-                d.name = value.value;
-                d.nameSource = QStringLiteral("sysfs: %1/%2").arg(d.path, attribute);
-            }
-        }
         struct stat after {};
         if (stat(path.constData(), &after) != 0 || after.st_dev != info.st_dev || after.st_ino != info.st_ino) {
             ++result.skipped;
@@ -119,5 +151,6 @@ void Enumerator::run()
         classify(d);
         result.devices.append(std::move(d));
     }
+    if (!isInterruptionRequested()) refinePresentation(result.devices);
     finish();
 }

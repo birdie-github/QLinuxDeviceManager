@@ -82,8 +82,8 @@ MainWindow::MainWindow()
     QSettings settings;
     restoreGeometry(settings.value("window/geometry").toByteArray());
     restoreState(settings.value("window/state").toByteArray());
-    for (const auto &id : settings.value("tree/expanded").toStringList()) expanded_.insert(id);
-    initialTree_ = !settings.contains("tree/expanded");
+    // Every launch starts collapsed; only refreshes within this session restore expansion.
+    settings.remove("tree/expanded");
     internalAction_->setChecked(settings.value("view/showInternal", false).toBool());
     connect(tree_->selectionModel(), &QItemSelectionModel::currentChanged, this,
             [this](const QModelIndex &, const QModelIndex &) { updateStatus(); });
@@ -149,9 +149,8 @@ void MainWindow::restoreTree()
 {
     for (int row = 0; row < model_->rowCount(); ++row) {
         const QModelIndex i = model_->index(row, 0);
-        if (initialTree_ || expanded_.contains(i.data(DeviceModel::CategoryRole).toString())) tree_->expand(i);
+        if (expanded_.contains(i.data(DeviceModel::CategoryRole).toString())) tree_->expand(i);
     }
-    if (model_->rowCount() > 0) initialTree_ = false;
     const QModelIndex selected = model_->findDevice(selectedPath_, selectedGeneration_);
     if (selected.isValid()) {
         tree_->setCurrentIndex(selected);
@@ -175,9 +174,6 @@ void MainWindow::saveSettings()
     settings.setValue("window/geometry", saveGeometry());
     settings.setValue("window/state", saveState());
     settings.setValue("view/showInternal", internalAction_->isChecked());
-    QStringList ids = expanded_.values();
-    ids.sort();
-    settings.setValue("tree/expanded", ids);
 }
 void MainWindow::closeEvent(QCloseEvent *event)
 {

@@ -23,6 +23,8 @@ struct Device {
     QHash<QString, Attribute> attributes;
     QString name;
     QString nameSource;
+    QString representedByPath; // Presentation grouping only, never a new ownership edge.
+    QHash<QString, QString> propertySources;
     QString category;         // Stable, untranslated application category ID.
     QString incarnation;      // Directory identity plus optional udev initialization stamp.
     quint64 generation = 0;   // Assigned by the GUI's inventory reconciliation.

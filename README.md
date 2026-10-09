@@ -7,8 +7,9 @@ Licensed under GPLv3 (see LICENSE).
 ## Current scope: Phase 1
 
 Devices by type, a read-only **Refresh (F5)** action, selection, themed icons,
-and persistent window geometry, toolbar visibility, category expansion and
-visibility settings. Run as a normal user; no daemon, device-management
+and persistent window geometry, toolbar visibility and visibility settings.
+Categories start collapsed on every launch; expansion is preserved during
+refreshes and visibility changes within the running session. Run as a normal user; no daemon, device-management
 operations, hardware health claims or bus rescans are implemented.
 
 The complete discovered inventory remains separate from the visible tree.
@@ -18,9 +19,15 @@ HID transport nodes, sound endpoints, DRM outputs, unbound ACPI objects,
 SCSI/ATA transport objects and other unbound implementation objects.
 This filter does not describe hardware health or disconnected hardware.
 
-Names prefer the device's own udev database model, model, or NAME property,
-then explicitly selected direct sysfs text metadata (input/video name, sound
-card ID, power-supply model), then its kernel name. Kernel names accompany
+CPU model names come from `/proc/cpuinfo`, matched by logical processor number
+(the file is read once per refresh with a 4 MiB bound). Each logical CPU retains
+its own record; offline CPUs without matching metadata keep their kernel name.
+Input/video function names and direct NVMe model metadata take precedence over
+generic model names. Other names prefer udev database/model properties, then
+selected direct sysfs text metadata. Missing PCI/USB database model properties
+can be resolved from the local libudev hwdb using the device's own modalias.
+If unresolved, a directly bound driver and kernel name describe the function
+without inventing a marketing name; no driver evidence means a kernel-name fallback. Kernel names accompany
 labels to distinguish identical models. Missing metadata has a readable
 fallback; failed attribute reads retain an explicit state and error separately.
 No parent vendor, model or driver is silently attributed to a child.
@@ -43,8 +50,14 @@ Application categories are deterministic groupings, not kernel device classes:
 | Other unbound objects | Other devices; hidden |
 
 Composite USB input/audio/video functions remain independently visible.
-A PCI adapter and its class function can both appear: they have distinct kernel
-identities and are not merged by matching names. DRM connectors are called
+A PCI network adapter with exactly one visible interface is represented by its
+PCI row; the interface remains available in the internal view. Multiple
+interfaces remain independently visible, with the redundant aggregate PCI row
+hidden. An NVMe class controller backed by a PCI NVMe controller is represented
+by that PCI row; namespace disks remain separate. These rules follow recorded
+udev ancestry and PCI classes, never matching model names or serial numbers.
+Devices without a matching parent remain visible. Tooltips identify grouped
+records and their representative. Separate PCI controllers remain separate. DRM connectors are called
 outputs, not monitors: their presence does not prove a monitor is connected.
 Category mappings require real-machine validation, particularly Bluetooth,
 multifunction video devices, firmware/platform devices and unusual buses.
@@ -90,7 +103,8 @@ fallbacks. Further desktop integration and UI polish belong to Phase 9.
 
 ## Source layout
 
-- `src/devices/`: inventory records, classification and enumeration worker.
+- `src/devices/`: inventory records, classification, bounded CPU metadata,
+  ancestry-based presentation grouping and the enumeration worker.
 - `src/ui/`: tree model, window, actions and UI state.
 - `src/main.cpp`: application startup and translation loading.
 - `resources/embedded/`: build-time metadata header template.
@@ -111,9 +125,11 @@ was authorized. Patch application, whitespace, source/CMake references and
 source-level ownership/connection review are checked. The included C++ fixture
 checks still need compilation and execution on the user's machine.
 
-No hardware was observed through this application. Container sysfs is not
-representative of a desktop, so hardware/category acceptance remains pending
-real-machine tests. Later phases cover properties, additional views, live
+A user-supplied HP laptop diagnostic dump was inspected offline: 16 logical
+Intel Core Ultra X7 358H CPUs, one PCI Wi-Fi adapter plus `wlo1`, and one PCI
+NVMe controller plus `nvme0`. See [doc/discovery-notes.md](doc/discovery-notes.md).
+This is evidence from the dump, not a runtime application test. GUI/category
+acceptance still requires real-machine testing. Later phases cover properties, additional views, live
 monitoring, resources, storage metadata and narrowly authorized operations.
 
 Relevant API/design references:

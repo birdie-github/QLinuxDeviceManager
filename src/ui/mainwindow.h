@@ -31,7 +31,6 @@ private:
     bool busy_ = false;
     bool pending_ = false;
     bool closing_ = false;
-    bool initialTree_ = true;
     QSet<QString> expanded_;
     QString selectedPath_;
     quint64 selectedGeneration_ = 0;

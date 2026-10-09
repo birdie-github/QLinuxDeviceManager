@@ -98,16 +98,51 @@ void classify(Device &d)
 }
 void nameDevice(Device &d)
 {
+    const auto attributeName = [&d](const QString &key) {
+        const auto it = d.attributes.constFind(key);
+        if (it == d.attributes.cend() || it->state != ReadState::Available || it->value.isEmpty()) return false;
+        d.name = it->value;
+        d.nameSource = QStringLiteral("sysfs: %1/%2").arg(d.path, key);
+        return true;
+    };
+    if (d.subsystem == "cpu") {
+        const auto model = d.attributes.value("cpu_model");
+        if (model.state == ReadState::Available && !model.value.isEmpty()) {
+            d.name = model.value;
+            d.nameSource = QStringLiteral("/proc/cpuinfo: processor %1").arg(d.sysname.mid(3));
+            return;
+        }
+    }
+    // Function names take priority over generic USB receiver/camera model names.
+    if ((d.subsystem == "input" || d.subsystem == "video4linux") && attributeName("name")) return;
+    if (d.subsystem == "input") {
+        QString name = d.properties.value("NAME");
+        if (name.startsWith('"') && name.endsWith('"') && name.size() >= 2) name = name.mid(1, name.size() - 2);
+        if (!name.isEmpty()) { d.name = name; d.nameSource = "udev: NAME"; return; }
+    }
+    if (d.subsystem == "video4linux") {
+        const QString name = d.properties.value("ID_V4L_PRODUCT");
+        if (!name.isEmpty()) { d.name = name; d.nameSource = "udev: ID_V4L_PRODUCT"; return; }
+    }
+    if (d.subsystem == "nvme" && attributeName("model")) return;
     for (const char *key : {"ID_MODEL_FROM_DATABASE", "ID_MODEL", "NAME"}) {
         const QString value = d.properties.value(QLatin1String(key));
         if (!value.isEmpty()) {
             d.name = value;
-            d.nameSource = QStringLiteral("udev: %1").arg(QLatin1String(key));
+            d.nameSource = d.propertySources.value(QLatin1String(key), QStringLiteral("udev: %1").arg(QLatin1String(key)));
             return;
         }
     }
+    if (d.subsystem == "sound" && attributeName("id")) return;
+    if (d.subsystem == "power_supply" && attributeName("model_name")) return;
     d.name = d.sysname.isEmpty() ? d.path : d.sysname;
     d.nameSource = "kernel name";
+    // Describe unresolved bound functions using real binding evidence, without
+    // claiming that a module/driver name is the hardware's marketing model.
+    if (!d.driver.isEmpty() && d.subsystem != "cpu") {
+        d.name = QStringLiteral("%1 — %2").arg(d.driver, d.name);
+        d.nameSource = "direct kernel driver and kernel name";
+    }
 }
 void reconcile(QVector<Device> &next, const QVector<Device> &previous, quint64 &generation)
 {

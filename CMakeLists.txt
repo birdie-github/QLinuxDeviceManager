@@ -19,6 +19,8 @@ pkg_check_modules(UDEV REQUIRED IMPORTED_TARGET libudev)
 add_executable(qlinuxdevicemanager
     src/main.cpp src/devices/device.h src/devices/device.cpp
     src/devices/enumerator.h src/devices/enumerator.cpp
+    src/devices/cpumetadata.h src/devices/cpumetadata.cpp
+    src/devices/devicepresentation.h src/devices/devicepresentation.cpp
     src/ui/devicemodel.h src/ui/devicemodel.cpp
     src/ui/mainwindow.h src/ui/mainwindow.cpp)
 target_include_directories(qlinuxdevicemanager PRIVATE
@@ -44,7 +46,10 @@ if(TARGET Qt6::lrelease)
 endif()
 include(CTest)
 if(BUILD_TESTING)
-    add_executable(device-rules-test tests/device-rules.cpp src/devices/device.cpp src/devices/device.h)
+    add_executable(device-rules-test tests/device-rules.cpp
+        src/devices/device.cpp src/devices/device.h
+        src/devices/cpumetadata.cpp src/devices/cpumetadata.h
+        src/devices/devicepresentation.cpp src/devices/devicepresentation.h)
     target_include_directories(device-rules-test PRIVATE src/devices)
     target_link_libraries(device-rules-test PRIVATE Qt6::Widgets)
     add_test(NAME device-rules COMMAND device-rules-test)
