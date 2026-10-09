@@ -24,6 +24,7 @@ add_executable(qlinuxdevicemanager
     src/main.cpp src/devices/device.h src/devices/device.cpp
     src/devices/enumerator.h src/devices/enumerator.cpp
     src/devices/deviceproperties.h src/devices/deviceproperties.cpp
+    src/devices/deviceresources.h src/devices/deviceresources.cpp
     src/devices/cpumetadata.h src/devices/cpumetadata.cpp
     src/devices/functionnames.h src/devices/functionnames.cpp
     src/devices/devicelabel.h src/devices/devicelabel.cpp
@@ -73,4 +74,9 @@ if(BUILD_TESTING)
     target_include_directories(device-rules-test PRIVATE src/devices)
     target_link_libraries(device-rules-test PRIVATE Qt6::Widgets)
     add_test(NAME device-rules COMMAND device-rules-test)
+    add_executable(device-resources-test tests/device-resources.cpp
+        src/devices/deviceresources.cpp src/devices/deviceresources.h)
+    target_include_directories(device-resources-test PRIVATE src/devices)
+    target_link_libraries(device-resources-test PRIVATE Qt6::Core)
+    add_test(NAME device-resources COMMAND device-resources-test)
 endif()

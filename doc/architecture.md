@@ -176,3 +176,59 @@ freezes the existing dialog, labels it as a removed snapshot and disables Reload
 Selection, Details and copying remain available. No live removal notification is
 claimed before Phase 4. Failed reads preserve the previous snapshot with an
 explicit error banner, rather than replacing errors with blank or healthy values.
+
+## Direct resource metadata in properties
+
+`deviceresources` owns typed raw range/IRQ records and strict PCI/PnP parsers.
+The existing properties worker passes its pinned device-directory descriptor to
+this collector; all reads remain inside the same before/after identity checks.
+Collection is on demand with no additional worker, polling or parent-resource
+inheritance. The UI adds Resources only when records or explicit collection
+errors exist, and retains that data in removed-device snapshots. Successful
+property reads hide the routine banner; loading and errors still show it.
+
+PCI input comes from the ASCII `resource` file, `irq`, and the documented
+`msi_irqs` directory. `resourceN`, `rom`, `config`, legacy memory/I/O access files
+and `/proc` resource tables are not opened. Type and allocation come from the
+stable Linux resource flags. Empty slots are skipped without renumbering.
+Slots 0–5 are BARs, slot 6 is expansion ROM; later slots retain their numeric
+resource identity rather than guessing that every later slot is a bridge window.
+64-bit addresses are preserved. Explicit UNSET/DISABLED flags suppress assigned
+range presentation, and typed zero/zero ranges are labelled unavailable.
+Bridge windows, prefetchability, read-only and 64-bit-memory flags are decoded;
+raw flags remain visible. Neither flags nor overlap establishes a conflict.
+
+All observed MSI/MSI-X filenames are interpreted as IRQ vector numbers and their
+mode attributes must be `msi` or `msix`. Vectors sort numerically. If vectors are
+observed, the legacy `irq` attribute is not added as a second active allocation:
+its meaning differs between MSI and MSI-X. Without observed vectors, a positive
+`irq` is shown as a reported value with active mode undetermined. Zero in that
+PCI attribute indicates no legacy INTx capability and is not presented as IRQ 0.
+Disappearing/unreadable vector metadata remains an explicit incomplete read.
+
+PnP uses the kernel's direct `resources` text representation: device state,
+io/mem/irq/dma/bus entries, disabled markers and explicit window markers. PnP
+IRQ 0 is retained; its semantics differ from the PCI `irq` attribute. A disabled
+PnP device does not acquire apparently active ranges from its stored assignments.
+No resource writes, automatic configuration or change-settings controls exist.
+
+Each resource file is limited to 64 KiB and at most 256 resource rows; MSI
+collection examines at most 4096 directory entries and reads at most 32 bytes
+per mode/IRQ attribute. Malformed input never becomes a valid zero or a guessed
+range; parser errors and any collection limit are shown in the table. The
+Resources table and clipboard exports include source attribution. Basic and
+advanced Details share the same formatted resource result. Fixture tests cover
+64-bit values, empty slots, unassigned/disabled/zeroed resources, malformed input
+and PnP-specific IRQ-zero and state semantics; they do not access real hardware.
+
+Sources:
+- https://docs.kernel.org/PCI/sysfs-pci.html
+- https://github.com/torvalds/linux/blob/master/Documentation/ABI/testing/sysfs-bus-pci
+- https://github.com/torvalds/linux/blob/master/include/linux/ioport.h
+- https://github.com/torvalds/linux/blob/master/drivers/pci/pci-sysfs.c
+- https://github.com/torvalds/linux/blob/master/drivers/pnp/interface.c
+
+The common interfaces above expose allocations rather than a Windows-style
+per-device conflict verdict. A conflict field is therefore omitted; neither
+sharing nor address containment is used to manufacture one. Broader Resources
+by type/connection tree views from Phase 5 remain outside this change.

@@ -10,6 +10,8 @@ class QFormLayout;
 class QLabel;
 class QPlainTextEdit;
 class QPushButton;
+class QTabWidget;
+class QTableWidget;
 
 class PropertiesDialog final : public QDialog {
     Q_OBJECT
@@ -34,11 +36,17 @@ private:
     };
     void rebuild();
     void rebuildDetails();
+    void rebuildResources();
+    void copyResources(bool selectedOnly);
     void showDetail();
     void copyAll();
     DeviceProperties snapshot_;
     QVector<Entry> entries_;
     QLabel *banner_ = nullptr;
+    QTabWidget *tabs_ = nullptr;
+    QWidget *resourcesPage_ = nullptr;
+    QTableWidget *resourcesTable_ = nullptr;
+    QString resourcesText_;
     QFormLayout *general_ = nullptr;
     QFormLayout *driver_ = nullptr;
     QComboBox *property_ = nullptr;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "device.h"
+#include "deviceresources.h"
 #include <QByteArray>
 #include <QThread>
 
@@ -9,6 +10,7 @@ struct DeviceProperties {
     Device device;
     QHash<QString, Attribute> values;
     QHash<QString, QString> sources;
+    DeviceResources resources;
     QByteArray efiBytes;
     bool efiTruncated = false;
     ReadState state = ReadState::Unavailable;

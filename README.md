@@ -121,6 +121,18 @@ Open **Action → Properties**, the toolbar button, the device context menu,
 - **Details**: a property selector, multiline read-only values, source attribution,
   copy selection/value/all, and an advanced toggle for curated raw udev/sysfs
   metadata and inventory naming sources.
+- **Resources**, when direct resource metadata is available: memory ranges, I/O
+  ranges and IRQs (including every observed MSI/MSI-X vector), with PCI BAR/ROM
+  identification and selected flag details. PCI and Plug and Play devices are
+  supported; PnP DMA channels and bus windows are shown when reported. Disabled,
+  unassigned and zeroed addresses retain explicit states, and read/parse errors
+  remain visible. Resources can be copied from their table or Details.
+
+The ordinary read-only snapshot notice is omitted; loading, read failures and
+removal/replacement still receive explicit messages. The Resources tab has no
+settings controls or conflict field: resource overlap and shared IRQs alone
+cannot establish a conflict. Only resource metadata is read, never BAR contents.
+Resource-oriented tree views are not implemented by this tab.
 
 Properties are collected on demand in one dedicated worker; opening another
 record closes the previous dialog and supersedes its request. No hardware changes

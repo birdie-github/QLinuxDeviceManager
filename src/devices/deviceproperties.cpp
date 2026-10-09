@@ -292,6 +292,7 @@ void PropertiesReader::run()
             const QByteArray name = key.toLatin1();
             sysfs(result, deviceFd.fd, name.constData());
         }
+        if (!isInterruptionRequested()) result.resources = collectDeviceResources(deviceFd.fd, d);
         // Binding can change during a read even if the device instance remains.
         const Attribute afterLink = linkTarget(deviceFd.fd, "driver");
         if (afterLink.state != driverLink.state || afterLink.value != driverLink.value || afterLink.error != driverLink.error) {

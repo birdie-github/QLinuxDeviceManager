@@ -8,6 +8,8 @@
 #include <QFontDatabase>
 #include <QFormLayout>
 #include <QHBoxLayout>
+#include <QHeaderView>
+#include <QItemSelectionModel>
 #include <QLabel>
 #include <QPlainTextEdit>
 #include <QPushButton>
@@ -15,6 +17,8 @@
 #include <QSignalBlocker>
 #include <QStringList>
 #include <QTabWidget>
+#include <QTableWidget>
+#include <algorithm>
 #include <QVBoxLayout>
 #include <utility>
 
@@ -73,7 +77,8 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     auto *layout = new QVBoxLayout(this);
     banner_ = plainLabel(tr("Loading properties…"), this);
     layout->addWidget(banner_);
-    auto *tabs = new QTabWidget(this);
+    tabs_ = new QTabWidget(this);
+    auto *tabs = tabs_;
     layout->addWidget(tabs, 1);
     const auto addForm = [tabs](const QString &title) {
         auto *scroll = new QScrollArea(tabs);
@@ -118,6 +123,33 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     copyLayout->addStretch();
     detailsLayout->addLayout(copyLayout);
     tabs->addTab(details, tr("Details"));
+    resourcesPage_ = new QWidget(tabs);
+    resourcesPage_->hide(); // Not a tab until metadata confirms applicability.
+    auto *resourcesLayout = new QVBoxLayout(resourcesPage_);
+    resourcesTable_ = new QTableWidget(0, 3, resourcesPage_);
+    resourcesTable_->setHorizontalHeaderLabels({tr("Resource type"), tr("Setting"), tr("Details")});
+    resourcesTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    resourcesTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    resourcesTable_->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    resourcesTable_->verticalHeader()->hide();
+    resourcesTable_->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+    resourcesTable_->horizontalHeader()->setStretchLastSection(true);
+    resourcesLayout->addWidget(resourcesTable_);
+    auto *resourceButtons = new QHBoxLayout;
+    auto *copyResourceSelection = new QPushButton(tr("Copy selection"), resourcesPage_);
+    auto *copyResourceAll = new QPushButton(tr("Copy all resources"), resourcesPage_);
+    copyResourceSelection->setEnabled(false);
+    connect(resourcesTable_->selectionModel(), &QItemSelectionModel::selectionChanged, this,
+        [this, copyResourceSelection] {
+            copyResourceSelection->setEnabled(resourcesTable_->selectionModel()->hasSelection());
+        });
+    connect(copyResourceSelection, &QPushButton::clicked, this, [this] { copyResources(true); });
+    connect(copyResourceAll, &QPushButton::clicked, this, [this] { copyResources(false); });
+    resourceButtons->addWidget(copyResourceSelection);
+    resourceButtons->addWidget(copyResourceAll);
+    resourceButtons->addStretch();
+    resourcesLayout->addLayout(resourceButtons);
+    // The tab appears only after collection finds resource records or read errors.
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
     reload_ = buttons->addButton(tr("Reload properties"), QDialogButtonBox::ActionRole);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
@@ -130,7 +162,10 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
 void PropertiesDialog::setBusy(bool busy)
 {
     reload_->setEnabled(!busy && !removed_);
-    if (busy && !removed_) banner_->setText(tr("Loading properties…"));
+    if (busy && !removed_) {
+        banner_->setText(tr("Loading properties…"));
+        banner_->show();
+    }
 }
 void PropertiesDialog::acceptResult(DeviceProperties result)
 {
@@ -138,12 +173,14 @@ void PropertiesDialog::acceptResult(DeviceProperties result)
     setBusy(false);
     if (result.state == ReadState::Removed) { markRemoved(); return; }
     if (result.state != ReadState::Available) {
+        banner_->show();
         banner_->setText(tr("Properties could not be refreshed: %1. Showing the previous snapshot.")
             .arg(readValue({result.state, {}, result.error})));
         return;
     }
     snapshot_ = std::move(result);
-    banner_->setText(tr("Read-only snapshot. Presence and driver binding do not establish hardware health."));
+    banner_->clear();
+    banner_->hide();
     rebuild();
 }
 void PropertiesDialog::reconcileInstance(const Device *current)
@@ -160,12 +197,14 @@ void PropertiesDialog::markRemoved()
 {
     removed_ = true;
     reload_->setEnabled(false);
+    banner_->show();
     banner_->setText(tr("Device removed or replaced. This dialog is a read-only snapshot; close it and reopen Properties for the current device."));
     rebuild();
 }
 void PropertiesDialog::rebuild()
 {
     entries_.clear();
+    rebuildResources();
     const Device &d = device();
     const bool efi = d.subsystem == "efivarfs";
     const Attribute notApplicable {ReadState::NotApplicable, {}, 0};
@@ -305,6 +344,8 @@ void PropertiesDialog::rebuild()
         add("efi/hex", tr("UEFI variable — hex dump"), dump,
             tr("Complete efivarfs file bytes, including the attribute prefix; contents are not decoded."));
     }
+    if (snapshot_.resources.hasInformation())
+        add("resources", tr("Resources"), resourcesText_, tr("Direct device resource metadata"));
     clearForm(general_);
     clearForm(driver_);
     for (const Entry &entry : entries_) {
@@ -351,4 +392,98 @@ void PropertiesDialog::copyAll()
         values.append(text);
     }
     QApplication::clipboard()->setText(values.join("\n\n"));
+}
+
+void PropertiesDialog::rebuildResources()
+{
+    const DeviceResources &data = snapshot_.resources;
+    const int existing = tabs_->indexOf(resourcesPage_);
+    if (data.hasInformation() && existing < 0) tabs_->addTab(resourcesPage_, tr("Resources"));
+    else if (!data.hasInformation() && existing >= 0) {
+        tabs_->removeTab(existing);
+        resourcesPage_->hide();
+    }
+    resourcesTable_->setRowCount(0);
+    QStringList copy;
+    const auto row = [this, &copy](const QString &type, const QString &setting,
+                                 const QString &details, const QString &source) {
+        const int index = resourcesTable_->rowCount();
+        resourcesTable_->insertRow(index);
+        const QStringList values {type, setting, details};
+        for (int column = 0; column < values.size(); ++column) {
+            auto *item = new QTableWidgetItem(values[column]);
+            item->setToolTip(source.toHtmlEscaped());
+            resourcesTable_->setItem(index, column, item);
+        }
+        resourcesTable_->item(index, 0)->setData(Qt::UserRole, source);
+        copy.append(values.join('\t') + '\n' + tr("Source: %1").arg(source));
+    };
+    if (!data.pnpState.isEmpty())
+        copy.append(tr("PnP device state: %1").arg(data.pnpState == "active" ? tr("Active") : tr("Disabled")));
+    for (const DeviceResource &resource : data.items) {
+        QString type;
+        switch (resource.type) {
+        case DeviceResource::Type::Memory: type = tr("Memory range"); break;
+        case DeviceResource::Type::Io: type = tr("I/O range"); break;
+        case DeviceResource::Type::Irq: type = tr("IRQ"); break;
+        case DeviceResource::Type::Dma: type = tr("DMA channel"); break;
+        case DeviceResource::Type::Bus: type = tr("Bus range"); break;
+        }
+        QString setting;
+        switch (resource.allocation) {
+        case DeviceResource::Allocation::Assigned:
+            if (resource.type == DeviceResource::Type::Irq || resource.type == DeviceResource::Type::Dma)
+                setting = QString::number(resource.start);
+            else {
+                const int width = resource.type == DeviceResource::Type::Memory ? 16 : 4;
+                setting = QStringLiteral("%1 – %2").arg(resource.start, width, 16, QLatin1Char('0'))
+                    .arg(resource.end, width, 16, QLatin1Char('0')).toUpper();
+            }
+            break;
+        case DeviceResource::Allocation::Unassigned: setting = tr("Unassigned"); break;
+        case DeviceResource::Allocation::Disabled: setting = tr("Disabled"); break;
+        case DeviceResource::Allocation::Unavailable: setting = tr("Address unavailable (zeroed or masked)"); break;
+        }
+        QStringList details;
+        if (resource.pci) {
+            if (resource.index < 6) details.append(tr("BAR %1").arg(resource.index));
+            else if (resource.index == 6) details.append(tr("Expansion ROM"));
+            else details.append(tr("PCI resource %1").arg(resource.index));
+        }
+        // Decode only stable flags; never interpret overlap or BUSY as a conflict.
+        if (resource.flags & 0x00002000) details.append(tr("Prefetchable"));
+        if (resource.flags & 0x00004000) details.append(tr("Read-only"));
+        if (resource.flags & 0x00100000) details.append(tr("64-bit memory"));
+        if (resource.flags & 0x00200000) details.append(tr("Bridge window"));
+        if (resource.pci)
+            details.append(tr("Flags: %1").arg(QStringLiteral("0x%1").arg(resource.flags, 0, 16)));
+        if (resource.mode == "msi") details.append(QStringLiteral("MSI"));
+        else if (resource.mode == "msix") details.append(QStringLiteral("MSI-X"));
+        else if (resource.mode == "reported") details.append(tr("Reported irq attribute; active mode not established"));
+        if (data.pnpState == "disabled") details.append(tr("PnP device disabled"));
+        row(type, setting, details.join("; "), resource.source);
+    }
+    for (const ResourceIssue &problem : data.issues)
+        row(tr("Resource metadata"), readValue(problem.error), tr("Read or parse failed"), problem.source);
+    resourcesText_ = copy.join("\n\n");
+}
+void PropertiesDialog::copyResources(bool selectedOnly)
+{
+    QList<int> rows;
+    if (selectedOnly) {
+        for (const QModelIndex &index : resourcesTable_->selectionModel()->selectedRows()) rows.append(index.row());
+        std::sort(rows.begin(), rows.end());
+    } else {
+        QApplication::clipboard()->setText(resourcesText_);
+        return;
+    }
+    QStringList text;
+    for (const int row : rows) {
+        QStringList values;
+        for (int column = 0; column < resourcesTable_->columnCount(); ++column)
+            values.append(resourcesTable_->item(row, column)->text());
+        text.append(values.join('\t') + '\n' + tr("Source: %1").arg(
+            resourcesTable_->item(row, 0)->data(Qt::UserRole).toString()));
+    }
+    QApplication::clipboard()->setText(text.join("\n\n"));
 }
