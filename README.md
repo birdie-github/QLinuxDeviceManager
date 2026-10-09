@@ -37,6 +37,20 @@ change driver bindings, rescan hardware buses, mount or unlock filesystems, modi
 firmware variables, or power off devices. A device's presence or driver binding
 alone does not establish that its hardware is healthy.
 
+## Screenshots
+
+**Main Window:**
+
+<img src="./screenshots/main-window.webp" alt="Main Window">
+
+**System Information**
+
+<img src="./screenshots/system-information.webp" alt="System Information">
+
+**Device Properties**
+
+<img src="./screenshots/device-properties.webp" alt="Device Properties">
+
 ## Using the application
 
 Launch `qlinuxdevicemanager` from a terminal or its desktop application entry.
