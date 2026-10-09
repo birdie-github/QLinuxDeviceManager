@@ -24,6 +24,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QPixmap>
 #include <QSettings>
 #include <QStatusBar>
 #include <QStyle>
@@ -187,6 +188,7 @@ MainWindow::MainWindow()
         QMessageBox box(this);
         box.setWindowTitle(tr("About QLinuxDeviceManager"));
         box.setTextFormat(Qt::PlainText);
+        box.setIconPixmap(QApplication::windowIcon().pixmap(QSize(96, 96), box.devicePixelRatioF()));
         box.setText(QStringLiteral("%1 %2\n").arg(QCoreApplication::applicationName(), QCoreApplication::applicationVersion())
                     + tr("A read-only Linux hardware viewer.\n"
                        "Categories are application groupings, not native Linux device classes.\n"

@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include "projectmetadata.h"
 #include <QApplication>
+#include <QIcon>
 #include <QDir>
 #include <QLibraryInfo>
 #include <QLocale>
@@ -21,6 +22,11 @@ int main(int argc, char **argv)
     QCoreApplication::setOrganizationName(QLDM_NAME);
     QCoreApplication::setApplicationName(QLDM_NAME);
     QCoreApplication::setApplicationVersion(QLDM_VERSION);
+    app.setDesktopFileName(QStringLiteral("io.github.birdie-github.QLinuxDeviceManager"));
+    QIcon applicationIcon;
+    for (const int size : {16, 32, 48, 64, 128, 256, 512})
+        applicationIcon.addFile(QStringLiteral(":/icons/%1x%1/QLinuxDeviceManager.png").arg(size));
+    app.setWindowIcon(applicationIcon);
     QTranslator qtTranslator;
     if (qtTranslator.load(QLocale(), "qtbase", "_", QLibraryInfo::path(QLibraryInfo::TranslationsPath)))
         app.installTranslator(&qtTranslator);

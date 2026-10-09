@@ -50,6 +50,19 @@ add_executable(qlinuxdevicemanager
     src/ui/propertiesdialog.h src/ui/propertiesdialog.cpp
     src/devices/systemproperties.h src/devices/systemproperties.cpp
     src/ui/systemdialog.h src/ui/systemdialog.cpp)
+# Embed existing PNG assets so a build-tree executable has its own icon without
+# an installed icon theme or Qt SVG image plugin. Keep every supplied raster size.
+set(APP_ICON_SIZES 16 32 48 64 128 256 512)
+set(APP_ICON_FILES)
+foreach(icon_size IN LISTS APP_ICON_SIZES)
+    list(APPEND APP_ICON_FILES
+        resources/external/icons/${icon_size}x${icon_size}/QLinuxDeviceManager.png)
+endforeach()
+qt_add_resources(qlinuxdevicemanager app_icons
+    PREFIX "/icons"
+    BASE "resources/external/icons"
+    FILES ${APP_ICON_FILES})
+
 target_include_directories(qlinuxdevicemanager PRIVATE
     src/devices src/ui "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_link_libraries(qlinuxdevicemanager PRIVATE Qt6::Widgets PkgConfig::UDEV)
@@ -72,6 +85,16 @@ include(GNUInstallDirs)
 install(TARGETS qlinuxdevicemanager RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES packaging/io.github.birdie-github.QLinuxDeviceManager.desktop
     DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+# Match the desktop entry's Icon key and Qt desktop file identity.
+set(APP_DESKTOP_ID io.github.birdie-github.QLinuxDeviceManager)
+foreach(icon_size IN LISTS APP_ICON_SIZES)
+    install(FILES resources/external/icons/${icon_size}x${icon_size}/QLinuxDeviceManager.png
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/${icon_size}x${icon_size}/apps
+        RENAME ${APP_DESKTOP_ID}.png)
+endforeach()
+install(FILES resources/external/icons/QLinuxDeviceManager.svg
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
+    RENAME ${APP_DESKTOP_ID}.svg)
 install(FILES project.json DESTINATION ${CMAKE_INSTALL_DATADIR}/QLinuxDeviceManager)
 # Optional tools: basic viewing never requires Linguist.
 find_package(Qt6 6.8 QUIET COMPONENTS LinguistTools)

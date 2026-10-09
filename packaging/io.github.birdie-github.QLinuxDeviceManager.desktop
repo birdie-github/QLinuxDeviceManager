@@ -1,9 +1,12 @@
 [Desktop Entry]
 Type=Application
 Name=QLinuxDeviceManager
-Comment=View Linux hardware and device information
+GenericName=Linux Device Manager
+Comment=Inspect Linux hardware, drivers, storage and live device events
 Exec=qlinuxdevicemanager
-Icon=computer
+TryExec=qlinuxdevicemanager
+Icon=io.github.birdie-github.QLinuxDeviceManager
+Keywords=Device;Hardware;Driver;USB;PCI;NVMe;System;
 Terminal=false
 Categories=System;HardwareSettings;
 StartupNotify=true

@@ -250,7 +250,7 @@ cmake --build build -j
 ./build/qlinuxdevicemanager
 ```
 
-Install the executable, desktop entry and available translation catalogs:
+Install the executable, desktop entry, application icons and available translation catalogs:
 
 ```sh
 sudo cmake --install build --prefix /usr/local
@@ -259,6 +259,9 @@ sudo cmake --install build --prefix /usr/local
 Use `-DKMOD=OFF` to omit libkmod or `-DUDISKS2=OFF` for a native-only storage build.
 Basic hardware viewing requires neither QtDBus nor UDisks2. The interface uses
 system-theme icons with Qt fallbacks and standard Qt X11/Wayland platform selection.
+The application window and About dialog use embedded application icons, available
+without installation. Installation supplies PNG sizes from 16 to 512 pixels and
+a scalable SVG in the standard `hicolor` icon theme for desktop launchers.
 The supplied interface is English; Qt's own dialogs use installed Qt translations
 when available.
 
