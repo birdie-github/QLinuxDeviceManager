@@ -36,6 +36,7 @@ bool DeviceFilter::filterAcceptsRow(int row, const QModelIndex &parent) const
 {
     if (!active()) return true;
     const QModelIndex index = sourceModel()->index(row, 0, parent);
+    if (index.data(DeviceModel::NodeKeyRole).toString() == "computer") return true;
     const QString path = index.data(DeviceModel::PathRole).toString();
     if (path.isEmpty()) {
         // Keep driver/module relationship children when their device matches.

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <functional>
 #include <QSet>
+#include <QSysInfo>
 #include <utility>
 
 DeviceModel::DeviceModel(QObject *parent) : QAbstractItemModel(parent) {}
@@ -48,6 +49,8 @@ QVariant DeviceModel::data(const QModelIndex &i, int role) const
     if (role == PathRole) return d ? QVariant(d->path) : QVariant();
     if (role == GenerationRole) return d ? QVariant::fromValue(d->generation) : QVariant();
     if (role == Qt::DisplayRole) return n->label;
+    if (role == Qt::DecorationRole && n->key == "computer")
+        return QIcon::fromTheme("computer", QApplication::style()->standardIcon(QStyle::SP_ComputerIcon));
     if (role == Qt::DecorationRole)
         return QIcon::fromTheme(categoryIcon(n->category), QApplication::style()->standardIcon(
             d ? QStyle::SP_ComputerIcon : QStyle::SP_DirIcon));
@@ -138,6 +141,8 @@ void DeviceModel::rebuild()
         parent->children.push_back(std::move(item));
         return result;
     };
+    const QString hostname = QSysInfo::machineHostName();
+    Node *computer = add(&root_, "computer", hostname.isEmpty() ? tr("This computer") : hostname, {});
     const auto deviceNode = [&](Node *parent, const Device &d) {
         return add(parent, "device:" + d.path, labels.value(d.path), d.category, d.path);
     };
@@ -175,7 +180,7 @@ void DeviceModel::rebuild()
         std::function<Node *(const Device &)> ensure = [&](const Device &d) -> Node * {
             if (nodes.contains(d.path)) return nodes.value(d.path);
             building.insert(d.path);
-            Node *parent = &root_;
+            Node *parent = computer;
             if (included.contains(d.parentPath) && !building.contains(d.parentPath))
                 parent = ensure(devices_.at(lookup_.value(d.parentPath)));
             Node *item = deviceNode(parent, d);
@@ -188,7 +193,7 @@ void DeviceModel::rebuild()
     } else {
         for (const Device *d : members) {
             if (!showInternal_ && d->hidden) continue;
-            Node *parent = &root_;
+            Node *parent = computer;
             if (view_ == View::Type || view_ == View::DriversByType)
                 parent = group(parent, "category:" + d->category, categoryLabel(d->category), d->category);
             if (view_ == View::DevicesByDriver || view_ == View::DriversByType) {

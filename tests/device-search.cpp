@@ -61,7 +61,8 @@ int main(int argc, char **argv)
     DeviceFilter filter;
     filter.setSourceModel(&model);
     filter.setQuery("casesensitiveserial", false);
-    check(filter.visibleCount() == 0 && filter.rowCount() == 0, "Name search ignores metadata and empty categories");
+    check(filter.visibleCount() == 0 && filter.rowCount() == 1
+          && filter.rowCount(filter.index(0, 0)) == 0, "Name search ignores metadata and empty categories but retains computer root");
     filter.setQuery("casesensitiveserial", true);
     filter.addMatches({{record.device.path, record.device.generation + 1, "ID_SERIAL"}});
     check(filter.visibleCount() == 0, "A stale generation cannot match a reused path");
@@ -107,7 +108,7 @@ int main(int argc, char **argv)
     for (const auto &entry : model.searchRecords())
         if (entry.device.path == child.path) childGeneration = entry.device.generation;
     model.setView(DeviceModel::View::DevicesByDriver);
-    check(model.rowCount() == 3, "Same driver name on two buses stays distinct from unbound group");
+    check(model.rowCount(model.index(0, 0)) == 3, "Same driver name on two buses stays distinct from unbound group");
     check(model.visibleCount() == 3 && filter.visibleCount() == 3,
           "Driver groups never inflate device count");
     model.setView(DeviceModel::View::DriversByDevice);
@@ -119,7 +120,8 @@ int main(int argc, char **argv)
     check(model.searchRecords().size() == 3 && filter.visibleCount() == 3,
           "Device-centric search/count ignores module rows");
     model.setView(DeviceModel::View::DriversByType);
-    check(model.rowCount() == 1 && model.rowCount(model.index(0, 0)) == 3,
+    check(model.rowCount(model.index(0, 0)) == 1
+          && model.rowCount(model.index(0, 0, model.index(0, 0))) == 3,
           "Drivers by type nests bus-qualified groups within category");
     check(model.findDevice(child.path, childGeneration).isValid(), "Instance selection survives view changes");
     Device unknown = pci;
@@ -138,6 +140,18 @@ int main(int argc, char **argv)
     check(filter.rowCount(filteredPci) == 1 && filter.rowCount(filter.index(0, 0, filteredPci)) == 1,
           "Filtering a device retains its driver and module-status rows");
     filter.setQuery({}, false);
+    for (const auto mode : {DeviceModel::View::Type, DeviceModel::View::Connection,
+                           DeviceModel::View::DevicesByDriver, DeviceModel::View::DriversByDevice,
+                           DeviceModel::View::DriversByType}) {
+        model.setView(mode);
+        const QModelIndex computer = model.index(0, 0);
+        check(model.rowCount() == 1 && computer.data(DeviceModel::NodeKeyRole).toString() == "computer",
+              "Every projection has one computer root");
+        check(!computer.data(DeviceModel::PathRole).isValid() && !computer.data().toString().isEmpty(),
+              "Computer root has a caption and is not a device Properties target");
+        check(model.visibleCount() == 3 && model.searchRecords().size() == 3,
+              "Computer root is excluded from device counts and search records");
+    }
     model.setView(DeviceModel::View::Type);
     check(model.visibleCount() == 3, "Returning to type projection retains same inventory");
     return failures ? 1 : 0;

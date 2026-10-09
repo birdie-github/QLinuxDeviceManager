@@ -235,6 +235,12 @@ Relevant API/design references:
 
 ## Alternative tree views
 
+All five views have one computer root labelled with the local hostname
+(`This computer` if unavailable). It starts expanded; the existing view contents
+start collapsed. Root expansion is retained per view within the session.
+The root remains visible when filtering finds no devices and is excluded from
+device counts, Properties targets and deep-search inputs.
+
 View offers Devices by type, Devices by connection, Devices by driver,
 Drivers by device and Drivers by type. Every view reuses the same inventory;
 switching does not enumerate hardware or read sysfs on the GUI thread.

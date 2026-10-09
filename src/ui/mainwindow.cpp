@@ -118,6 +118,7 @@ MainWindow::MainWindow()
     for (const auto mode : {DeviceModel::View::Type, DeviceModel::View::Connection,
                            DeviceModel::View::DevicesByDriver, DeviceModel::View::DriversByDevice,
                            DeviceModel::View::DriversByType}) {
+        expanded_.insert(DeviceModel::viewId(mode) + ":computer");
         auto *choice = view->addAction(DeviceModel::viewLabel(mode));
         choice->setCheckable(true);
         views->addAction(choice);
