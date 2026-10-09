@@ -23,6 +23,7 @@ endif()
 add_executable(qlinuxdevicemanager
     src/main.cpp src/devices/device.h src/devices/device.cpp
     src/devices/enumerator.h src/devices/enumerator.cpp
+    src/devices/monitorstate.h src/devices/monitorstate.cpp
     src/devices/deviceproperties.h src/devices/deviceproperties.cpp
     src/devices/deviceresources.h src/devices/deviceresources.cpp
     src/devices/cpumetadata.h src/devices/cpumetadata.cpp
@@ -69,6 +70,11 @@ if(TARGET Qt6::lrelease)
 endif()
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(monitor-state-test tests/monitor-state.cpp
+        src/devices/monitorstate.cpp src/devices/monitorstate.h)
+    target_include_directories(monitor-state-test PRIVATE src/devices)
+    target_link_libraries(monitor-state-test PRIVATE Qt6::Core)
+    add_test(NAME monitor-state COMMAND monitor-state-test)
     add_executable(device-rules-test tests/device-rules.cpp
         src/devices/device.cpp src/devices/device.h
         src/devices/cpumetadata.cpp src/devices/cpumetadata.h

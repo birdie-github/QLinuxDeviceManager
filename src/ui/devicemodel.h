@@ -22,7 +22,8 @@ public:
     int columnCount(const QModelIndex & = {}) const override { return 1; }
     QVariant data(const QModelIndex &index, int role) const override;
     QVariant headerData(int section, Qt::Orientation orientation, int role) const override;
-    void setInventory(QVector<Device> devices);
+    bool setInventory(QVector<Device> devices, const QSet<QString> &removedPaths = {},
+                      bool identityLost = false);
     std::optional<Device> device(const QString &path, quint64 generation) const;
     void setShowInternal(bool show);
     QModelIndex findDevice(const QString &path, quint64 generation) const;
@@ -36,12 +37,14 @@ private:
         QString category;
         QString key;
         bool context = false;
+        quint64 generation = 0; // Projection identity; replacements are removed/inserted.
         QString path; // Record lookup ID, never a pointer into inventory storage.
         QString label; // GUI-translated display text, rebuilt with the inventory.
         std::vector<std::unique_ptr<Node>> children;
     };
     Node *node(const QModelIndex &index) const;
     void rebuild();
+    void synchronize(Node *parent, Node *desired, const QSet<QString> &changedPaths);
     QVector<Device> devices_;
     QHash<QString, int> lookup_;
     Node root_;

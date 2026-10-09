@@ -40,7 +40,7 @@ private:
     void acceptSystemInformation();
     void requestProperties();
     void acceptProperties();
-    void acceptInventory();
+    void acceptInventory(const Inventory &inventory);
     void rememberTree();
     void restoreTree();
     void updateStatus();
@@ -75,7 +75,6 @@ private:
     Enumerator worker_;
     quint64 requested_ = 0;
     bool busy_ = false;
-    bool pending_ = false;
     bool closing_ = false;
     QSet<QString> expanded_;
     QString selectedPath_;

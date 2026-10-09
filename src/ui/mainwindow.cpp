@@ -201,7 +201,9 @@ MainWindow::MainWindow()
     internalAction_->setChecked(settings.value("view/showInternal", false).toBool());
     connect(tree_->selectionModel(), &QItemSelectionModel::currentChanged, this,
             [this](const QModelIndex &, const QModelIndex &) { updateStatus(); });
-    connect(&worker_, &QThread::finished, this, &MainWindow::acceptInventory, Qt::QueuedConnection);
+    qRegisterMetaType<Inventory>();
+    connect(&worker_, &Enumerator::inventoryReady, this, &MainWindow::acceptInventory, Qt::QueuedConnection);
+    connect(&worker_, &QThread::finished, this, [this] { if (closing_) close(); }, Qt::QueuedConnection);
     connect(&propertiesWorker_, &QThread::finished, this, &MainWindow::acceptProperties, Qt::QueuedConnection);
     connect(&systemWorker_, &QThread::finished, this, &MainWindow::acceptSystemInformation, Qt::QueuedConnection);
     QTimer::singleShot(0, this, &MainWindow::refresh);
@@ -220,40 +222,35 @@ MainWindow::~MainWindow()
 void MainWindow::refresh()
 {
     if (closing_) return;
-    cancelSearch();
-    ++requested_;
-    if (busy_) {
-        pending_ = true;
-        return;
-    }
-    busy_ = true; // Includes the interval before queued finished() delivery.
-    worker_.setRequest(requested_);
-    refreshAction_->setEnabled(false);
+    busy_ = true;
+    requested_ = worker_.requestRefresh();
     statusBar()->showMessage(tr("Refreshing devices…"));
-    worker_.start();
+    if (!worker_.isRunning()) worker_.start();
 }
-void MainWindow::acceptInventory()
+void MainWindow::acceptInventory(const Inventory &inventory)
 {
-    worker_.wait(); // finished() can precede final thread-local cleanup.
-    Inventory inventory = worker_.takeResult();
-    if (closing_) { close(); return; }
-    if (pending_ || inventory.request != requested_) {
-        pending_ = false;
-        worker_.setRequest(requested_);
-        worker_.start();
-        return;
-    }
-    busy_ = false;
-    refreshAction_->setEnabled(true);
+    worker_.acknowledge();
+    if (closing_) return;
+    const bool manualRefresh = busy_ && inventory.request >= requested_;
+    busy_ = inventory.request < requested_;
     if (!inventory.error.isEmpty()) {
+        if (inventory.identityLost || !inventory.removedPaths.isEmpty()) {
+            model_->setInventory({}, {}, true);
+            if (propertiesDialog_) propertiesDialog_->reconcileInstance(nullptr);
+            pendingProperties_.reset();
+            ++propertiesRequest_;
+            propertiesWorker_.requestInterruption();
+        }
         applyFilter();
         statusBar()->showMessage(inventory.error);
         return;
     }
     rememberTree();
-    cancelSearch();
-    model_->setInventory(std::move(inventory.devices));
-    ++searchRevision_;
+    const bool changed = model_->setInventory(inventory.devices, inventory.removedPaths, inventory.identityLost);
+    if (changed || manualRefresh) {
+        cancelSearch();
+        ++searchRevision_;
+    }
     if (propertiesDialog_) {
         const Device &target = propertiesDialog_->device();
         const auto current = model_->device(target.path, target.generation);
@@ -264,9 +261,18 @@ void MainWindow::acceptInventory()
             propertiesWorker_.requestInterruption();
         }
     }
-    scanNote_ = inventory.skipped ? tr("%1 records unavailable or removed during enumeration").arg(inventory.skipped) : QString();
-    restoreTree();
-    applyFilter();
+    scanNote_ = inventory.monitorNote;
+    if (inventory.skipped) {
+        if (!scanNote_.isEmpty()) scanNote_ += QStringLiteral(" — ");
+        scanNote_ += tr("%1 records unavailable or removed during enumeration").arg(inventory.skipped);
+    }
+    if (changed || manualRefresh) {
+        restoreTree();
+        applyFilter();
+    } else {
+        if (searchPending_ && !searchBusy_ && !busy_) startSearch();
+        updateStatus();
+    }
 }
 void MainWindow::rememberTree()
 {
@@ -302,8 +308,12 @@ void MainWindow::restoreTree()
     if (selected.isValid()) {
         for (QModelIndex parent = selected.parent(); parent.isValid(); parent = parent.parent())
             tree_->setExpanded(parent, true);
-        tree_->setCurrentIndex(selected);
-        tree_->scrollTo(selected);
+        if (tree_->currentIndex() != selected) {
+            tree_->setCurrentIndex(selected);
+            tree_->scrollTo(selected);
+        }
+    } else if (!selectedPath_.isEmpty() && !model_->device(selectedPath_, selectedGeneration_)) {
+        tree_->setCurrentIndex({}); // Never silently select a replacement or neighbour.
     }
 }
 void MainWindow::updateStatus()
@@ -311,7 +321,7 @@ void MainWindow::updateStatus()
     if (closing_) return;
     propertiesAction_->setEnabled(tree_->currentIndex().data(DeviceModel::NodeKeyRole).toString() == "computer"
         || !tree_->currentIndex().data(DeviceModel::PathRole).toString().isEmpty());
-    if (worker_.isRunning()) { statusBar()->showMessage(tr("Refreshing devices…")); return; }
+    if (busy_) { statusBar()->showMessage(tr("Refreshing devices…")); return; }
     QString message = tr("%1 shown / %2 discovered").arg(filter_->visibleCount()).arg(model_->inventoryCount());
     if (filter_->active() && deepSearch_->isChecked()) {
         message += tr(" — Deep search: %1/%2").arg(searchDone_).arg(searchTotal_);

@@ -10,6 +10,25 @@
 #include <QSysInfo>
 #include <utility>
 
+namespace {
+bool sameMetadata(const Device &a, const Device &b)
+{
+    if (a.path != b.path || a.parentPath != b.parentPath || a.subsystem != b.subsystem
+        || a.sysname != b.sysname || a.devtype != b.devtype || a.driver != b.driver
+        || a.driverModule != b.driverModule || a.properties != b.properties
+        || a.name != b.name || a.nameSource != b.nameSource || a.nameTranslated != b.nameTranslated
+        || a.nameCandidate != b.nameCandidate || a.representedByPath != b.representedByPath
+        || a.propertySources != b.propertySources || a.category != b.category
+        || a.incarnation != b.incarnation || a.hidden != b.hidden || a.attributes.size() != b.attributes.size())
+        return false;
+    for (auto it = a.attributes.cbegin(); it != a.attributes.cend(); ++it) {
+        const auto other = b.attributes.constFind(it.key());
+        if (other == b.attributes.cend() || it->state != other->state
+            || it->value != other->value || it->error != other->error) return false;
+    }
+    return true;
+}
+}
 DeviceModel::DeviceModel(QObject *parent) : QAbstractItemModel(parent) {}
 DeviceModel::Node *DeviceModel::node(const QModelIndex &i) const
 {
@@ -44,6 +63,7 @@ QVariant DeviceModel::data(const QModelIndex &i, int role) const
     const Node *n = node(i);
     const auto found = lookup_.constFind(n->path);
     const Device *d = found == lookup_.cend() ? nullptr : &devices_.at(found.value());
+    if (d && d->generation != n->generation) d = nullptr;
     if (role == NodeKeyRole) return n->key;
     if (role == CategoryRole) return n->category;
     if (role == PathRole) return d ? QVariant(d->path) : QVariant();
@@ -82,13 +102,112 @@ QVariant DeviceModel::data(const QModelIndex &i, int role) const
     }
     return {};
 }
-void DeviceModel::setInventory(QVector<Device> devices)
+bool DeviceModel::setInventory(QVector<Device> devices, const QSet<QString> &removedPaths,
+                               bool identityLost)
 {
-    reconcile(devices, devices_, generation_);
-    beginResetModel();
+    QVector<Device> previous;
+    if (!identityLost) {
+        for (const Device &d : devices_) {
+            bool removed = false;
+            QString path = d.path;
+            while (!path.isEmpty()) {
+                if (removedPaths.contains(path)) { removed = true; break; }
+                const int slash = path.lastIndexOf('/');
+                if (slash < 0) break;
+                path.truncate(slash);
+            }
+            if (!removed) previous.append(d);
+        }
+    }
+    reconcile(devices, previous, generation_);
+    QSet<QString> changedPaths;
+    for (const Device &d : devices) {
+        const auto old = lookup_.constFind(d.path);
+        if (old == lookup_.cend() || d.generation != devices_.at(old.value()).generation
+            || !sameMetadata(d, devices_.at(old.value()))) changedPaths.insert(d.path);
+    }
+    // Grouped-record tooltips also change when a member disappears or moves.
+    QHash<QString, QString> representatives;
+    for (const Device &d : devices) representatives.insert(d.path, d.representedByPath);
+    for (const Device &d : devices_) {
+        if (!representatives.contains(d.path) || representatives.value(d.path) != d.representedByPath) {
+            changedPaths.insert(d.path);
+            if (!d.representedByPath.isEmpty()) changedPaths.insert(d.representedByPath);
+        }
+    }
+    for (const Device &d : devices)
+        if (changedPaths.contains(d.path) && !d.representedByPath.isEmpty()) changedPaths.insert(d.representedByPath);
+    const QString hostname = QSysInfo::machineHostName();
+    const QString computerLabel = hostname.isEmpty() ? tr("This computer") : hostname;
+    if (changedPaths.isEmpty() && !root_.children.empty() && root_.children.front()->label == computerLabel)
+        return false;
+    // Build a temporary projection, then update only changed branches. Existing
+    // Node addresses (and persistent indexes) survive unchanged inventory entries.
+    auto existing = std::move(root_.children);
     devices_ = std::move(devices);
     rebuild();
-    endResetModel();
+    Node desired;
+    desired.children = std::move(root_.children);
+    root_.children = std::move(existing);
+    synchronize(&root_, &desired, changedPaths);
+    return true;
+}
+void DeviceModel::synchronize(Node *parentNode, Node *desired, const QSet<QString> &changedPaths)
+{
+    const QModelIndex parentIndex = parentNode == &root_ ? QModelIndex()
+        : createIndex(parentNode->row, 0, parentNode);
+    const auto same = [](const Node &a, const Node &b) {
+        return a.key == b.key && a.generation == b.generation;
+    };
+    const auto rows = [](Node *parent) {
+        for (size_t i = 0; i < parent->children.size(); ++i) {
+            parent->children[i]->parent = parent;
+            parent->children[i]->row = static_cast<int>(i);
+        }
+    };
+    for (int i = static_cast<int>(parentNode->children.size()) - 1; i >= 0; --i) {
+        const Node &old = *parentNode->children[static_cast<size_t>(i)];
+        const bool retained = std::any_of(desired->children.begin(), desired->children.end(),
+            [&](const auto &next) { return same(old, *next); });
+        if (retained) continue;
+        beginRemoveRows(parentIndex, i, i);
+        parentNode->children.erase(parentNode->children.begin() + i);
+        rows(parentNode);
+        endRemoveRows();
+    }
+    for (size_t i = 0; i < desired->children.size(); ++i) {
+        auto &next = desired->children[i];
+        size_t found = i;
+        while (found < parentNode->children.size() && !same(*parentNode->children[found], *next)) ++found;
+        if (found == parentNode->children.size()) {
+            beginInsertRows(parentIndex, static_cast<int>(i), static_cast<int>(i));
+            parentNode->children.insert(parentNode->children.begin() + static_cast<std::ptrdiff_t>(i), std::move(next));
+            // Children of the inserted subtree already point to their owned parents.
+            rows(parentNode);
+            endInsertRows();
+            continue;
+        }
+        if (found != i) {
+            beginMoveRows(parentIndex, static_cast<int>(found), static_cast<int>(found), parentIndex, static_cast<int>(i));
+            auto moving = std::move(parentNode->children[found]);
+            parentNode->children.erase(parentNode->children.begin() + static_cast<std::ptrdiff_t>(found));
+            parentNode->children.insert(parentNode->children.begin() + static_cast<std::ptrdiff_t>(i), std::move(moving));
+            rows(parentNode);
+            endMoveRows();
+        }
+        Node *current = parentNode->children[i].get();
+        const bool changed = current->label != next->label || current->category != next->category
+            || current->context != next->context || changedPaths.contains(current->path);
+        current->label = next->label;
+        current->category = next->category;
+        current->context = next->context;
+        // Metadata, grouped tooltips and filter matches may change without a label change.
+        if (changed) {
+            const QModelIndex index = createIndex(current->row, 0, current);
+            emit dataChanged(index, index);
+        }
+        synchronize(current, next.get(), changedPaths);
+    }
 }
 void DeviceModel::setShowInternal(bool show)
 {
@@ -144,7 +263,9 @@ void DeviceModel::rebuild()
     const QString hostname = QSysInfo::machineHostName();
     Node *computer = add(&root_, "computer", hostname.isEmpty() ? tr("This computer") : hostname, {});
     const auto deviceNode = [&](Node *parent, const Device &d) {
-        return add(parent, "device:" + d.path, labels.value(d.path), d.category, d.path);
+        Node *item = add(parent, "device:" + d.path, labels.value(d.path), d.category, d.path);
+        item->generation = d.generation;
+        return item;
     };
     const auto driverKey = [](const Device &d) {
         return d.driver.isEmpty() ? QStringLiteral("unbound")

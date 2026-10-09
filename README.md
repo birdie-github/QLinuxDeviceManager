@@ -4,9 +4,9 @@ A lightweight Linux hardware viewer using C++17, Qt6 Widgets and libudev,
 with a conventional desktop interface inspired by Windows Device Manager.
 Licensed under GPLv3 (see LICENSE).
 
-## Current scope: Phase 3
+## Current scope: Phase 4
 
-Five inventory views (see below), a read-only **Refresh (F5)** action, selection, themed icons,
+Five live inventory views (see below), a read-only **Refresh (F5)** action, selection, themed icons,
 and persistent window geometry, toolbar visibility and visibility settings.
 Categories start collapsed on every launch; expansion is preserved during
 refreshes and visibility changes within the running session. Run as a normal user; no daemon, device-management
@@ -194,7 +194,7 @@ fallbacks. Further desktop integration and UI polish belong to Phase 9.
 Use **View → Filter** or **Ctrl+F** to show the full-width search bar. Names are
 searched by default; **Deep search** includes advanced properties, resources and
 numbers, collecting metadata in the background. Escape or Ctrl+F hides the bar
-and clears the filter. Deep-search metadata is cached until F5 refresh.
+and clears the filter. Deep-search metadata is cached until a changed live inventory or F5 refresh.
 
 ## Source layout
 
@@ -225,8 +225,7 @@ A user-supplied HP laptop diagnostic dump was inspected offline: 16 logical
 Intel Core Ultra X7 358H CPUs, one PCI Wi-Fi adapter plus `wlo1`, and one PCI
 NVMe controller plus `nvme0`. See [doc/discovery-notes.md](doc/discovery-notes.md).
 This is evidence from the dump, not a runtime application test. GUI/category
-acceptance still requires real-machine testing. Later phases cover properties, additional views, live
-monitoring, resources, storage metadata and narrowly authorized operations.
+acceptance still requires real-machine testing. Later phases cover additional resources, storage metadata and narrowly authorized operations.
 
 Relevant API/design references:
 - https://www.kernel.org/doc/html/latest/admin-guide/sysfs-rules.html
@@ -265,7 +264,7 @@ Driver/module rows describe relationships and do not open device Properties.
 Device rows still support Properties, filtering and deep search. Counts include
 only device/firmware records, including connection-context ancestors, never
 synthetic driver/module groups. These views do not list every installed or
-loaded module. Refresh is required to update binding/module observations.
+loaded module. Live udev updates reconcile binding/module observations; F5 also requests a fresh snapshot.
 
 Selection follows the same path and generation between views where visible;
 its ancestor chain is expanded to reveal it. Other expansion state is retained
@@ -322,3 +321,20 @@ rather than silently included as RAM. Up to 4096 records and 64 bytes per select
 property are accepted. This uses cached udev metadata and depends on firmware and
 the distribution's memory-identification rule; no SMBIOS parsing, subprocess,
 extra dependency or elevation is added to the application.
+
+## Live hardware monitoring
+
+USB and other udev device changes update all views automatically. Bursts are
+coalesced (100 ms quiet time, 500 ms maximum scheduling delay, plus scan time).
+The monitor starts before initial enumeration; fresh worker snapshots reconcile
+events rather than replaying stale add records. Model updates retain unchanged
+rows, expansion and selected instances. Unplugging the selected instance clears
+selection and marks its Properties dialog removed; replugging at the same path
+creates a new instance.
+
+Continuous churn may briefly hide uncertain branches until a fresh scan confirms
+them. Detected event loss or monitor failure triggers full reconciliation and
+invalidates old identities. Monitoring recovery retries automatically; its status
+is visible. A 30-second reconciliation also catches silent drift and EFI directory
+changes. F5 remains available throughout and never rescans a hardware bus.
+No subprocess, elevation, extra library or hardware-management action is added.

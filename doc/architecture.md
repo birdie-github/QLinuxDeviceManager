@@ -12,20 +12,16 @@
   rebuild, used for sorting, and disambiguated within each category with kernel
   identifiers. Raw inventory names and name sources are never rewritten.
 - `MainWindow`: UI, settings and tree-state restoration. Refresh requests
-  serialize/coalesce; stale snapshots are superseded. Categories start collapsed
+  serialize/coalesce; useful snapshots are applied without starving under churn. Categories start collapsed
   on every launch; expanded state is retained only within a running session. Failed scans retain the
   previous inventory. Shutdown requests interruption between records and waits
   asynchronously for the worker before destroying its owner.
 
 Selection survives refresh only for matching path and local generation. The
 incarnation hint combines sysfs directory device/inode numbers and an optional
-udev initialization timestamp. This distinguishes observed replacements and
-never merges identical serials/model names. **It cannot guarantee detection
-of an unplug/replug entirely between scans with reused identifiers.** Phase 4
-will add event-based instance tracking and startup reconciliation before any
-management operations exist. Initial enumeration is not an atomic kernel
-snapshot; concurrent hotplug can require another Refresh. No live monitoring
-or automatic refresh is implemented in Phase 1.
+udev initialization timestamp. Phase 4 adds removal evidence and conservative
+identity invalidation after monitor loss, described below. Neither inventory
+snapshots nor binding observations are atomic with respect to the kernel.
 
 The worker checks cancellation between devices. A kernel metadata read already
 in progress cannot safely be forcibly canceled; shutdown can wait for that read.
@@ -292,8 +288,7 @@ The enumeration worker captures only the explicitly selected `driver/module`
 symlink for directly bound records. Its absence (including permission or removal
 races) is undetermined, never proof of a built-in driver. A module link establishes
 ownership rather than whether code is built-in/modular or which installed file
-matches running code. No libkmod dependency is added. Existing inter-scan
-identity and non-atomic binding limitations remain until monitoring/reconciliation.
+matches running code. No libkmod dependency is added. Non-atomic binding limitations remain; Phase 4 adds monitored instance reconciliation.
 
 Connection projection closes visible records over available inventory parent
 links, with cycle guards; missing parents are not guessed from path prefixes.
@@ -358,3 +353,66 @@ not invalidate known installed sizes. Physical and usable capacity remain separa
 raw byte values; only SystemDialog formats GiB and the nonnegative MiB difference.
 No guessed total, cgroup adjustment or detailed reservation attribution is made.
 The system-properties fixture target now links the existing libudev dependency.
+
+## Phase 4: live inventory reconciliation
+
+Enumerator now lives for the window lifetime. Its native `udev` monitor is
+worker-owned and enabled before the initial enumeration. No subsystem filter is
+installed: add/remove/change/bind/unbind/move hints can affect all projections.
+Event records are never replayed into inventory. Each coalesced batch triggers a
+fresh full enumeration on the worker, including ancestry, naming, visibility and
+EFI metadata. This deliberately favors one maintainable snapshot collector over
+separate per-subsystem incremental discovery rules. Only changed model branches
+are inserted, removed or moved; unchanged nodes and persistent indexes survive.
+An unchanged snapshot skips projection rebuilding and deep-search invalidation.
+View/visibility changes still use model resets, as before.
+
+The monitor is drained before and after enumeration. If events arrive during a
+scan, a second fresh scan reconciles them before publication. After at most two
+scans, still-changing paths, their ancestors/descendants and linked presentation
+representatives are withheld and another scan is scheduled. Unrelated siblings
+can remain visible even if their connection-context ancestor is temporarily
+withheld. This is conservative, may briefly hide a changing branch, and never
+promotes a stale add payload into an authoritative device. Snapshots cannot be
+atomic with respect to the kernel: events arriving after the final drain are
+handled by the next update. Device Properties remains an instance-checked read.
+
+Quiet-time coalescing is 100 ms, with a 500 ms maximum delay from the first event;
+scan duration adds to that deadline. There are at most 4096 changed paths and
+4096 removal hints per batch, and at most 4096 receives per drain. Hitting either
+bound, socket errors (including detected receive loss), or monitor failure
+invalidates old instance generations and triggers a fresh reconciliation. The
+socket is reopened before scanning an abandoned queue. Sequence-number gaps are
+not used as loss evidence: an unfiltered udev stream still need not expose every
+kernel event. A periodic full reconciliation every 30 seconds repairs otherwise
+undetectable drift (also refreshes EFI directory metadata, which is not a udev
+device stream). While monitoring is unavailable, recovery/enumeration is retried
+every two seconds and the status bar reports reduced monitoring. F5 remains a
+read-only request for a fresh snapshot.
+
+Remove evidence survives all reconciliation rounds until publication and forces
+new generations for that path and its descendants, even when inode/timestamp
+hints match. Reopening after a monitoring gap invalidates every previous
+generation. The GUI never carries selection or a Properties dialog over to a
+replacement. Failed enumeration normally retains the previous inventory; failure
+with removal/loss evidence clears it conservatively rather than retaining phantom
+instances. Late property/search results are canceled or rejected by request and
+generation checks.
+
+An atomic acknowledgement bounds delivery to one queued snapshot, with no GUI
+wait for a live worker. Manual refresh requests are atomic counters; requests
+arriving during a scan are serviced next without discarding useful snapshots or
+restarting endlessly. The worker polls in 50 ms intervals between scans and checks
+interruption between records. Shutdown keeps the GUI event loop alive until the
+monitor and existing read workers finish; blocking kernel reads retain the prior
+cooperative-cancellation limitation.
+
+Fixture checks cover bounded event hints, scan change exclusion, retained
+remove/add evidence, loss recovery, persistent indexes through rename/reorder,
+replacement of descendant generations, and additions/removals in all five views.
+They are provided for target-machine execution; this delivery is statically
+verified only.
+
+API references:
+- https://www.freedesktop.org/software/systemd/man/latest/udev_monitor_receive_device.html
+- https://doc.qt.io/qt-6/qabstractitemmodel.html#beginMoveRows

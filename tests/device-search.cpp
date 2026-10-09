@@ -3,6 +3,7 @@
 #include "devicemodel.h"
 #include <QCoreApplication>
 #include <cstdio>
+#include <QPersistentModelIndex>
 
 int main(int argc, char **argv)
 {
@@ -154,5 +155,44 @@ int main(int argc, char **argv)
     }
     model.setView(DeviceModel::View::Type);
     check(model.visibleCount() == 3, "Returning to type projection retains same inventory");
+    // Live updates keep persistent indexes and replace observed instances.
+    int resets = 0;
+    int changes = 0;
+    QObject::connect(&model, &QAbstractItemModel::modelReset, [&] { ++resets; });
+    QObject::connect(&model, &QAbstractItemModel::dataChanged, [&] { ++changes; });
+    model.setInventory({pci, child, usb});
+    auto currentGeneration = [&](const QString &path) {
+        for (const auto &entry : model.searchRecords())
+            if (entry.device.path == path) return entry.device.generation;
+        return quint64(0);
+    };
+    pciGeneration = currentGeneration(pci.path);
+    QPersistentModelIndex retained(model.findDevice(pci.path, pciGeneration));
+    changes = 0;
+    model.setInventory({pci, child, usb});
+    check(retained.isValid() && changes == 0 && resets == 0,
+          "Unchanged live snapshots emit no row data changes or model resets");
+    Device renamed = pci;
+    renamed.name = "ZZ renamed fixture";
+    model.setInventory({renamed, child, usb});
+    check(retained.isValid() && retained.data().toString().contains("ZZ renamed"),
+          "Rename/reorder preserves persistent instance index");
+    QPersistentModelIndex oldChild(model.findDevice(child.path, currentGeneration(child.path)));
+    model.setInventory({renamed, child, usb}, {pci.path});
+    check(!retained.isValid() && !oldChild.isValid() && !model.device(pci.path, pciGeneration),
+          "Remove/add replaces parent and descendant identities even with unchanged inode hints");
+    QPersistentModelIndex lost(model.findDevice(usb.path, currentGeneration(usb.path)));
+    model.setInventory({renamed, child, usb}, {}, true);
+    check(!lost.isValid() && resets == 0, "Event loss invalidates identities through row replacement");
+    for (const auto mode : {DeviceModel::View::Type, DeviceModel::View::Connection,
+                           DeviceModel::View::DevicesByDriver, DeviceModel::View::DriversByDevice,
+                           DeviceModel::View::DriversByType}) {
+        model.setView(mode);
+        QPersistentModelIndex stable(model.findDevice(usb.path, currentGeneration(usb.path)));
+        model.setInventory({renamed, usb});
+        check(stable.isValid() && model.visibleCount() == 2, "Removal retains unrelated rows in every projection");
+        model.setInventory({renamed, child, usb});
+        check(stable.isValid() && model.visibleCount() == 3, "Addition retains unrelated rows in every projection");
+    }
     return failures ? 1 : 0;
 }

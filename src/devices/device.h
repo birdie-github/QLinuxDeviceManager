@@ -4,6 +4,7 @@
 #include <QMetaType>
 #include <QString>
 #include <QVector>
+#include <QSet>
 
 enum class ReadState { Available, Unavailable, PermissionDenied, Removed, Error, Unsupported, NotApplicable };
 struct Attribute {
@@ -39,6 +40,9 @@ struct Inventory {
     QString error;
     int skipped = 0;
     quint64 request = 0;
+    QSet<QString> removedPaths; // Includes descendants when an ancestor was removed.
+    bool identityLost = false; // Event loss: no old generation can be trusted.
+    QString monitorNote;
 };
 Q_DECLARE_METATYPE(Inventory)
 

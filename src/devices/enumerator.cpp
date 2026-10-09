@@ -13,6 +13,9 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <utility>
+#include <poll.h>
+#include <QElapsedTimer>
+#include "monitorstate.h"
 
 namespace {
 QString text(const char *value)
@@ -50,28 +53,20 @@ Attribute readAttribute(const QString &path)
     return result;
 }
 }
-Inventory Enumerator::takeResult()
-{
-    Q_ASSERT(!isRunning());
-    return std::move(result_);
-}
-void Enumerator::run()
+Inventory Enumerator::collect()
 {
     Inventory result;
-    result.request = request_;
-    const auto finish = [&] { result_ = std::move(result); };
+    result.request = request_.load();
     std::unique_ptr<udev, decltype(&udev_unref)> context(udev_new(), &udev_unref);
     if (!context) {
         result.error = tr("Could not create the udev context.");
-        finish();
-        return;
+        return result;
     }
     std::unique_ptr<udev_enumerate, decltype(&udev_enumerate_unref)> scan(
         udev_enumerate_new(context.get()), &udev_enumerate_unref);
     if (!scan || udev_enumerate_scan_devices(scan.get()) < 0) {
-        result.error = tr("Could not enumerate kernel devices. The previous inventory has been retained.");
-        finish();
-        return;
+        result.error = tr("Could not enumerate kernel devices.");
+        return result;
     }
     // hwdb is an optional local naming database, still accessed through libudev.
     std::unique_ptr<udev_hwdb, decltype(&udev_hwdb_unref)> hwdb(udev_hwdb_new(context.get()), &udev_hwdb_unref);
@@ -172,5 +167,129 @@ void Enumerator::run()
     }
     if (!isInterruptionRequested()) refinePresentation(result.devices);
     if (!isInterruptionRequested()) appendEfiVariables(result);
-    finish();
+    return result;
+}
+
+void Enumerator::run()
+{
+    using Monitor = std::unique_ptr<udev_monitor, decltype(&udev_monitor_unref)>;
+    std::unique_ptr<udev, decltype(&udev_unref)> context(udev_new(), &udev_unref);
+    Monitor monitor(nullptr, &udev_monitor_unref);
+    MonitorState events;
+    QElapsedTimer clock;
+    clock.start();
+    qint64 retryAt = 0;
+    qint64 firstEvent = -1;
+    qint64 lastEvent = 0;
+    qint64 periodicAt = 30000;
+    quint64 handledRequest = 0;
+    bool initial = true;
+    bool pending = true;
+    bool awaitingGui = false;
+    QString monitorNote;
+    const auto failed = [&] {
+        monitor.reset();
+        events.lose();
+        pending = true;
+        retryAt = clock.elapsed() + 2000;
+        monitorNote = tr("Live monitoring unavailable; retrying (F5 remains available)");
+    };
+    const auto openMonitor = [&] {
+        if (!context) context.reset(udev_new());
+        if (!context) { failed(); return; }
+        monitor.reset(udev_monitor_new_from_netlink(context.get(), "udev"));
+        if (!monitor) { failed(); return; }
+        // Best effort, unprivileged. Failure to enlarge the socket is harmless;
+        // ENOBUFS below triggers a fresh reconciliation and invalidates identities.
+        udev_monitor_set_receive_buffer_size(monitor.get(), 1024 * 1024);
+        if (udev_monitor_enable_receiving(monitor.get()) < 0
+            || udev_monitor_get_fd(monitor.get()) < 0) { failed(); return; }
+        monitorNote.clear();
+        events.lose(); // A reopened monitor cannot vouch for instances during its gap.
+        pending = true;
+    };
+    const auto drain = [&] {
+        if (!monitor) return;
+        // Bound each drain, even under a continuous stream. On overflow reopen
+        // before scanning so an abandoned queue cannot masquerade as current state.
+        for (int count = 0; count < MonitorState::Limit; ++count) {
+            pollfd fd{udev_monitor_get_fd(monitor.get()), POLLIN, 0};
+            const int ready = poll(&fd, 1, 0);
+            if (ready < 0) { if (errno == EINTR) return; failed(); return; }
+            if (fd.revents & (POLLERR | POLLHUP | POLLNVAL)) { failed(); return; }
+            if (!ready || !(fd.revents & POLLIN)) return;
+            errno = 0;
+            std::unique_ptr<udev_device, decltype(&udev_device_unref)> event(
+                udev_monitor_receive_device(monitor.get()), &udev_device_unref);
+            if (!event) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) return;
+                failed();
+                return;
+            }
+            const QString action = text(udev_device_get_action(event.get()));
+            const QString path = text(udev_device_get_syspath(event.get()));
+            events.observe(path, action == "remove");
+            if (path.startsWith("/sys/devices/")) {
+                lastEvent = clock.elapsed();
+                if (firstEvent < 0) firstEvent = lastEvent;
+            }
+            const QString oldPath = text(udev_device_get_property_value(event.get(), "DEVPATH_OLD"));
+            if (oldPath.startsWith("/devices/")) events.observe("/sys" + oldPath, true);
+        }
+        failed();
+    };
+    // Enable reception BEFORE the initial snapshot, and retain it across scans.
+    openMonitor();
+    while (!isInterruptionRequested()) {
+        drain();
+        const qint64 now = clock.elapsed();
+        if (!monitor && now >= retryAt) openMonitor();
+        if (events.dirty) {
+            pending = true;
+            if (firstEvent < 0) firstEvent = now;
+            // Quiet-time deadline is updated only when drain() receives events.
+        }
+        if (awaitingGui && acknowledged_.load()) {
+            awaitingGui = false;
+        }
+        const quint64 request = request_.load();
+        const bool manual = request != handledRequest;
+        const bool due = initial || manual || now >= periodicAt
+            || (pending && (firstEvent < 0 || now - firstEvent >= 500 || now - lastEvent >= 100));
+        if (!awaitingGui && due) {
+            Inventory inventory;
+            // At most two scans per publication. Continuous churn cannot keep
+            // restarting a scan forever; uncertain dependency branches are withheld.
+            for (int round = 0; round < 2; ++round) {
+                events.beginScan();
+                inventory = collect();
+                drain();
+                if (!events.dirty || isInterruptionRequested() || !inventory.error.isEmpty()) break;
+                if (!monitor) openMonitor();
+            }
+            if (isInterruptionRequested()) break;
+            events.excludeUnsettled(inventory);
+            inventory.removedPaths = events.removed;
+            inventory.identityLost = events.lost;
+            inventory.monitorNote = monitorNote;
+            if (events.dirty && inventory.monitorNote.isEmpty())
+                inventory.monitorNote = tr("Changing device branches are being reconciled");
+            handledRequest = inventory.request;
+            pending = events.dirty;
+            events.removed.clear();
+            events.lost = false;
+            initial = false;
+            firstEvent = pending ? clock.elapsed() : -1;
+            lastEvent = clock.elapsed();
+            periodicAt = clock.elapsed() + (monitor && inventory.error.isEmpty() ? 30000 : 2000);
+            acknowledged_.store(false);
+            awaitingGui = true;
+            emit inventoryReady(inventory);
+        }
+        // Short interruptible polling also observes manual refresh and GUI ack.
+        pollfd fd{monitor ? udev_monitor_get_fd(monitor.get()) : -1, POLLIN, 0};
+        const int ready = poll(&fd, monitor ? 1 : 0, 50);
+        if (ready > 0 && (fd.revents & POLLIN)) lastEvent = clock.elapsed();
+        if (ready < 0 && errno != EINTR) failed();
+    }
 }
