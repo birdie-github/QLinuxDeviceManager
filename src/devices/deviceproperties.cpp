@@ -182,7 +182,7 @@ DeviceProperties PropertiesReader::takeResult()
     Q_ASSERT(!isRunning());
     return std::move(result_);
 }
-DeviceProperties collectDeviceProperties(const Device &device)
+DeviceProperties collectDeviceProperties(const Device &device, bool cachedStorageService)
 {
     DeviceProperties result;
     result.device = device;
@@ -290,6 +290,8 @@ DeviceProperties collectDeviceProperties(const Device &device)
             sysfs(result, deviceFd.fd, name.constData());
         }
         if (!QThread::currentThread()->isInterruptionRequested()) result.resources = collectDeviceResources(deviceFd.fd, d);
+        if (!QThread::currentThread()->isInterruptionRequested())
+            result.storage = collectStorageProperties(d, cachedStorageService);
         // Binding can change during a read even if the device instance remains.
         const Attribute afterLink = linkTarget(deviceFd.fd, "driver");
         if (afterLink.state != driverLink.state || afterLink.value != driverLink.value || afterLink.error != driverLink.error) {

@@ -2,6 +2,9 @@
 #include "devicelabel.h"
 #include <QCoreApplication>
 #include <QStringList>
+#include <QDateTime>
+#include <QLocale>
+#include <limits>
 
 QString propertyReadValue(const Attribute &a)
 {
@@ -18,6 +21,46 @@ QString propertyReadValue(const Attribute &a)
     return {};
 }
 namespace {
+QString storageValue(const StorageField &field)
+{
+    const Attribute &value = field.value;
+    if (value.state != ReadState::Available) return propertyReadValue(value);
+    using Format = StorageField::Format;
+    switch (field.format) {
+    case Format::Text:
+        if (field.id == "service" && value.value == "cached") return QCoreApplication::translate("Storage", "Available; cached properties only");
+        if (field.id == "mountinfo" && value.value == "application-namespace")
+            return QCoreApplication::translate("Storage", "Application mount namespace only; other namespaces may differ. No filesystem is mounted or unlocked.");
+        if (field.id == "mounts" && value.value == "no-observed-mount")
+            return QCoreApplication::translate("Storage", "No mount observed in the application namespace");
+        return propertyReadValue(value);
+    case Format::Bytes: {
+        bool valid = false;
+        const quint64 bytes = value.value.toULongLong(&valid);
+        if (!valid) return QCoreApplication::translate("Storage", "Invalid capacity or sector-size metadata");
+        if (bytes > static_cast<quint64>(std::numeric_limits<qint64>::max())) return QCoreApplication::translate("Storage", "%1 bytes").arg(QLocale().toString(bytes));
+        return QCoreApplication::translate("Storage", "%1 bytes (%2)").arg(QLocale().toString(bytes), QLocale().formattedDataSize(static_cast<qint64>(bytes)));
+    }
+    case Format::Boolean: return value.value == "1" ? QCoreApplication::translate("Storage", "Yes") : value.value == "0" ? QCoreApplication::translate("Storage", "No") : QCoreApplication::translate("Storage", "Invalid boolean metadata");
+    case Format::Removable: return value.value == "1" ? QCoreApplication::translate("Storage", "Removable (UDisks2 hint)") : value.value == "0" ? QCoreApplication::translate("Storage", "Fixed (UDisks2 hint)") : QCoreApplication::translate("Storage", "Invalid removable metadata");
+    case Format::Epoch: {
+        bool valid = false;
+        const quint64 seconds = value.value.toULongLong(&valid);
+        if (!valid || !seconds || seconds > static_cast<quint64>(std::numeric_limits<qint64>::max())) return QCoreApplication::translate("Storage", "Unavailable");
+        const QDateTime time = QDateTime::fromSecsSinceEpoch(static_cast<qint64>(seconds));
+        return time.isValid() ? time.toString(Qt::ISODate) : QCoreApplication::translate("Storage", "Unavailable");
+    }
+    case Format::Kelvin: {
+        bool valid = false;
+        const double kelvin = value.value.toDouble(&valid);
+        return valid && kelvin > 0 ? QCoreApplication::translate("Storage", "%1 °C (cached)").arg(QLocale().toString(kelvin - 273.15, 'f', 1)) : QCoreApplication::translate("Storage", "Unavailable");
+    }
+    case Format::AtaHealth: return value.value == "1" ? QCoreApplication::translate("Storage", "Failure predicted by drive (cached)")
+        : value.value == "0" ? QCoreApplication::translate("Storage", "No failure predicted by drive (cached; not a guarantee of health)") : QCoreApplication::translate("Storage", "Unavailable");
+    case Format::NvmeHealth: return value.value.isEmpty() ? QCoreApplication::translate("Storage", "No critical warnings reported (cached; not a guarantee of health)") : value.value;
+    }
+    return {};
+}
 QString hexDump(const QByteArray &bytes)
 {
     QStringList lines;
@@ -52,6 +95,22 @@ QVector<PropertyEntry> propertyEntries(const DeviceProperties &snapshot, bool re
         const Attribute a = snapshot.values.value(id, fallback);
         add(id, label, propertyReadValue(a), snapshot.sources.value(id), false, tab);
     };
+    if (snapshot.storage.applicable) {
+        add("storage/scope", QCoreApplication::translate("Storage", "Storage snapshot"),
+            QCoreApplication::translate("Storage", "Each entity is a separate storage layer; capacities are not added. Health is cached UDisks2 evidence, separate from operational status. Reload never requests SMART updates or self-tests. Deep search includes native metadata only."), {}, false, 3);
+        for (const StorageField &note : snapshot.storage.notes)
+            add("storage/note/" + note.id, QCoreApplication::translate("Storage", note.label), storageValue(note), note.source, false, 3);
+        for (const StorageEntity &entity : snapshot.storage.entities) {
+            const QString prefix = "storage/entity/" + entity.id;
+            add(prefix, QCoreApplication::translate("Storage", "Storage entity"), entity.id, {}, false, 3);
+            for (const StorageField &field : entity.fields)
+                add(prefix + '/' + field.id, QCoreApplication::translate("Storage", field.label), storageValue(field), field.source, false, 3);
+        }
+        int index = 0;
+        for (const StorageLink &edge : snapshot.storage.links)
+            add("storage/link/" + QString::number(index++), QCoreApplication::translate("Storage", edge.label),
+                edge.from + "\n→ " + edge.to, edge.source, false, 3);
+    }
     add("name", QCoreApplication::translate("PropertiesDialog", "Device name"), deviceDisplayName(d), d.nameSource, false, 0);
     add("category", QCoreApplication::translate("PropertiesDialog", "Category"), categoryLabel(d.category), QCoreApplication::translate("PropertiesDialog", "Application grouping"), false, 0);
     Attribute manufacturer;

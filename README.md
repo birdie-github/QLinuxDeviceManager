@@ -4,13 +4,13 @@ A lightweight Linux hardware viewer using C++17, Qt6 Widgets and libudev,
 with a conventional desktop interface inspired by Windows Device Manager.
 Licensed under GPLv3 (see LICENSE).
 
-## Current scope: Phase 5
+## Current scope: Phase 6
 
 Five live device inventory views and two resource views (see below), a read-only **Refresh (F5)** action, selection, themed icons,
 and persistent window geometry, toolbar visibility and visibility settings.
 Categories start collapsed on every launch; expansion is preserved during
 refreshes and visibility changes within the running session. Run as a normal user; no daemon, device-management
-operations, hardware health claims or bus rescans are implemented.
+operations or bus rescans are implemented. Storage Properties includes available cached health evidence.
 
 The complete discovered inventory remains separate from the visible tree.
 **View → Show virtual and internal devices** is off by default. It includes
@@ -157,8 +157,11 @@ and libudev development headers. Optional: Qt Linguist tools for translation
 catalog generation and libkmod >= 30 for module-description fallback names and
 installed module properties.
 Use `-DQLDM_WITH_KMOD=OFF` to explicitly omit libkmod; CMake reports whether
-module naming is enabled. QtDBus, UDisks2 and journal libraries are not used
-in this phase. No particular desktop environment is required.
+module naming is enabled. Optional QtDBus enables cached UDisks2 storage metadata
+when an already-running UDisks2 service is accessible. Use
+`-DQLDM_WITH_UDISKS2=OFF` for a native-only build. Basic viewing requires neither
+QtDBus nor UDisks2; journal libraries are not used. No particular desktop
+environment is required.
 
 Fedora packages: `gcc-c++ cmake make pkgconf-pkg-config qt6-qtbase-devel
 systemd-devel`; optional `qt6-qttools-devel` and `kmod-devel`.
@@ -376,3 +379,60 @@ branches initially collapsed.
 Shared interrupts and overlapping ranges are reported without asserting exclusive
 ownership or conflicts. No global /proc entry is attributed by a device-name guess;
 these views currently use directly associated PCI/PnP sysfs metadata only.
+
+## Storage properties (Phase 6)
+
+Block devices and NVMe controllers have a **Storage** tab with an entity selector,
+source tooltips, relationship notes and a Copy storage snapshot button. Native metadata
+includes capacity (kernel `size` is always in 512-byte units), logical/physical
+sector sizes, kernel removable-media and read-only flags, udev model/vendor,
+serial, revision, transport, partition and cached filesystem identifiers.
+Selected SCSI/NVMe identity fields retain their actual parent source paths.
+Missing, restricted and failed reads are explicit; no raw disk node is opened,
+filesystem probed, filesystem mounted or encryption unlocked.
+
+Partitions are available through **Show virtual and internal devices**, and a
+disk's Storage snapshot also includes related partitions. Kernel partition
+ancestry and `slaves`/`holders` links expose backing and using devices, including
+encrypted/device-mapper, LVM and software RAID layers. Each canonical block
+path appears once. Related volumes may span other drives: explicit links preserve
+this scope rather than inventing a one-disk/one-volume ownership tree. Capacities
+are never summed across layers. Device-mapper names/UUIDs and available RAID
+level/state/degraded counts are shown without claiming general disk health.
+
+Mount points come from `/proc/self/mountinfo`, matched by major:minor rather
+than guessed device names. They cover the application's mount namespace only;
+other containers, sessions and the UDisks daemon may observe different mounts.
+Filesystem type and mount root are included so bind mounts/subvolume mounts are
+not mistaken for independent physical volumes. No matching entry means no mount
+was observed in this namespace, not proof that the volume is globally unused.
+
+Optional UDisks2 uses one asynchronous ObjectManager cache request with a
+2.5-second timeout in the existing Properties worker. It does not auto-start the
+service. Exact device numbers associate block objects; explicit Drive,
+CryptoBackingDevice, Partition.Table, MDRaid/member and optional LVM object links
+add service entities. Available drive identity/transport, partition tables,
+partition offsets/types/UUIDs and content metadata supplement native data.
+Removable/fixed is labelled as a UDisks2 hint, separately from the kernel's
+removable-media flag. ConnectionBus is an external-bus hint; native NVMe ancestry
+and udev ID_ATA_SATA identify NVMe/SATA where available without guessing from names.
+Absent services, denied access, errors and native-only builds leave viewing usable.
+Service links and sources are available in Details and Copy all values.
+
+ATA failure prediction and NVMe critical warnings are shown only with a nonzero
+cached `SmartUpdated` timestamp, displayed in local time with its UTC offset.
+Cached temperature and available ATA bad-sector/failing-attribute counts are
+shown separately. Missing interfaces or never-updated caches remain unavailable;
+a negative failure prediction is not a guarantee of health. Opening, Reload and
+inventory reconciliation never request SMART updates, polling or self-tests.
+The service may maintain its cache independently. No write-cache policies or
+modifying UDisks operations are added.
+
+Storage reads occur on demand, with bounds of 4096 block/service objects, 256
+related entities per source, 4 KiB per metadata string and 4 MiB for mountinfo.
+Interruptions and the existing dialog instance checks reject obsolete results.
+Related native identities are checked again before delivery; topology remains a
+snapshot rather than an atomic kernel/service transaction. Deep search collects
+native storage metadata only, avoiding a full service request per searched record.
+SATA, NVMe, USB, encrypted/LVM and multi-drive RAID behavior require real-machine
+validation; this phase was statically reviewed, not compiled or run.

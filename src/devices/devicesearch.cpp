@@ -146,7 +146,7 @@ void DeepSearchWorker::run()
             document = cached->document;
             unavailable = cached->unavailable;
         } else {
-            const DeviceProperties properties = collectDeviceProperties(record.device);
+            const DeviceProperties properties = collectDeviceProperties(record.device, false);
             if (isInterruptionRequested()) return;
             unavailable = properties.state != ReadState::Available || !properties.resources.issues.isEmpty();
             for (const Attribute &value : properties.values)

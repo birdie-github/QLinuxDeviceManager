@@ -30,6 +30,8 @@ private:
     void rebuild();
     void rebuildDetails();
     void rebuildResources();
+    void rebuildStorage();
+    void showStorageEntity();
     void copyResources(bool selectedOnly);
     void showDetail();
     void copyAll();
@@ -42,6 +44,10 @@ private:
     QString resourcesText_;
     QFormLayout *general_ = nullptr;
     QFormLayout *driver_ = nullptr;
+    QFormLayout *storage_ = nullptr;
+    QWidget *storagePage_ = nullptr;
+    QComboBox *storageEntity_ = nullptr;
+    QPlainTextEdit *storageNotes_ = nullptr;
     QComboBox *property_ = nullptr;
     QPlainTextEdit *value_ = nullptr;
     QLabel *source_ = nullptr;

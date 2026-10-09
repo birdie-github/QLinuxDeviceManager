@@ -2,6 +2,7 @@
 #include "devicefilter.h"
 #include "devicemodel.h"
 #include "resourceformat.h"
+#include "propertytext.h"
 #include <QCoreApplication>
 #include <cstdio>
 #include <QPersistentModelIndex>
@@ -46,6 +47,33 @@ int main(int argc, char **argv)
     check(!searchDocumentMatch(efiDocument, "41 42 ff").isEmpty(), "EFI hex bytes are searchable");
     check(!searchDocumentMatch(efiDocument, "AB.").isEmpty(), "EFI printable byte view is searchable");
     check(!searchDocumentMatch(efiDocument, "4142ff").isEmpty(), "EFI compact hex bytes are searchable");
+    // Synthetic storage observations, not live hardware results. Missing health
+    // must remain unavailable, while explicit cached evidence stays searchable.
+    DeviceProperties storageFixture;
+    storageFixture.device = device;
+    storageFixture.state = ReadState::Available;
+    storageFixture.storage.applicable = true;
+    StorageEntity volume;
+    volume.id = "/sys/devices/storage-fixture";
+    volume.fields.append({"capacity", "Block capacity", {ReadState::Available, "18446744073709551615", 0},
+                          "fixture/size", StorageField::Format::Bytes});
+    volume.fields.append({"health", "Cached NVMe critical warnings", {}, "fixture/cache", StorageField::Format::NvmeHealth});
+    volume.fields.append({"mounts", "Mount points", {ReadState::Available, "/fixture mount", 0}, "fixture/mountinfo"});
+    storageFixture.storage.entities.append(volume);
+    const auto storageEntries = propertyEntries(storageFixture);
+    bool unavailableHealth = false;
+    bool exactCapacity = false;
+    for (const PropertyEntry &entry : storageEntries) {
+        if (entry.id.endsWith("/health")) unavailableHealth = entry.value == "Unavailable";
+        if (entry.id.endsWith("/capacity")) exactCapacity = entry.value.endsWith(" bytes") && !entry.value.contains('(');
+    }
+    check(unavailableHealth, "Missing health data cannot produce a healthy verdict");
+    check(exactCapacity, "Capacity above signed 64-bit range keeps exact bytes without a clamped size");
+    const auto storageDocument = deviceSearchDocument({device, "Visible device", {}}, storageFixture);
+    check(!searchDocumentMatch(storageDocument, "/fixture mount").isEmpty(), "Storage mounts are searchable");
+    storageFixture.state = ReadState::Removed;
+    check(searchDocumentMatch(deviceSearchDocument({device, "Visible device", {}}, storageFixture), "/fixture mount").isEmpty(),
+          "Removed instances cannot contribute partial storage results to search");
     properties.state = ReadState::Removed;
     document = deviceSearchDocument({device, "Visible device", {}}, properties);
     check(searchDocumentMatch(document, "32902").isEmpty(), "Invalidated properties do not contribute partial data");

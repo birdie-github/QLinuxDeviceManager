@@ -7,6 +7,7 @@
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFontDatabase>
+#include <QFileInfo>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -65,6 +66,41 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     };
     general_ = addForm(tr("General"));
     driver_ = addForm(tr("Driver"));
+    storagePage_ = new QWidget(tabs);
+    storagePage_->hide();
+    auto *storageLayout = new QVBoxLayout(storagePage_);
+    auto *storageLabel = new QLabel(tr("Storage &entity:"), storagePage_);
+    storageEntity_ = new QComboBox(storagePage_);
+    storageEntity_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    storageEntity_->setMinimumContentsLength(24);
+    storageLabel->setBuddy(storageEntity_);
+    storageLayout->addWidget(storageLabel);
+    storageLayout->addWidget(storageEntity_);
+    auto *storageScroll = new QScrollArea(storagePage_);
+    storageScroll->setWidgetResizable(true);
+    storageScroll->setFrameShape(QFrame::NoFrame);
+    auto *storageFormPage = new QWidget(storageScroll);
+    storage_ = new QFormLayout(storageFormPage);
+    storage_->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    storage_->setRowWrapPolicy(QFormLayout::WrapLongRows);
+    storageScroll->setWidget(storageFormPage);
+    storageLayout->addWidget(storageScroll, 2);
+    storageNotes_ = new QPlainTextEdit(storagePage_);
+    storageNotes_->setReadOnly(true);
+    storageLayout->addWidget(storageNotes_, 1);
+    auto *copyStorage = new QPushButton(tr("Copy storage snapshot"), storagePage_);
+    storageLayout->addWidget(copyStorage);
+    connect(storageEntity_, &QComboBox::currentIndexChanged, this, &PropertiesDialog::showStorageEntity);
+    connect(copyStorage, &QPushButton::clicked, this, [this] {
+        QStringList text;
+        for (const PropertyEntry &entry : entries_) {
+            if (entry.tab != 3) continue;
+            QString item = entry.label + ":\n" + entry.value;
+            if (!entry.source.isEmpty()) item += '\n' + tr("Source: %1").arg(entry.source);
+            text.append(item);
+        }
+        QApplication::clipboard()->setText(text.join("\n\n"));
+    });
     auto *details = new QWidget(tabs);
     auto *detailsLayout = new QVBoxLayout(details);
     auto *propertyLabel = new QLabel(tr("&Property:"), details);
@@ -178,6 +214,7 @@ void PropertiesDialog::rebuild()
     entries_ = propertyEntries(snapshot_, removed_, resourcesText_);
     clearForm(general_);
     clearForm(driver_);
+    rebuildStorage();
     for (const PropertyEntry &entry : entries_) {
         if (entry.tab > 1) continue;
         QFormLayout *form = entry.tab == 0 ? general_ : driver_;
@@ -273,4 +310,53 @@ void PropertiesDialog::copyResources(bool selectedOnly)
             resourcesTable_->item(row, 0)->data(Qt::UserRole).toString()));
     }
     QApplication::clipboard()->setText(text.join("\n\n"));
+}
+
+void PropertiesDialog::rebuildStorage()
+{
+    const int existing = tabs_->indexOf(storagePage_);
+    if (snapshot_.storage.applicable && existing < 0) tabs_->addTab(storagePage_, tr("Storage"));
+    else if (!snapshot_.storage.applicable && existing >= 0) {
+        tabs_->removeTab(existing);
+        storagePage_->hide();
+    }
+    const QString previous = storageEntity_->currentData().toString();
+    const QSignalBlocker blocker(storageEntity_);
+    storageEntity_->clear();
+    for (const StorageEntity &entity : snapshot_.storage.entities) {
+        storageEntity_->addItem(tr("%1 — %2").arg(QFileInfo(entity.id).fileName(),
+            entity.id.startsWith("/sys/") ? tr("Kernel metadata") : tr("UDisks2 metadata")), entity.id);
+        storageEntity_->setItemData(storageEntity_->count() - 1, entity.id.toHtmlEscaped(), Qt::ToolTipRole);
+    }
+    int selected = storageEntity_->findData(previous);
+    if (selected < 0) selected = storageEntity_->findData(device().path);
+    storageEntity_->setCurrentIndex(selected < 0 ? 0 : selected);
+    QStringList notes;
+    for (const PropertyEntry &entry : entries_) {
+        if (entry.tab != 3 || entry.id.startsWith("storage/entity/")) continue;
+        QString text = entry.label + ":\n" + entry.value;
+        if (!entry.source.isEmpty()) text += '\n' + tr("Source: %1").arg(entry.source);
+        notes.append(text);
+    }
+    storageNotes_->setPlainText(notes.join("\n\n"));
+    showStorageEntity();
+}
+void PropertiesDialog::showStorageEntity()
+{
+    clearForm(storage_);
+    const QString id = storageEntity_->currentData().toString();
+    QSet<QString> fields;
+    for (const StorageEntity &entity : snapshot_.storage.entities) {
+        if (entity.id != id) continue;
+        const QString prefix = "storage/entity/" + entity.id;
+        fields.insert(prefix);
+        for (const StorageField &field : entity.fields) fields.insert(prefix + '/' + field.id);
+        break;
+    }
+    for (const PropertyEntry &entry : entries_) {
+        if (!fields.contains(entry.id)) continue;
+        auto *label = plainLabel(entry.value, storagePage_);
+        label->setToolTip(entry.source.toHtmlEscaped());
+        storage_->addRow(entry.label + ':', label);
+    }
 }

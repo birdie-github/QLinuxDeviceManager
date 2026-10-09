@@ -14,6 +14,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
 find_package(Qt6 6.2 REQUIRED COMPONENTS Widgets)
+# Optional read-only UDisks2 cache access. Native storage viewing still works without it.
+option(QLDM_WITH_UDISKS2 "Use optional QtDBus for cached UDisks2 storage metadata" ON)
+if(QLDM_WITH_UDISKS2)
+    find_package(Qt6 6.2 QUIET COMPONENTS DBus)
+endif()
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(UDEV REQUIRED IMPORTED_TARGET libudev)
 option(QLDM_WITH_KMOD "Use optional libkmod for function descriptions and installed module properties" ON)
@@ -25,6 +30,7 @@ add_executable(qlinuxdevicemanager
     src/devices/enumerator.h src/devices/enumerator.cpp
     src/devices/monitorstate.h src/devices/monitorstate.cpp
     src/devices/deviceproperties.h src/devices/deviceproperties.cpp
+    src/devices/storageproperties.h src/devices/storageproperties.cpp
     src/devices/deviceresources.h src/devices/deviceresources.cpp
     src/devices/resourceformat.h src/devices/resourceformat.cpp
     src/devices/cpumetadata.h src/devices/cpumetadata.cpp
@@ -50,6 +56,13 @@ if(QLDM_WITH_KMOD AND TARGET PkgConfig::KMOD)
     message(STATUS "Module description naming: enabled (libkmod)")
 else()
     message(STATUS "Module description naming: disabled (libkmod >= 30 unavailable or disabled)")
+endif()
+if(QLDM_WITH_UDISKS2 AND TARGET Qt6::DBus)
+    target_link_libraries(qlinuxdevicemanager PRIVATE Qt6::DBus)
+    target_compile_definitions(qlinuxdevicemanager PRIVATE QLDM_HAVE_DBUS)
+    message(STATUS "Cached UDisks2 storage metadata: enabled (QtDBus)")
+else()
+    message(STATUS "Cached UDisks2 storage metadata: disabled; native fallback available")
 endif()
 target_compile_options(qlinuxdevicemanager PRIVATE -Wall -Wextra -Wpedantic)
 include(GNUInstallDirs)
@@ -94,6 +107,7 @@ if(BUILD_TESTING)
     add_executable(device-search-test tests/device-search.cpp
         src/devices/devicesearch.cpp src/devices/devicesearch.h
         src/devices/deviceproperties.cpp src/devices/deviceproperties.h
+        src/devices/storageproperties.cpp src/devices/storageproperties.h
         src/devices/deviceresources.cpp src/devices/deviceresources.h
         src/devices/device.cpp src/devices/device.h
         src/devices/devicelabel.cpp src/devices/devicelabel.h
@@ -108,6 +122,10 @@ if(BUILD_TESTING)
     if(QLDM_WITH_KMOD AND TARGET PkgConfig::KMOD)
         target_link_libraries(device-search-test PRIVATE PkgConfig::KMOD)
         target_compile_definitions(device-search-test PRIVATE QLDM_HAVE_KMOD)
+    endif()
+    if(QLDM_WITH_UDISKS2 AND TARGET Qt6::DBus)
+        target_link_libraries(device-search-test PRIVATE Qt6::DBus)
+        target_compile_definitions(device-search-test PRIVATE QLDM_HAVE_DBUS)
     endif()
     add_test(NAME device-search COMMAND device-search-test)
     add_executable(system-properties-test tests/system-properties.cpp

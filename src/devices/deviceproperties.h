@@ -2,6 +2,7 @@
 
 #include "device.h"
 #include "deviceresources.h"
+#include "storageproperties.h"
 #include <QByteArray>
 #include <QThread>
 
@@ -11,6 +12,7 @@ struct DeviceProperties {
     QHash<QString, Attribute> values;
     QHash<QString, QString> sources;
     DeviceResources resources;
+    StorageProperties storage;
     QByteArray efiBytes;
     bool efiTruncated = false;
     ReadState state = ReadState::Unavailable;
@@ -19,7 +21,7 @@ struct DeviceProperties {
 };
 
 // Worker-thread collector shared by Properties and deep search. No GUI objects.
-DeviceProperties collectDeviceProperties(const Device &device);
+DeviceProperties collectDeviceProperties(const Device &device, bool cachedStorageService = true);
 
 // One window-owned worker, shared by successive dialogs. Requests serialize.
 class PropertiesReader final : public QThread {
