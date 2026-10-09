@@ -156,10 +156,10 @@ Required: Linux, CMake >= 3.19, a C++17 compiler, pkg-config, Qt >= 6.2 Widgets
 and libudev development headers. Optional: Qt Linguist tools for translation
 catalog generation and libkmod >= 30 for module-description fallback names and
 installed module properties.
-Use `-DQLDM_WITH_KMOD=OFF` to explicitly omit libkmod; CMake reports whether
+Use `-DKMOD=OFF` to explicitly omit libkmod; CMake reports whether
 module naming is enabled. Optional QtDBus enables cached UDisks2 storage metadata
 when an already-running UDisks2 service is accessible. Use
-`-DQLDM_WITH_UDISKS2=OFF` for a native-only build. Basic viewing requires neither
+`-DUDISKS2=OFF` for a native-only build. Basic viewing requires neither
 QtDBus nor UDisks2; journal libraries are not used. No particular desktop
 environment is required.
 
