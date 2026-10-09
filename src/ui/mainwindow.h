@@ -1,6 +1,7 @@
 #pragma once
 #include "enumerator.h"
 #include "deviceproperties.h"
+#include "systemproperties.h"
 #include <QPointer>
 #include <optional>
 #include <QMainWindow>
@@ -16,6 +17,7 @@ class DeviceModel;
 class QTreeView;
 class QCloseEvent;
 class PropertiesDialog;
+class SystemDialog;
 
 class MainWindow final : public QMainWindow {
     Q_OBJECT
@@ -33,6 +35,9 @@ private:
     void acceptSearchBatch(const SearchBatch &batch);
     void searchFinished();
     void openProperties();
+    void openSystemInformation();
+    void requestSystemInformation();
+    void acceptSystemInformation();
     void requestProperties();
     void acceptProperties();
     void acceptInventory();
@@ -64,6 +69,9 @@ private:
     std::optional<Device> pendingProperties_;
     quint64 propertiesRequest_ = 0;
     bool propertiesBusy_ = false;
+    SystemDialog *systemDialog_ = nullptr;
+    SystemPropertiesReader systemWorker_;
+    bool systemBusy_ = false;
     Enumerator worker_;
     quint64 requested_ = 0;
     bool busy_ = false;

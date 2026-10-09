@@ -36,7 +36,9 @@ add_executable(qlinuxdevicemanager
     src/ui/devicefilter.h src/ui/devicefilter.cpp
     src/ui/devicemodel.h src/ui/devicemodel.cpp
     src/ui/mainwindow.h src/ui/mainwindow.cpp
-    src/ui/propertiesdialog.h src/ui/propertiesdialog.cpp)
+    src/ui/propertiesdialog.h src/ui/propertiesdialog.cpp
+    src/devices/systemproperties.h src/devices/systemproperties.cpp
+    src/ui/systemdialog.h src/ui/systemdialog.cpp)
 target_include_directories(qlinuxdevicemanager PRIVATE
     src/devices src/ui "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_link_libraries(qlinuxdevicemanager PRIVATE Qt6::Widgets PkgConfig::UDEV)
@@ -100,4 +102,10 @@ if(BUILD_TESTING)
         target_compile_definitions(device-search-test PRIVATE QLDM_HAVE_KMOD)
     endif()
     add_test(NAME device-search COMMAND device-search-test)
+    add_executable(system-properties-test tests/system-properties.cpp
+        src/devices/systemproperties.cpp src/devices/systemproperties.h
+        src/devices/cpumetadata.cpp src/devices/cpumetadata.h)
+    target_include_directories(system-properties-test PRIVATE src/devices)
+    target_link_libraries(system-properties-test PRIVATE Qt6::Core)
+    add_test(NAME system-properties COMMAND system-properties-test)
 endif()

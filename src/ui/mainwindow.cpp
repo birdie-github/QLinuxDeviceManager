@@ -2,6 +2,7 @@
 #include "devicemodel.h"
 #include "devicefilter.h"
 #include "propertiesdialog.h"
+#include "systemdialog.h"
 #include "projectmetadata.h"
 
 #include <QAction>
@@ -85,6 +86,9 @@ MainWindow::MainWindow()
     connect(&searchWorker_, &QThread::finished, this, &MainWindow::searchFinished, Qt::QueuedConnection);
 
     auto *file = menuBar()->addMenu(tr("&File"));
+    auto *systemInfo = file->addAction(tr("System Information"));
+    connect(systemInfo, &QAction::triggered, this, &MainWindow::openSystemInformation);
+    file->addSeparator();
     auto *quit = file->addAction(tr("&Quit"));
     quit->setShortcut(QKeySequence::Quit);
     connect(quit, &QAction::triggered, this, &QWidget::close);
@@ -100,12 +104,14 @@ MainWindow::MainWindow()
     propertiesAction_->setEnabled(false);
     connect(propertiesAction_, &QAction::triggered, this, &MainWindow::openProperties);
     connect(tree_, &QTreeView::doubleClicked, this, [this](const QModelIndex &index) {
-        if (!index.data(DeviceModel::PathRole).toString().isEmpty()) openProperties();
+        if (index.data(DeviceModel::NodeKeyRole).toString() == "computer"
+            || !index.data(DeviceModel::PathRole).toString().isEmpty()) openProperties();
     });
     tree_->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(tree_, &QWidget::customContextMenuRequested, this, [this](const QPoint &position) {
         const QModelIndex index = tree_->indexAt(position);
-        if (index.data(DeviceModel::PathRole).toString().isEmpty()) return;
+        if (index.data(DeviceModel::NodeKeyRole).toString() != "computer"
+            && index.data(DeviceModel::PathRole).toString().isEmpty()) return;
         tree_->setCurrentIndex(index);
         QMenu menu(this);
         menu.addAction(propertiesAction_);
@@ -197,6 +203,7 @@ MainWindow::MainWindow()
             [this](const QModelIndex &, const QModelIndex &) { updateStatus(); });
     connect(&worker_, &QThread::finished, this, &MainWindow::acceptInventory, Qt::QueuedConnection);
     connect(&propertiesWorker_, &QThread::finished, this, &MainWindow::acceptProperties, Qt::QueuedConnection);
+    connect(&systemWorker_, &QThread::finished, this, &MainWindow::acceptSystemInformation, Qt::QueuedConnection);
     QTimer::singleShot(0, this, &MainWindow::refresh);
 }
 MainWindow::~MainWindow()
@@ -204,6 +211,8 @@ MainWindow::~MainWindow()
     worker_.requestInterruption();
     propertiesWorker_.requestInterruption();
     searchWorker_.requestInterruption();
+    systemWorker_.requestInterruption();
+    systemWorker_.wait();
     searchWorker_.wait();
     worker_.wait(); // Fallback for destruction without a normal window close.
     propertiesWorker_.wait();
@@ -300,7 +309,8 @@ void MainWindow::restoreTree()
 void MainWindow::updateStatus()
 {
     if (closing_) return;
-    propertiesAction_->setEnabled(!tree_->currentIndex().data(DeviceModel::PathRole).toString().isEmpty());
+    propertiesAction_->setEnabled(tree_->currentIndex().data(DeviceModel::NodeKeyRole).toString() == "computer"
+        || !tree_->currentIndex().data(DeviceModel::PathRole).toString().isEmpty());
     if (worker_.isRunning()) { statusBar()->showMessage(tr("Refreshing devices…")); return; }
     QString message = tr("%1 shown / %2 discovered").arg(filter_->visibleCount()).arg(model_->inventoryCount());
     if (filter_->active() && deepSearch_->isChecked()) {
@@ -329,9 +339,10 @@ void MainWindow::closeEvent(QCloseEvent *event)
     closing_ = true;
     pendingProperties_.reset();
     cancelSearch();
-    if (worker_.isRunning() || propertiesWorker_.isRunning() || searchWorker_.isRunning()) {
+    if (worker_.isRunning() || propertiesWorker_.isRunning() || searchWorker_.isRunning() || systemWorker_.isRunning()) {
         worker_.requestInterruption();
         propertiesWorker_.requestInterruption();
+        systemWorker_.requestInterruption();
         setEnabled(false);
         statusBar()->showMessage(tr("Waiting for device metadata reads to finish…"));
         event->ignore(); // Keep the event loop alive; finished() closes the window.
@@ -342,6 +353,10 @@ void MainWindow::openProperties()
 {
     if (closing_) return;
     const QModelIndex index = tree_->currentIndex();
+    if (index.data(DeviceModel::NodeKeyRole).toString() == "computer") {
+        openSystemInformation();
+        return;
+    }
     const auto record = model_->device(index.data(DeviceModel::PathRole).toString(),
                                       index.data(DeviceModel::GenerationRole).toULongLong());
     if (!record) return;
@@ -455,4 +470,33 @@ void MainWindow::searchFinished()
     searchBusy_ = false;
     if (closing_) { close(); return; }
     if (searchPending_) startSearch();
+}
+
+void MainWindow::openSystemInformation()
+{
+    if (closing_) return;
+    if (!systemDialog_) {
+        // Retain one window-owned dialog, including while hidden, so worker results
+        // cannot target a deleted dialog. Opening it again reuses that same snapshot.
+        systemDialog_ = new SystemDialog(this);
+        connect(systemDialog_, &SystemDialog::refreshRequested, this, &MainWindow::requestSystemInformation);
+        requestSystemInformation();
+    }
+    systemDialog_->show();
+    systemDialog_->raise();
+    systemDialog_->activateWindow();
+}
+void MainWindow::requestSystemInformation()
+{
+    if (closing_ || systemBusy_ || !systemDialog_) return;
+    systemBusy_ = true; // Includes queued finished delivery; only one request runs.
+    systemDialog_->setBusy(true);
+    systemWorker_.start();
+}
+void MainWindow::acceptSystemInformation()
+{
+    systemWorker_.wait();
+    systemBusy_ = false;
+    if (closing_) { close(); return; }
+    if (systemDialog_) systemDialog_->acceptResult(systemWorker_.takeResult());
 }

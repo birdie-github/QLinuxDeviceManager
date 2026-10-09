@@ -310,3 +310,40 @@ not automatically accept unrelated descendants of a matching connection parent.
 View changes interrupt/invalidate deep-search requests and advance its revision.
 Expansion keys are scoped by view; device selection still requires a matching
 instance generation. There is no additional worker or device discovery per view.
+
+## System overview
+
+`systemproperties` collects an owned SystemProperties snapshot (raw Attributes
+and source paths) in one MainWindow-owned SystemPropertiesReader. `systemdialog`
+formats and translates it independently of device dialogs. MainWindow retains
+one dialog while hidden, serializes Refresh including queued finished delivery,
+joins final thread cleanup before reuse, and participates in the existing
+cooperative shutdown flow. There is no device identity to retarget and no callback
+capturing a disposable dialog. Opening File → System Information works even if
+inventory enumeration fails or no root row is selected.
+
+The collector reads only os-release (64 KiB, /etc takes precedence), cpuinfo
+(existing 4 MiB bound), meminfo (64 KiB), uptime, six DMI text fields, EFI-directory
+presence, hypervisor/type and selected CPU topology/cache text fields (4 KiB each).
+CPU lists contain at most 4096 unique IDs; cache collection examines at most
+16384 entries. No recursive arbitrary attribute reader, subprocess, D-Bus service,
+privileged helper, module change, firmware execution or memory mapping is used.
+Interruption is checked between reads; an already blocking kernel read cannot
+be forcibly canceled. Cached snapshots are refreshed only by the dialog button.
+
+Topology counts unique package IDs and package/die/core tuples across present
+CPUs; absent optional die IDs remain undetermined components. Negative or missing
+package/core IDs invalidate totals rather than manufacture socket/core zero.
+Cache totals deduplicate level/type/sharing sets, validate that each set contains
+its reporting CPU, reject inconsistent duplicate sizes and invalidate incomplete
+results. Rechecking present/online lists detects observed hotplug but cannot make
+the snapshot atomic or detect every change-and-return during collection.
+Virtualization uses positive kernel hypervisor/type or x86 CPUID evidence; no
+negative detection is promoted into a physical-machine verdict. UEFI absence
+is similarly qualified. Values are plain text; Copy all exports the same captions
+and displayed values, while source attribution stays in tooltips.
+
+Primary references:
+- https://www.freedesktop.org/software/systemd/man/latest/os-release.html
+- https://docs.kernel.org/admin-guide/cputopology.html
+- https://github.com/torvalds/linux/blob/master/Documentation/ABI/testing/sysfs-devices-system-cpu

@@ -239,7 +239,8 @@ All five views have one computer root labelled with the local hostname
 (`This computer` if unavailable). It starts expanded; the existing view contents
 start collapsed. Root expansion is retained per view within the session.
 The root remains visible when filtering finds no devices and is excluded from
-device counts, Properties targets and deep-search inputs.
+device counts, device Properties targets and deep-search inputs.
+Its Properties action opens System Information (see below).
 
 View offers Devices by type, Devices by connection, Devices by driver,
 Drivers by device and Drivers by type. Every view reuses the same inventory;
@@ -272,3 +273,35 @@ separately per view during this session. The chosen view persists across launche
 which still start collapsed. No Devices by container view is offered: neither
 ancestry nor matching names/serials establishes a reliable Linux container
 identity; grouping them would invent a hardware ownership relationship.
+
+## System Information
+
+File → System Information and Properties on the hostname root open the same
+modeless system overview. It has selectable plain-text values, source tooltips,
+Copy all, Refresh and Close. Reopening reuses its last snapshot; Refresh collects
+new values. Hardware enumeration and device Properties remain usable.
+
+The dialog shows hostname, OS name, kernel architecture/release/build, CPU models,
+sockets/cores, present/online logical CPUs, usable physical RAM in GiB, uptime,
+system and motherboard manufacturer/model, firmware version/date, boot-mode
+evidence, reported hypervisor identity and unique CPU cache totals by level/type.
+Missing or restricted metadata stays explicitly unavailable; absent virtualization
+evidence does not prove physical hardware. Firmware dates retain their reported
+format. RAM is Linux MemTotal, not installed DIMM capacity or currently free RAM.
+
+Collection uses uname/gethostname, selected /proc and sysfs files and, on x86,
+CPUID hypervisor identification. No lsb_release, uname, dmidecode or other program
+is launched. OS naming follows os-release precedence and quoting without shell
+execution. CPU socket/core/die IDs are kernel-reported topology (a VM may expose
+virtual topology); incomplete observations do not produce partial totals. Caches
+are deduplicated by level/type and the CPU-sharing set across online CPUs; totals
+need not include caches belonging exclusively to offline CPUs. A change in CPU
+presence/online lists invalidates topology and cache results; Refresh can retry.
+Boot mode identifies UEFI when its kernel directory is exposed; absence leaves
+legacy boot versus a restricted environment unresolved.
+
+One additional serial worker is active only on request. Reads and list expansion
+are bounded and shutdown cooperatively cancels collection. In a container, OS,
+hostname, /proc and sysfs may reflect different namespace scopes; the overview
+reports this process's exposed system view rather than promising host identity.
+Serial numbers, machine IDs and live utilization are not collected.
