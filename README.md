@@ -1,498 +1,283 @@
-# QLinuxDeviceManager
+# QLinuxDeviceManager — Linux Device Manager
 
-A lightweight Linux hardware viewer using C++17, Qt6 Widgets and libudev,
-with a conventional desktop interface inspired by Windows Device Manager.
-Licensed under GPLv3 (see LICENSE).
+**QLinuxDeviceManager is a lightweight graphical Linux device manager and hardware
+information viewer inspired by Windows Device Manager.** Browse your computer's
+devices, inspect kernel drivers and hardware resources, examine storage volumes
+and cached drive health, and watch live device events in one Qt desktop application.
 
-## Current scope: Phases 6 and 8
+It provides a Linux alternative to Windows Device Manager for hardware inspection
+and troubleshooting. It runs as a normal user and reads local information through
+libudev, sysfs and procfs, with optional UDisks2 storage metadata. No particular
+desktop environment is required.
 
-Five live device inventory views and two resource views (see below), a read-only **Refresh (F5)** action, selection, themed icons,
-and persistent window geometry, toolbar visibility and visibility settings.
-Categories start collapsed on every launch; expansion is preserved during
-refreshes and visibility changes within the running session. Run as a normal user; no daemon, device-management
-operations or bus rescans are implemented. Storage Properties includes available cached health evidence.
+## Features
 
-The complete discovered inventory remains separate from the visible tree.
-**View → Show virtual and internal devices** is off by default. It includes
-`/sys/devices/virtual` records, partitions, USB interfaces, input endpoints,
-HID transport nodes, sound endpoints, DRM outputs, unbound ACPI objects,
-SCSI/ATA transport objects and other unbound implementation objects.
-This filter does not describe hardware health or disconnected hardware.
+- **Hardware browser:** processors, PCI and USB devices, disk drives, storage
+  controllers, network adapters, display adapters, audio devices, keyboards,
+  pointing devices, Bluetooth, cameras, batteries and system devices.
+- **Seven tree views:** inspect devices by type, connection or driver, and browse
+  reported memory addresses, I/O ranges, IRQs and other hardware resources.
+- **Device properties:** hardware identifiers, manufacturer, kernel paths, direct
+  driver bindings, kernel module information and advanced udev/sysfs metadata.
+- **Storage information:** SATA, NVMe and USB device metadata, related partitions,
+  filesystems, mount points, encrypted/device-mapper layers, LVM and software RAID.
+- **Cached drive health:** available ATA SMART failure predictions, temperatures
+  and counts, plus NVMe critical warnings, through UDisks2.
+- **System information:** CPU models and topology, cache totals, physical and usable
+  RAM, motherboard and firmware details, operating system, kernel and uptime.
+- **Live hardware monitoring:** automatically update the inventory as devices are
+  connected, removed or changed, with an Events tab for observed udev activity.
+- **Search and copy:** filter device names or search advanced metadata and resources;
+  copy property values, storage information, resource assignments and events.
+- **UEFI variable viewer:** browse world-readable firmware variables and inspect
+  their raw hex/ASCII contents.
 
-CPU model names come from `/proc/cpuinfo`, matched by logical processor number
-(the file is read once per refresh with a 4 MiB bound). Each logical CPU retains
-its own record; offline CPUs without matching metadata keep their kernel name.
-Input/video function names and direct NVMe model metadata take precedence over
-generic model names. Other names prefer udev database/model properties, then
-selected direct sysfs text metadata. Missing PCI/USB database model properties
-can be resolved from the local libudev hwdb using the device's own modalias.
-If unresolved, a directly bound driver and kernel name describe the function
-without inventing a marketing name; no driver evidence means a kernel-name fallback. Kernel names accompany
-labels to distinguish identical models. Missing metadata has a readable
-fallback; failed attribute reads retain an explicit state and error separately.
-No parent vendor, model or driver is silently attributed to a child.
+The application is read-only. It does not install drivers, load or unload modules,
+change driver bindings, rescan hardware buses, mount or unlock filesystems, modify
+firmware variables, or power off devices. A device's presence or driver binding
+alone does not establish that its hardware is healthy.
 
-Additional naming uses exact standard ACPI/PNP identifiers (including compatible
-IDs), direct HDA codec `chip_name`/`vendor_name`, and USB `product` text.
-Linux USB root hubs receive explicit USB 1.1/2.0/3.x captions, using their
-root-bus names, address and descriptor IDs. Separate USB buses remain separate
-rows. Known platform, PCI Express service and faux kernel functions receive
-readable captions scoped to exact subsystem/alias or driver identities.
-Standard function labels are translated in the view; raw IDs remain visible.
-An optional libkmod fallback reads installed module descriptions through native
-APIs in the enumeration worker. Bound modules are identified through that
-device's actual `driver/module` link. When only a modalias is available, exactly
-one matching module is required and the label is marked **module candidate**.
-Descriptions explain a software/kernel function, not a hardware marketing
-model, health, binding status or the version of loaded code. Tooltips record the
-naming basis. Missing or ambiguous metadata keeps the previous fallback label.
+## Using the application
 
-The default audio view groups a PCI audio function with its single ALSA card.
-If the function owns multiple cards, every card remains visible and the extra
-PCI row is suppressed. USB sound cards and unrelated audio controllers are
-preserved. All grouped records remain available under Show internal devices.
+Launch `qlinuxdevicemanager` from a terminal or its desktop application entry.
+The tree starts with your computer's hostname. Select a device and open
+**Action → Properties**, use the toolbar or context menu, press **Alt+Enter**, or
+double-click the device.
 
-Power supplies use reported type/manufacturer/model metadata for readable role
-labels. Battery role placeholders such as `Primary` are retained in tooltips;
-no manufacturer is hardcoded. UCSI supplies retain separate connector numbers.
-Generated I2C mouse/touchpad names put the function first and retain the firmware
-identifier in parentheses, while descriptive product names remain intact.
-ALSA headphone, microphone and HDMI/DisplayPort jack-detection
-switches appear as internal audio records rather than ordinary HID devices.
-Raw names and kernel identifiers remain in tooltips. Repeated friendly labels
-receive identifiers to distinguish them; Show internal devices includes IDs.
-
-**UEFI variables** lists regular files with the world-read permission bit set
-under `/sys/firmware/efi/efivars`. This is a separate firmware category, not a
-claim that variables are hardware devices. Enumeration reads directory entries
-and file metadata only; variable contents are not opened, parsed or cached.
-Concatenated filename words are separated for display. Original names remain
-in tooltips, and namespace GUIDs/full filenames appear only with Show internal
-devices enabled. Equal names in different namespaces retain separate rows with
-numbered namespace labels. Restricted files remain excluded even when running
-as root or showing internal devices. Missing/inaccessible efivarfs yields no
-category; this does not prevent ordinary device discovery. Permission bits do
-not guarantee that another security policy will permit a future value read.
-Opening Properties reads a bounded hex snapshot; see below.
-
-Application categories are deterministic groupings, not kernel device classes:
-
-| Records | Group and default visibility |
+| Action | How to use it |
 | --- | --- |
-| PCI class 01/02/03/04/0c03 | Storage/network/display/audio/USB respectively |
-| Other PCI, platform, PNP; bound ACPI | System devices |
-| USB device / interface | USB; interfaces hidden |
-| Block disk / partition | Disk drives; partitions hidden |
-| inputN with keyboard or pointing flags | Keyboards / mice; other inputN → HID |
-| event, js, mouse endpoints; HID/hidraw | HID/input group; endpoints hidden |
-| Sound card / other sound endpoints | Audio; endpoints hidden |
-| net, hci Bluetooth, video4linux, power_supply, cpu | Corresponding functional group |
-| DRM card / connectors | Display adapters / display outputs; hidden by default |
-| NVMe controller; SCSI hosts / ATA ports | Storage controllers; transport nodes hidden |
-| Other directly bound physical function | Other devices |
-| Other unbound objects | Other devices; hidden |
+| Refresh the device inventory | **F5** or **Action → Refresh** |
+| Search device names | **Ctrl+F** or **View → Filter** |
+| Search properties and resources | Enable **Deep search** in the search bar |
+| Clear and hide the search bar | **Escape** or **Ctrl+F** |
+| Reveal partitions and implementation records | **View → Show virtual and internal devices** |
+| Open the system overview | **File → System Information** or Properties on the computer root |
+| Reread a device's properties | **Reload properties** in its dialog |
 
-Composite USB input/audio/video functions remain independently visible.
-A PCI network adapter with exactly one visible interface is represented by its
-PCI row; the interface remains available in the internal view. Multiple
-interfaces remain independently visible, with the redundant aggregate PCI row
-hidden. An NVMe class controller backed by a PCI NVMe controller is represented
-by that PCI row; namespace disks remain separate. These rules follow recorded
-udev ancestry and PCI classes, never matching model names or serial numbers.
-Devices without a matching parent remain visible. Tooltips identify grouped
-records and their representative. Separate PCI controllers remain separate. DRM connectors are called
-outputs, not monitors: their presence does not prove a monitor is connected.
-Category mappings require real-machine validation, particularly Bluetooth,
-multifunction video devices, firmware/platform devices and unusual buses.
+Deep search collects metadata in the background. Its cache is refreshed after
+inventory changes or an F5 refresh. Storage deep search uses native metadata;
+it does not query UDisks2 for every device.
+
+Virtual and internal devices are hidden by default to keep the hardware browser
+readable. This includes partitions, USB interfaces, input and sound endpoints,
+DRM outputs and many transport or unbound kernel objects. Their visibility is
+not a health or connectivity verdict. Friendly names retain kernel identifiers
+where needed to distinguish identical devices; tooltips explain their sources.
+Some related records are grouped in the default view and remain individually
+accessible with internal devices shown.
+
+Window geometry, toolbar visibility, the selected tree view and visibility settings
+persist across launches. The computer root starts expanded and other groups start
+collapsed; expansion and selection are retained during updates within the session.
+
+## Hardware and driver views
+
+Choose a view from the **View** menu. All views use the same device inventory.
+
+| View | What it shows |
+| --- | --- |
+| Devices by type | Devices grouped by their hardware or functional category |
+| Devices by connection | Devices arranged by their recorded kernel parent relationships |
+| Devices by driver | Directly bound devices grouped by subsystem and driver |
+| Drivers by device | Each device's direct driver and observed owning kernel module |
+| Drivers by type | Device category, bus-qualified driver and associated devices |
+| Resources by type | Reported assignments grouped by resource kind and device |
+| Resources by connection | Assignments under their reporting devices in the connection tree |
+
+Connection views retain necessary ancestors for context. A parent device's driver
+or resource assignments are not presented as belonging to its child. Driver views
+show relationships for discovered devices, rather than listing every installed or
+loaded module. Missing bindings or module links are reported without assuming a
+fault or a built-in driver.
+
+Resources include directly associated PCI and Plug and Play memory/MMIO and I/O
+ranges, PCI BARs and expansion ROM resources, IRQs, readable MSI/MSI-X vectors, and
+reported PnP DMA channels and bus windows. Unsupported, disabled, unassigned and
+restricted observations remain explicit. Shared interrupts or overlapping ranges
+are not automatically labelled conflicts. The application reads resource metadata,
+not PCI BAR contents.
 
 ## Device properties
 
-Open **Action → Properties**, the toolbar button, the device context menu,
-**Alt+Enter**, or double-click a device. A modeless dialog provides:
+The modeless Properties dialog provides these tabs when applicable:
 
-- **General**: name, category, manufacturer, bus/subsystem, location, evidence-based
-  status, direct driver binding and selected hardware identifiers.
-- **Driver**: bound driver, owning module, modular/built-in determination where
-  evidence permits, running module version and optional installed-module metadata
-  (filename, version, description, author, license, declared firmware names).
-  Installed metadata may differ from already loaded code; absent module links
-  or versions do not prove a built-in driver. Direct NVMe firmware revisions are
-  shown when available; declared firmware filenames are not firmware versions.
-- **Details**: a property selector, multiline read-only values, source attribution,
-  copy selection/value/all, and an advanced toggle for curated raw udev/sysfs
-  metadata and inventory naming sources.
-- **Resources**, when direct resource metadata is available: memory ranges, I/O
-  ranges and IRQs (including every observed MSI/MSI-X vector), with PCI BAR/ROM
-  identification and selected flag details. PCI and Plug and Play devices are
-  supported; PnP DMA channels and bus windows are shown when reported. Disabled,
-  unassigned and zeroed addresses retain explicit states, and read/parse errors
-  remain visible. Resources can be copied from their table or Details.
+| Tab | Information |
+| --- | --- |
+| General | Name, category, manufacturer, bus/subsystem, location, observed status and selected hardware identifiers |
+| Driver | Direct driver binding, owning module, available running version and optional installed-module metadata |
+| Details | Generic properties, source attribution, advanced raw metadata and copy controls |
+| Resources | Directly reported hardware resource assignments and read/parse errors |
+| Storage | Selected storage device identity, capacity, transport, sector sizes and flags |
+| Volumes | Related storage layers, content, mount points, identifiers and backing relationships |
+| Health | Each related drive's available cached ATA SMART or NVMe health evidence |
+| Events | Live udev observations associated with the exact device instance |
 
-The ordinary read-only snapshot notice is omitted; loading, read failures and
-removal/replacement still receive explicit messages. The Resources tab has no
-settings controls or conflict field: resource overlap and shared IRQs alone
-cannot establish a conflict. Only resource metadata is read, never BAR contents.
-Resource-oriented tree views are not implemented by this tab.
+Storage-specific information stays in its dedicated tabs, including when advanced
+Details are enabled. Sources are available in tooltips or copied text. Compact
+information captions expose scope and coverage notes when hovered.
 
-Properties are collected on demand in one dedicated worker; opening another
-record closes the previous dialog and supersedes its request. No hardware changes
-are available. Reload properties rereads the same instance. F5 still refreshes
-only the inventory. A removed/replaced device retains a visibly marked snapshot
-and disables Reload when detected by a property read or accepted inventory update.
-Live removal events distinguish unplug/replug at the same path; detected event loss
-invalidates previous identities conservatively. Kernel observations remain snapshots,
-and undetected event loss can still limit instance tracking.
+Properties are collected on demand. F5 refreshes the inventory; **Reload properties**
+updates the open device snapshot. A removed or replaced device leaves a marked,
+read-only snapshot with reload disabled. Reconnecting a device at the same kernel
+path does not intentionally retarget the old dialog to the replacement.
 
-UEFI Details includes a hex/ASCII dump of the first **64 KiB** of the complete
-variable file, including its attribute prefix, with an explicit truncation notice
-when needed. Contents are not decoded. World readability and identity are
-rechecked, including under root; denied reads are reported explicitly. GUIDs and
-full variable filenames/paths remain advanced-only. Copy all respects the advanced
-toggle. Neither reading sysfs presence nor binding a driver establishes health.
+Installed module descriptions, filenames, licenses and versions require optional
+libkmod support. Installed metadata can differ from code already loaded into the
+kernel. Declared firmware filenames do not establish which firmware is loaded or
+its version; directly reported firmware revisions are shown where available.
 
-## Build and install
-
-Required: Linux, CMake >= 3.19, a C++17 compiler, pkg-config, Qt >= 6.8 Widgets
-and libudev development headers. Optional: Qt Linguist tools for translation
-catalog generation and libkmod >= 30 for module-description fallback names and
-installed module properties.
-Use `-DKMOD=OFF` to explicitly omit libkmod; CMake reports whether
-module naming is enabled. Optional QtDBus enables cached UDisks2 storage metadata
-when an already-running UDisks2 service is accessible. Use
-`-DUDISKS2=OFF` for a native-only build. Basic viewing requires neither
-QtDBus nor UDisks2; journal libraries are not used. No particular desktop
-environment is required. The optional Qt components must also be version 6.8
-or newer. Project executables and tests enable Qt strict API checks through 6.8.
-Directory scans collect bounded, sorted results using QDirListing, preserving
-sysfs links to directories and checking cancellation during enumeration. Debug
-builds assert the GUI/worker thread boundaries when delivering snapshots.
-Older distribution Qt packages (for example Ubuntu 24.04's Qt 6.4) require a newer
-Qt installation to build this application.
-
-Fedora packages: `gcc-c++ cmake make pkgconf-pkg-config qt6-qtbase-devel
-systemd-devel`; optional `qt6-qttools-devel` and `kmod-devel`.
-Debian/Ubuntu packages: `g++ cmake make pkg-config qt6-base-dev libudev-dev`;
-optional `qt6-tools-dev qt6-tools-dev-tools libkmod-dev`.
-
-```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
-ctest --test-dir build --output-on-failure
-./build/qlinuxdevicemanager
-cmake --install build --prefix /usr/local
-```
-
-Tests exercise fixture classification and instance reconciliation; they neither
-enumerate hardware nor create a window. Disable with `-DBUILD_TESTING=OFF`.
-Translations use `tr()` and Qt Linguist TS/QM catalogs. When Linguist is
-available, `cmake --build build --target update-translations` extracts source
-strings into the English template; copy it to the desired locale, translate
-and add that TS file to CMake's catalog list. Installed catalogs are loaded from
-`share/QLinuxDeviceManager/translations`. Qt's own dialogs use installed Qt
-catalogs when available. No non-English translation is supplied yet.
-
-X11/Wayland selection follows the standard Qt platform configuration. Root
-launch (including `sudo`) is possible only if the existing display environment
-permits it. The application does not alter display authorization, invoke sudo,
-or request passwords. Root uses `/root/.config`, `/root/.local/share` and
-`/root/.cache` and the title identifies administrative mode. Settings live
-under `QLinuxDeviceManager` in the normal Qt configuration location.
-
-A Linux desktop entry is installed; icons follow the system theme with Qt
-fallbacks. Further desktop integration and UI polish belong to Phase 9.
-
-Use **View → Filter** or **Ctrl+F** to show the full-width search bar. Names are
-searched by default; **Deep search** includes advanced properties, resources and
-numbers, collecting metadata in the background. Escape or Ctrl+F hides the bar
-and clears the filter. Deep-search metadata is cached until a changed live inventory or F5 refresh.
-
-## Source layout
-
-- `src/devices/`: inventory records, classification, bounded CPU metadata,
-  ancestry-based presentation grouping, standard function labels, optional
-  module-description naming, enumeration and on-demand properties workers.
-- `src/ui/`: tree model, window, actions and UI state.
-- `src/main.cpp`: application startup and translation loading.
-- `resources/embedded/`: build-time metadata header template.
-- `resources/external/`: externally installed translation catalogs.
-- `doc/`: architecture and refresh/identity limitations.
-- `packaging/`: Linux desktop entry.
-- `project.json`: project identity, release and resource metadata; CMake reads
-  its name/version and generates application metadata.
-- `tests/`: focused fixture checks.
-
-See [doc/architecture.md](doc/architecture.md) for ownership, refresh and
-instance-tracking details.
-
-## Verification of this delivery
-
-Static verification only: no application build, test executable or GUI launch
-was authorized. Patch application, whitespace, source/CMake references and
-source-level ownership/connection review are checked. The included C++ fixture
-checks still need compilation and execution on the user's machine.
-
-A user-supplied HP laptop diagnostic dump was inspected offline: 16 logical
-Intel Core Ultra X7 358H CPUs, one PCI Wi-Fi adapter plus `wlo1`, and one PCI
-NVMe controller plus `nvme0`. See [doc/discovery-notes.md](doc/discovery-notes.md).
-This is evidence from the dump, not a runtime application test. GUI/category
-acceptance still requires real-machine testing. Later phases cover storage metadata and narrowly authorized operations.
-
-Relevant API/design references:
-- https://www.kernel.org/doc/html/latest/admin-guide/sysfs-rules.html
-- https://www.freedesktop.org/software/systemd/man/latest/libudev.html
-- https://doc.qt.io/qt-6/qthread.html
-
-## Alternative tree views
-
-All seven views have one computer root labelled with the local hostname
-(`This computer` if unavailable). It starts expanded; the existing view contents
-start collapsed. Root expansion is retained per view within the session.
-The root remains visible when filtering finds no devices and is excluded from
-device counts, device Properties targets and deep-search inputs.
-Its Properties action opens System Information (see below).
-
-View offers Devices by type, Devices by connection, Devices by driver,
-Drivers by device and Drivers by type. Every view reuses the same inventory;
-switching does not enumerate hardware or read sysfs on the GUI thread.
-
-- **Devices by connection** follows actual inventory parent paths. Hidden
-  ancestors needed by visible devices remain as context (identified in their
-  tooltips); unrelated hidden branches remain excluded. Missing parents leave
-  roots rather than invented Linux/Windows bus objects. UEFI variables remain
-  separate roots because their directory is not an inventoried hardware device.
-- **Devices by driver** groups directly bound devices by subsystem and driver
-  name. Identical names on different buses stay separate. Devices without a
-  direct binding have an explicit group; this is not a failure verdict.
-- **Drivers by device** shows device → direct driver → owning kernel module
-  when its `driver/module` link is observed. The nearest bound ancestor, if any,
-  appears as a separately labelled parent-device relationship, never as the
-  selected device's own binding. Missing module links leave module/built-in
-  status undetermined. Built-in drivers remain visible as bound drivers.
-- **Drivers by type** groups category → bus-qualified driver → devices.
-
-Driver/module rows describe relationships and do not open device Properties.
-Device rows still support Properties, filtering and deep search. Counts include
-only device/firmware records, including connection-context ancestors, never
-synthetic driver/module groups. These views do not list every installed or
-loaded module. Live udev updates reconcile binding/module observations; F5 also requests a fresh snapshot.
-
-Selection follows the same path and generation between views where visible;
-its ancestor chain is expanded to reveal it. Other expansion state is retained
-separately per view during this session. The chosen view persists across launches,
-which still start collapsed. No Devices by container view is offered: neither
-ancestry nor matching names/serials establishes a reliable Linux container
-identity; grouping them would invent a hardware ownership relationship.
-
-## System Information
-
-File → System Information and Properties on the hostname root open the same
-modeless system overview. It has selectable plain-text values, source tooltips,
-Copy all, Refresh and Close. Reopening reuses its last snapshot; Refresh collects
-new values. Hardware enumeration and device Properties remain usable.
-
-The dialog shows hostname, OS name, kernel architecture/release/build, CPU models,
-sockets/cores, present/online logical CPUs, physical and usable RAM in GiB, uptime,
-system and motherboard manufacturer/model, firmware version/date, boot-mode
-evidence, reported hypervisor identity and unique CPU cache totals by level/type.
-Missing or restricted metadata stays explicitly unavailable; absent virtualization
-evidence does not prove physical hardware. Firmware dates retain their reported
-format. RAM is Linux MemTotal, not installed DIMM capacity or currently free RAM.
-
-Collection uses uname/gethostname, selected /proc and sysfs files and, on x86,
-CPUID hypervisor identification. No lsb_release, uname, dmidecode or other program
-is launched. OS naming follows os-release precedence and quoting without shell
-execution. CPU socket/core/die IDs are kernel-reported topology (a VM may expose
-virtual topology); incomplete observations do not produce partial totals. Caches
-are deduplicated by level/type and the CPU-sharing set across online CPUs; totals
-need not include caches belonging exclusively to offline CPUs. A change in CPU
-presence/online lists invalidates topology and cache results; Refresh can retry.
-Boot mode identifies UEFI when its kernel directory is exposed; absence leaves
-legacy boot versus a restricted environment unresolved.
-
-One additional serial worker is active only on request. Reads and list expansion
-are bounded and shutdown cooperatively cancels collection. In a container, OS,
-hostname, /proc and sysfs may reflect different namespace scopes; the overview
-reports this process's exposed system view rather than promising host identity.
-Serial numbers, machine IDs and live utilization are not collected.
-
-Physical RAM sums firmware-reported capacities from the DMI device's udev
-properties, using libudev and the existing system-information worker. Usable RAM
-still comes from MemTotal. Its system-reserved annotation is their byte difference,
-rounded to MiB; the tooltip explains that this covers all RAM unavailable to Linux,
-not a detailed firmware-reservation map. Copy all includes both rows and the same
-annotation. The difference is omitted when physical capacity is unavailable or
-smaller than usable capacity; missing firmware data never causes rounding MemTotal
-up to guess an installed size.
-
-All advertised memory records must have a valid capacity or explicit empty-slot
-marker. Missing capacity makes the total unavailable; malformed data, conflicting
-empty markers and overflow produce errors. Known nonvolatile capacity is unsupported
-rather than silently included as RAM. Up to 4096 records and 64 bytes per selected
-property are accepted. This uses cached udev metadata and depends on firmware and
-the distribution's memory-identification rule; no SMBIOS parsing, subprocess,
-extra dependency or elevation is added to the application.
-
-## Live hardware monitoring
-
-USB and other udev device changes update all views automatically. Bursts are
-coalesced (100 ms quiet time, 500 ms maximum scheduling delay, plus scan time).
-The monitor starts before initial enumeration; fresh worker snapshots reconcile
-events rather than replaying stale add records. Model updates retain unchanged
-rows, expansion and selected instances. Unplugging the selected instance clears
-selection and marks its Properties dialog removed; replugging at the same path
-creates a new instance.
-
-Continuous churn may briefly hide uncertain branches until a fresh scan confirms
-them. Detected event loss or monitor failure triggers full reconciliation and
-invalidates old identities. Monitoring recovery retries automatically; its status
-is visible. A 30-second reconciliation also catches silent drift and EFI directory
-changes. F5 remains available throughout and never rescans a hardware bus.
-No subprocess, elevation, extra library or hardware-management action is added.
-
-## Resource views
-
-View → Resources by type groups reported assignments as resource kind → device →
-assignment. View → Resources by connection follows actual inventory parent links,
-with assignment rows under their reporting devices. Both retain the hostname root,
-use the existing virtual/internal visibility setting, and preserve selection and
-expansion during live updates. Connection ancestors are retained for context; they
-do not acquire their children's assignments. Devices with no supported resource
-information are omitted unless needed as ancestors. A resource kind appears only
-when an assignment or explicit read/parse error is available.
-
-The current collector covers PCI memory/MMIO and I/O ranges, BAR slots, expansion
-ROM/bridge resources, reported IRQs and every readable MSI/MSI-X vector. PnP metadata
-also supplies IRQs, DMA channels and bus/address ranges where the kernel exposes
-them. Unassigned, disabled, zeroed/masked and restricted observations retain their
-explicit states. Unsupported buses do not receive guessed parent resources or
-Windows-only resource categories.
-
-The tree and device Resources tab use the same native collector and formatter,
-including documented flags, allocation states and source attribution. Tree resource
-snapshots are collected in the existing inventory worker, refreshed by live events,
-F5 and periodic reconciliation. The tab collects its own snapshot on opening or
-Reload, so observations made at different times may differ. No additional worker,
-external utility, permission change or PCI BAR-content access is added.
-
-Double-click or Properties on an assignment opens its reporting device's dialog.
-Resource rows are not extra devices: shown counts and deep-search inputs count each
-visible device once even when it occurs under multiple resource types. Ordinary
-filtering matches assignment captions/settings as well as device names; deep search
-uses the existing metadata collector. Tooltips identify the reporting device and
-source. The chosen view persists across launches, with the root expanded and other
-branches initially collapsed.
-
-Shared interrupts and overlapping ranges are reported without asserting exclusive
-ownership or conflicts. No global /proc entry is attributed by a device-name guess;
-these views currently use directly associated PCI/PnP sysfs metadata only.
-
-## Storage properties (Phase 6)
+## Storage devices, volumes and health
 
 Block devices and NVMe controllers have separate **Storage**, **Volumes** and
-**Health** tabs. Storage shows the selected device overview; Volumes lists related
-layers, content and mounts, with identifiers and explicit relationships beneath
-the selected row. Health shows each related drive's cached evidence separately.
-Exact kernel/UDisks2 block mappings share one volume row. Source tooltips and
-per-tab copy buttons retain provenance; compact notice hints contain collection
-scope and failures. Storage metadata is excluded from the Details property
-selector and its copy output, including advanced raw storage fields. Deep search
-retains the native storage facts. Native metadata
-includes capacity (kernel `size` is always in 512-byte units), logical/physical
-sector sizes, kernel removable-media and read-only flags, udev model/vendor,
-serial, revision, transport, partition and cached filesystem identifiers.
-Selected SCSI/NVMe identity fields retain their actual parent source paths.
-Missing, restricted and failed reads are explicit; no raw disk node is opened,
-filesystem probed, filesystem mounted or encryption unlocked.
+**Health** tabs. Available information includes model, manufacturer, serial number,
+firmware revision, transport, capacity, logical/physical sector sizes, read-only
+and removable-media flags, partition tables and filesystem identifiers.
 
-Partitions are available through **Show virtual and internal devices**, and a
-disk's Volumes tab also includes related partitions. Kernel partition
-ancestry and `slaves`/`holders` links expose backing and using devices, including
-encrypted/device-mapper, LVM and software RAID layers. Each canonical block
-path appears once. Related volumes may span other drives: explicit links preserve
-this scope rather than inventing a one-disk/one-volume ownership tree. Capacities
-are never summed across layers. Device-mapper names/UUIDs and available RAID
-level/state/degraded counts are shown without claiming general disk health.
+Volumes retain explicit partition, backing and using relationships. Encrypted
+mappings, LVM and RAID can span several devices; capacities are not added across
+layers. Exact kernel/UDisks2 block mappings share one volume row, with conflicting
+metadata shown explicitly. Missing or failed reads remain visible.
 
-Mount points come from `/proc/self/mountinfo`, matched by major:minor rather
-than guessed device names. They cover the application's mount namespace only;
-other containers, sessions and the UDisks daemon may observe different mounts.
-Filesystem type and mount root are included so bind mounts/subvolume mounts are
-not mistaken for independent physical volumes. No matching entry means no mount
-was observed in this namespace, not proof that the volume is globally unused.
+Mount points come from `/proc/self/mountinfo` and describe the application's
+**mount namespace**. They include filesystem type and mount root, so bind mounts
+and subvolume mounts can be distinguished. No observed mount is not proof that a
+volume is unused elsewhere. No filesystem probing, mounting or unlocking occurs.
 
-Optional UDisks2 uses one asynchronous ObjectManager cache request with a
-2.5-second timeout in the existing Properties worker. It does not auto-start the
-service. Exact device numbers associate block objects; explicit Drive,
-CryptoBackingDevice, Partition.Table, MDRaid/member and optional LVM object links
-add service entities. Available drive identity/transport, partition tables,
-partition offsets/types/UUIDs and content metadata supplement native data.
-Removable/fixed is labelled as a UDisks2 hint, separately from the kernel's
-removable-media flag. ConnectionBus is an external-bus hint; native NVMe ancestry
-and udev ID_ATA_SATA identify NVMe/SATA where available without guessing from names.
-Absent services, denied access, errors and native-only builds leave viewing usable.
-Service links and sources are available in Details and Copy all values.
+Optional UDisks2 support supplements native metadata when the service is already
+running and accessible. Missing services, denied access and builds without QtDBus
+retain native storage viewing. The UDisks2 removable-drive hint is distinct from
+the kernel's removable-media flag.
 
-ATA failure prediction and NVMe critical warnings are shown only with a nonzero
-cached `SmartUpdated` timestamp, displayed in local time with its UTC offset.
-Cached temperature and available ATA bad-sector/failing-attribute counts are
-shown separately. Missing interfaces or never-updated caches remain unavailable;
-a negative failure prediction is not a guarantee of health. Opening, Reload and
-inventory reconciliation never request SMART updates, polling or self-tests.
-The service may maintain its cache independently. No write-cache policies or
-modifying UDisks operations are added.
+Health information is **cached evidence**, with the last update timestamp where
+available. ATA failure prediction, NVMe critical warnings, cached temperature and
+available ATA bad-sector/failing-attribute counts are shown separately. Missing
+interfaces or never-updated caches are unavailable; an absence of reported warnings
+is not a guarantee of health. Opening or reloading Properties never requests SMART
+updates, background polling or self-tests. UDisks2 may update its own cache
+independently.
 
-Storage reads occur on demand, with bounds of 4096 block/service objects, 256
-related entities per source, 4 KiB per metadata string and 4 MiB for mountinfo.
-Interruptions and the existing dialog instance checks reject obsolete results.
-Related native identities are checked again before delivery; topology remains a
-snapshot rather than an atomic kernel/service transaction. Deep search collects
-native storage metadata only, avoiding a full service request per searched record.
-SATA, NVMe, USB, encrypted/LVM and multi-drive RAID behavior require real-machine
-validation; this phase was statically reviewed, not compiled or run.
+## System information
 
-## Device events and diagnostics (Phase 8)
+The system overview shows hostname, operating system, kernel architecture/release/
+build, CPU models, sockets and cores, present and online logical processors, unique
+cache totals by level/type, uptime, motherboard identity, firmware version/date,
+boot-mode evidence and reported hypervisor identity.
 
-Properties → **Events** shows live udev observations received during this
-application session: receipt timestamp (local time with UTC offset), raw event
-type, translated description and selectable details. Details include monotonic
-elapsed time, udev sequence, exact kernel path, subsystem, device type, event
-payload driver, optional initialization stamp and the local instance token.
-Missing payload data is labelled unavailable. The Events tab shows a compact
-information caption; hover over it for the full scope/coverage notice.
-Copy selection and Copy all events include that full notice. Event observation does not establish hardware
-health or prove that a reported driver transition succeeded permanently.
+**Physical RAM** uses available firmware-reported capacities from udev metadata.
+**Usable RAM** uses Linux `MemTotal`; it is not currently free memory. When both
+values are valid, their difference is shown as system-reserved RAM, covering all
+memory unavailable to Linux rather than only firmware reservations. Missing
+capacity is left unavailable instead of guessed.
 
-The existing monitor worker maintains a ring of at most **1024 events globally**;
-a dialog shows the latest **256** for its exact device instance, newest first.
-Oldest records are evicted with a visible global count. The instance registry is
-bounded to 16384 paths and pruned against published inventory snapshots. Events
-with uncertain association are withheld from device tabs and counted in the
-coverage notice. Ordinary inventory scans do not manufacture add/change events.
-Hidden/internal records are monitored too; related devices retain separate event
-histories. EFI variables have no libudev value-change history.
+CPU topology and virtualization information reflect what the running environment
+exposes. A container or virtual machine may report a restricted or virtual system
+view; absent virtualization evidence does not prove physical hardware. CPU cache
+totals cover online processors. The overview collects no machine ID or system
+serial number and does not launch external diagnostic programs.
 
-Session-local association tokens complement the existing kernel identity and GUI
-generation. A removal retires the device and descendant associations; replugging
-at a reused path does not inherit old events. Conflicting inode/initialization
-hints remain unassociated. Reordered/duplicate sequence numbers do not modify the
-current path association; global sequence gaps are normal and not treated as loss. Monitor failure/event loss retires associations and
-reports an incomplete-coverage notice. Event history follows the same owned,
-acknowledged worker-to-GUI snapshot flow as inventory; no new polling thread,
-queued signal flood or persistent log is added. A removed Properties dialog keeps
-its retained event snapshot, accepts any late observations for the old token only,
-and cannot follow the replacement device.
+Use **Refresh** to collect a new system snapshot and **Copy all** to copy its values.
 
-This phase implements **live history only**, not a Windows-style persistent
-per-device log. Journal and kernel-log retrieval remain unimplemented: a reusable
-path or a text substring alone cannot reliably attribute historical records to
-this instance, even within one boot. No log access, journal dependency, elevation,
-external command or diagnostic daemon is required, so ordinary viewing and live
-observations work regardless of system-log permissions. Missing monitoring leaves
-retained observations readable and is explicit; no events is not a healthy verdict.
-Undetected event loss and kernel path/inode reuse without distinguishing metadata
-remain limitations of observation-based identity. Live timestamps describe when
-the application received an event; wall-clock adjustments may change them, while
-elapsed time retains observation order.
+## Live device events
 
-Phase 7 privileged operations remain unimplemented. Phase 8 was statically
-reviewed only; the instance/eviction fixture checks were added but not executed.
+The **Events** tab records udev observations received since the application started,
+with receipt times, event types, descriptions and available payload details.
+It retains at most **1,024 events globally** and displays the latest **256 events
+per exact device instance**, newest first. Copy controls include the full coverage
+notice.
+
+This is session history, not a persistent Windows-style device log. Historical
+journal and kernel messages are not queried. Related devices have separate
+histories; UEFI variables have no udev value-change history. Uncertain event
+associations are withheld, and detected monitoring failures or losses are reported.
+No retained events does not establish that the device has had no errors.
+
+Live device changes update the inventory automatically, with periodic reconciliation
+and manual F5 refresh available. If monitoring fails, the application reports it
+and retries. Kernel observations remain snapshots: undetected event loss and
+reused paths without distinguishing metadata can limit instance tracking.
+
+## UEFI firmware variables
+
+On UEFI systems exposing `/sys/firmware/efi/efivars`, the **UEFI variables** category
+lists regular files with the world-read permission bit set. This permission filter
+also applies when running as root. Missing or inaccessible efivarfs does not
+prevent ordinary hardware discovery.
+
+Names are separated into readable words; original names remain in tooltips.
+Namespace GUIDs and full filenames are shown with internal devices enabled.
+Equal names in different namespaces remain separate records.
+
+Opening Properties reads up to **64 KiB** of the variable file as a hex/ASCII dump,
+including its attribute prefix. Longer values receive a truncation notice.
+Contents are not decoded or modified, and actual access can still be denied by
+security policy despite the file's permission bits.
+
+## Build and installation
+
+Requirements:
+
+- Linux and a C++17 compiler.
+- CMake **3.19 or newer** and pkg-config.
+- Qt **6.8 or newer**, including Widgets, and libudev development headers.
+- Optional QtDBus **6.8 or newer** for cached UDisks2 storage metadata.
+- Optional libkmod **30 or newer** for installed-module metadata and fallback names.
+- Optional Qt Linguist tools **6.8 or newer** to build translation catalogs.
+
+Fedora packages:
+
+```sh
+sudo dnf install gcc-c++ cmake make pkgconf-pkg-config qt6-qtbase-devel systemd-devel
+# Optional:
+sudo dnf install qt6-qttools-devel kmod-devel
+```
+
+Debian/Ubuntu packages:
+
+```sh
+sudo apt install g++ cmake make pkg-config qt6-base-dev libudev-dev
+# Optional:
+sudo apt install qt6-tools-dev qt6-tools-dev-tools libkmod-dev
+```
+
+Check that your distribution's Qt packages meet the minimum version; older
+releases may require a newer Qt installation.
+
+Build and run from a source checkout:
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+cmake --build build -j
+./build/qlinuxdevicemanager
+```
+
+Install the executable, desktop entry and available translation catalogs:
+
+```sh
+sudo cmake --install build --prefix /usr/local
+```
+
+Use `-DKMOD=OFF` to omit libkmod or `-DUDISKS2=OFF` for a native-only storage build.
+Basic hardware viewing requires neither QtDBus nor UDisks2. The interface uses
+system-theme icons with Qt fallbacks and standard Qt X11/Wayland platform selection.
+The supplied interface is English; Qt's own dialogs use installed Qt translations
+when available.
+
+## Permissions and settings
+
+Run the application as a normal desktop user. Restricted information is reported
+as unavailable or permission denied; no passwords or administrative privileges
+are required for ordinary viewing. The application does not upload hardware
+information or run a separate diagnostic daemon.
+
+Settings use the normal Qt configuration location under `QLinuxDeviceManager`.
+If launched as root, the window identifies administrative mode and settings use
+`/root/.config`, `/root/.local/share` and `/root/.cache`. Root launch requires an
+already-authorized display/session environment; the application does not change
+display access permissions or invoke sudo itself.
+
+## License
+
+QLinuxDeviceManager is written in C++17 using Qt 6 Widgets and libudev and is
+licensed under the [GNU General Public License, version 3](LICENSE).
+
+Project: [github.com/birdie-github/QLinuxDeviceManager](https://github.com/birdie-github/QLinuxDeviceManager)
