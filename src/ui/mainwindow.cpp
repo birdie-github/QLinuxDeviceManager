@@ -5,6 +5,8 @@
 #include "projectmetadata.h"
 
 #include <QAction>
+#include <QActionGroup>
+#include <functional>
 #include <QApplication>
 #include <QCloseEvent>
 #include <QCheckBox>
@@ -110,6 +112,28 @@ MainWindow::MainWindow()
         menu.exec(tree_->viewport()->mapToGlobal(position));
     });
     auto *view = menuBar()->addMenu(tr("&View"));
+    auto *views = new QActionGroup(this);
+    QSettings viewSettings;
+    const QString savedView = viewSettings.value("view/tree", "type").toString();
+    for (const auto mode : {DeviceModel::View::Type, DeviceModel::View::Connection,
+                           DeviceModel::View::DevicesByDriver, DeviceModel::View::DriversByDevice,
+                           DeviceModel::View::DriversByType}) {
+        auto *choice = view->addAction(DeviceModel::viewLabel(mode));
+        choice->setCheckable(true);
+        views->addAction(choice);
+        if (DeviceModel::viewId(mode) == savedView) model_->setView(mode);
+        connect(choice, &QAction::triggered, this, [this, mode] {
+            rememberTree();
+            cancelSearch();
+            model_->setView(mode);
+            ++searchRevision_;
+            restoreTree();
+            applyFilter();
+        });
+    }
+    for (QAction *choice : views->actions())
+        choice->setChecked(choice->text() == DeviceModel::viewLabel(model_->view()));
+    view->addSeparator();
     filterAction_ = view->addAction(tr("&Filter"));
     filterAction_->setCheckable(true);
     filterAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_F));
@@ -237,26 +261,37 @@ void MainWindow::acceptInventory()
 void MainWindow::rememberTree()
 {
     if (filter_->active()) return; // Preserve the unfiltered expansion and selection.
-    // Remember categories not currently visible as well (e.g. a hidden-only group).
-    for (int row = 0; row < model_->rowCount(); ++row) {
-        const QModelIndex i = model_->index(row, 0);
-        const QString id = i.data(DeviceModel::CategoryRole).toString();
-        if (tree_->isExpanded(filter_->mapFromSource(i))) expanded_.insert(id);
-        else expanded_.remove(id);
-    }
+    const QString prefix = DeviceModel::viewId(model_->view()) + ':';
+    std::function<void(const QModelIndex &)> visit = [&](const QModelIndex &parent) {
+        for (int row = 0; row < model_->rowCount(parent); ++row) {
+            const QModelIndex i = model_->index(row, 0, parent);
+            const QString id = prefix + i.data(DeviceModel::NodeKeyRole).toString();
+            if (tree_->isExpanded(filter_->mapFromSource(i))) expanded_.insert(id);
+            else expanded_.remove(id);
+            visit(i);
+        }
+    };
+    visit({});
     const QModelIndex current = tree_->currentIndex();
     selectedPath_ = current.data(DeviceModel::PathRole).toString();
     selectedGeneration_ = current.data(DeviceModel::GenerationRole).toULongLong();
 }
 void MainWindow::restoreTree()
 {
-    for (int row = 0; row < model_->rowCount(); ++row) {
-        const QModelIndex i = model_->index(row, 0);
-        tree_->setExpanded(filter_->mapFromSource(i), filter_->active()
-            || expanded_.contains(i.data(DeviceModel::CategoryRole).toString()));
-    }
+    const QString prefix = DeviceModel::viewId(model_->view()) + ':';
+    std::function<void(const QModelIndex &)> visit = [&](const QModelIndex &parent) {
+        for (int row = 0; row < model_->rowCount(parent); ++row) {
+            const QModelIndex i = model_->index(row, 0, parent);
+            tree_->setExpanded(filter_->mapFromSource(i), filter_->active()
+                || expanded_.contains(prefix + i.data(DeviceModel::NodeKeyRole).toString()));
+            visit(i);
+        }
+    };
+    visit({});
     const QModelIndex selected = filter_->mapFromSource(model_->findDevice(selectedPath_, selectedGeneration_));
     if (selected.isValid()) {
+        for (QModelIndex parent = selected.parent(); parent.isValid(); parent = parent.parent())
+            tree_->setExpanded(parent, true);
         tree_->setCurrentIndex(selected);
         tree_->scrollTo(selected);
     }
@@ -284,6 +319,7 @@ void MainWindow::saveSettings()
     QSettings settings;
     settings.setValue("window/geometry", saveGeometry());
     settings.setValue("window/state", saveState());
+    settings.setValue("view/tree", DeviceModel::viewId(model_->view()));
     settings.setValue("view/showInternal", internalAction_->isChecked());
 }
 void MainWindow::closeEvent(QCloseEvent *event)

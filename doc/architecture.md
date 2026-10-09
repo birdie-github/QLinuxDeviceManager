@@ -279,3 +279,34 @@ cooperative and cannot interrupt an already blocked kernel read.
 The device-search fixture checks cover numeric aliases, raw/EFI text, invalidated
 property reads, exact displayed labels, category retention, hidden records and
 stale-generation matches. They need compilation/execution on the target machine.
+
+## Phase 3: inventory projections
+
+`DeviceModel::View` selects one of five projections. Stable untranslated view
+IDs are settings keys; translated captions are presentation only. Owned tree
+nodes refer to inventory records by canonical path and expose a separate
+NodeKeyRole for expansion restoration. Synthetic category/driver/module nodes
+have no PathRole or GenerationRole and cannot be passed to Properties.
+
+The enumeration worker captures only the explicitly selected `driver/module`
+symlink for directly bound records. Its absence (including permission or removal
+races) is undetermined, never proof of a built-in driver. A module link establishes
+ownership rather than whether code is built-in/modular or which installed file
+matches running code. No libkmod dependency is added. Existing inter-scan
+identity and non-atomic binding limitations remain until monitoring/reconciliation.
+
+Connection projection closes visible records over available inventory parent
+links, with cycle guards; missing parents are not guessed from path prefixes.
+Hidden context ancestors retain their actual record identity. Driver projections
+use subsystem plus driver name, never a module name or naming candidate, as the
+binding key. The device-centric projection exposes nearest bound ancestor
+relationships separately, including its named device. Many drivers may share
+one module without merging their bindings or devices.
+
+Traversal for lookup, search inputs, visible counts and expansion restoration
+now visits arbitrary depth. Recursive proxy filtering keeps ancestors of matching
+devices and the synthetic driver/module children of a matching device. It does
+not automatically accept unrelated descendants of a matching connection parent.
+View changes interrupt/invalidate deep-search requests and advance its revision.
+Expansion keys are scoped by view; device selection still requires a matching
+instance generation. There is no additional worker or device discovery per view.

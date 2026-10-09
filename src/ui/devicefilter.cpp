@@ -1,5 +1,6 @@
 #include "devicefilter.h"
 #include "devicemodel.h"
+#include <functional>
 
 DeviceFilter::DeviceFilter(QObject *parent) : QSortFilterProxyModel(parent)
 {
@@ -36,7 +37,18 @@ bool DeviceFilter::filterAcceptsRow(int row, const QModelIndex &parent) const
     if (!active()) return true;
     const QModelIndex index = sourceModel()->index(row, 0, parent);
     const QString path = index.data(DeviceModel::PathRole).toString();
-    if (path.isEmpty()) return false; // Recursive filtering retains matching groups.
+    if (path.isEmpty()) {
+        // Keep driver/module relationship children when their device matches.
+        for (QModelIndex owner = parent; owner.isValid(); owner = owner.parent()) {
+            const QString ownerPath = owner.data(DeviceModel::PathRole).toString();
+            if (ownerPath.isEmpty()) continue;
+            if (owner.data(Qt::DisplayRole).toString().contains(query_, Qt::CaseInsensitive)) return true;
+            const auto match = matches_.constFind(ownerPath);
+            return deep_ && match != matches_.cend()
+                && match->generation == owner.data(DeviceModel::GenerationRole).toULongLong();
+        }
+        return false; // Recursive filtering retains matching ancestor groups.
+    }
     if (index.data(Qt::DisplayRole).toString().contains(query_, Qt::CaseInsensitive)) return true;
     const auto match = matches_.constFind(path);
     return deep_ && match != matches_.cend()
@@ -45,7 +57,14 @@ bool DeviceFilter::filterAcceptsRow(int row, const QModelIndex &parent) const
 int DeviceFilter::visibleCount() const
 {
     int count = 0;
-    for (int row = 0; row < rowCount(); ++row) count += rowCount(index(row, 0));
+    std::function<void(const QModelIndex &)> visit = [&](const QModelIndex &parent) {
+        for (int row = 0; row < rowCount(parent); ++row) {
+            const QModelIndex child = index(row, 0, parent);
+            if (!child.data(DeviceModel::PathRole).toString().isEmpty()) ++count;
+            visit(child);
+        }
+    };
+    visit({});
     return count;
 }
 QString DeviceFilter::matchReason(const QModelIndex &index) const

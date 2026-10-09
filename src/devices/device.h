@@ -19,6 +19,7 @@ struct Device {
     QString sysname;
     QString devtype;
     QString driver;           // Direct binding only; never inherited.
+    QString driverModule;     // Observed driver/module link; absence is undetermined.
     QHash<QString, QString> properties;
     QHash<QString, Attribute> attributes;
     QString name;

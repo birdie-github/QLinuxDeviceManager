@@ -5,6 +5,7 @@
 #include "efivariables.h"
 
 #include <libudev.h>
+#include <QFileInfo>
 #include <memory>
 #include <cstring>
 #include <cerrno>
@@ -91,6 +92,10 @@ void Enumerator::run()
         d.subsystem = text(udev_device_get_subsystem(raw.get()));
         d.devtype = text(udev_device_get_devtype(raw.get()));
         d.driver = text(udev_device_get_driver(raw.get()));
+        if (!d.driver.isEmpty()) {
+            const QString target = QFileInfo(d.path + "/driver/module").symLinkTarget();
+            if (target.startsWith("/sys/module/")) d.driverModule = QFileInfo(target).fileName();
+        }
         if (auto *parent = udev_device_get_parent(raw.get()))
             d.parentPath = text(udev_device_get_syspath(parent));
         // Explicit allowlist: no recursive sysfs reads, binary resources or hardware queries.

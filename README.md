@@ -4,9 +4,9 @@ A lightweight Linux hardware viewer using C++17, Qt6 Widgets and libudev,
 with a conventional desktop interface inspired by Windows Device Manager.
 Licensed under GPLv3 (see LICENSE).
 
-## Current scope: Phase 2
+## Current scope: Phase 3
 
-Devices by type, a read-only **Refresh (F5)** action, selection, themed icons,
+Five inventory views (see below), a read-only **Refresh (F5)** action, selection, themed icons,
 and persistent window geometry, toolbar visibility and visibility settings.
 Categories start collapsed on every launch; expansion is preserved during
 refreshes and visibility changes within the running session. Run as a normal user; no daemon, device-management
@@ -232,3 +232,37 @@ Relevant API/design references:
 - https://www.kernel.org/doc/html/latest/admin-guide/sysfs-rules.html
 - https://www.freedesktop.org/software/systemd/man/latest/libudev.html
 - https://doc.qt.io/qt-6/qthread.html
+
+## Alternative tree views
+
+View offers Devices by type, Devices by connection, Devices by driver,
+Drivers by device and Drivers by type. Every view reuses the same inventory;
+switching does not enumerate hardware or read sysfs on the GUI thread.
+
+- **Devices by connection** follows actual inventory parent paths. Hidden
+  ancestors needed by visible devices remain as context (identified in their
+  tooltips); unrelated hidden branches remain excluded. Missing parents leave
+  roots rather than invented Linux/Windows bus objects. UEFI variables remain
+  separate roots because their directory is not an inventoried hardware device.
+- **Devices by driver** groups directly bound devices by subsystem and driver
+  name. Identical names on different buses stay separate. Devices without a
+  direct binding have an explicit group; this is not a failure verdict.
+- **Drivers by device** shows device → direct driver → owning kernel module
+  when its `driver/module` link is observed. The nearest bound ancestor, if any,
+  appears as a separately labelled parent-device relationship, never as the
+  selected device's own binding. Missing module links leave module/built-in
+  status undetermined. Built-in drivers remain visible as bound drivers.
+- **Drivers by type** groups category → bus-qualified driver → devices.
+
+Driver/module rows describe relationships and do not open device Properties.
+Device rows still support Properties, filtering and deep search. Counts include
+only device/firmware records, including connection-context ancestors, never
+synthetic driver/module groups. These views do not list every installed or
+loaded module. Refresh is required to update binding/module observations.
+
+Selection follows the same path and generation between views where visible;
+its ancestor chain is expanded to reveal it. Other expansion state is retained
+separately per view during this session. The chosen view persists across launches,
+which still start collapsed. No Devices by container view is offered: neither
+ancestry nor matching names/serials establishes a reliable Linux container
+identity; grouping them would invent a hardware ownership relationship.

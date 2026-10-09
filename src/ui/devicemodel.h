@@ -9,7 +9,12 @@
 class DeviceModel final : public QAbstractItemModel {
     Q_OBJECT
 public:
-    enum { PathRole = Qt::UserRole + 1, GenerationRole, CategoryRole };
+    enum { PathRole = Qt::UserRole + 1, GenerationRole, CategoryRole, NodeKeyRole };
+    enum class View { Type, Connection, DevicesByDriver, DriversByDevice, DriversByType };
+    View view() const { return view_; }
+    void setView(View view);
+    static QString viewId(View view);
+    static QString viewLabel(View view);
     explicit DeviceModel(QObject *parent = nullptr);
     QModelIndex index(int row, int column, const QModelIndex &parent = {}) const override;
     QModelIndex parent(const QModelIndex &child) const override;
@@ -29,6 +34,8 @@ private:
         Node *parent = nullptr;
         int row = 0;
         QString category;
+        QString key;
+        bool context = false;
         QString path; // Record lookup ID, never a pointer into inventory storage.
         QString label; // GUI-translated display text, rebuilt with the inventory.
         std::vector<std::unique_ptr<Node>> children;
@@ -39,6 +46,7 @@ private:
     QHash<QString, int> lookup_;
     Node root_;
     bool showInternal_ = false;
+    View view_ = View::Type;
     quint64 generation_ = 0;
     int visible_ = 0;
 };
