@@ -111,3 +111,19 @@ generated name form, I2C bus code, matching vendor/product numbers, and the
 corresponding udev capability flag. Descriptive names and other buses retain
 their original product names. Both input functions remain separate; shared HID
 ancestry alone is insufficient to prove that a mouse interface is redundant.
+
+The follow-up screenshot exposed a missing connection in the metadata allowlist:
+PRODUCT, PHYS and ID_INPUT_SWITCH were required by the presentation rules but
+were not copied by the worker. DEVNUM was also missing for USB root-hub labels.
+These fields are now explicitly collected through libudev; no extra sysfs scans
+or hardware queries are introduced. Static verification checks rule property
+references against the worker's allowlist, with documented power-supply fields
+handled by the existing selected attribute reads.
+
+Headphone and microphone jack switches now follow the same internal-audio rule
+as HDMI/DisplayPort switches. Matching still requires ALSA physical identity and
+switch metadata, and excludes keyboard/mouse/touchpad functions. The default
+view hides these switches; the internal view uses readable jack-detection labels.
+Pointing functions remain visible as Mouse/Touchpad followed by the original
+firmware identifier. They are not HID roots and are not suppressed merely
+because both belong to the same HID device.

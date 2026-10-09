@@ -311,7 +311,12 @@ int main()
     check(deviceDisplayName(supply) == "USB power supply", "An unmatched UCSI name must not imply a connector number");
     touchpad.properties.insert("PRODUCT", "18/6cb/cfc6/100");
     touchpad.properties.insert("ID_INPUT_TOUCHPAD", "1");
-    check(deviceDisplayName(touchpad) == "I2C touchpad", "Generated I2C touchpad names should have concise captions");
+    check(deviceDisplayName(touchpad) == "Touchpad (SYNA3517:00)", "Generated I2C names must put the function before the firmware identifier");
+    Device generatedMouse = touchpad;
+    generatedMouse.properties.insert("NAME", "\"SYNA3517:00 06CB:CFC6 Mouse\"");
+    generatedMouse.properties.remove("ID_INPUT_TOUCHPAD");
+    generatedMouse.properties.insert("ID_INPUT_MOUSE", "1");
+    check(deviceDisplayName(generatedMouse) == "Mouse (SYNA3517:00)", "Mouse captions must put the function first too");
     touchpad.properties.insert("PRODUCT", "3/6cb/cfc6/100");
     check(deviceDisplayName(touchpad).contains("SYNA3517"), "USB input names must not be shortened by I2C rules");
     touchpad.properties.insert("PRODUCT", "18/6cb/ffff/100");
@@ -332,6 +337,16 @@ int main()
     check(audioWithJack[3].category == "audio" && audioWithJack[3].hidden
           && audioWithJack[3].representedByPath == audioPci.path,
           "ALSA switch must leave the default HID list and remain associated with the audio controller");
+    jack.properties.insert("NAME", "\"sof-hda-dsp Headphone\"");
+    classify(jack);
+    check(jack.category == "audio" && jack.hidden && deviceDisplayName(jack) == "Headphone jack detection",
+          "ALSA headphone switches must receive a readable internal audio label");
+    jack.properties.insert("NAME", "\"sof-hda-dsp Mic\"");
+    check(deviceDisplayName(jack) == "Microphone jack detection", "ALSA microphone switches need a readable label");
+    jack.properties.remove("PHYS");
+    classify(jack);
+    check(!jack.hidden && jack.category == "hid", "An audio-like name without ALSA identity must remain visible");
+    jack.properties.insert("PHYS", "\"ALSA\"");
     jack.properties.insert("ID_INPUT_KEYBOARD", "1");
     classify(jack);
     check(jack.category == "keyboard" && !jack.hidden, "Mixed keyboard input must remain visible despite an audio-like name");

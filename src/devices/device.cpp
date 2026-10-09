@@ -66,7 +66,7 @@ void classify(Device &d)
         d.category = "disk";
         d.hidden = d.hidden || d.devtype != "disk";
     } else if (s == "input") {
-        if (isHdmiAudioJack(d)) { d.category = "audio"; d.hidden = true; }
+        if (isAudioJackSwitch(d)) { d.category = "audio"; d.hidden = true; }
         else if (flag("ID_INPUT_KEYBOARD")) d.category = "keyboard";
         else if (flag("ID_INPUT_MOUSE") || flag("ID_INPUT_TOUCHPAD") || flag("ID_INPUT_POINTINGSTICK")) d.category = "mouse";
         else d.category = "hid";

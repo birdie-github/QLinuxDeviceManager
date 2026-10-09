@@ -96,7 +96,8 @@ void Enumerator::run()
         for (const char *key : {"ID_MODEL_FROM_DATABASE", "ID_MODEL", "NAME", "ID_V4L_PRODUCT", "MODALIAS", "PCI_CLASS",
                               "PCI_ID", "ID_VENDOR_FROM_DATABASE", "ID_VENDOR", "ID_BUS",
                               "ID_INPUT_KEYBOARD", "ID_INPUT_MOUSE", "ID_INPUT_TOUCHPAD",
-                              "ID_INPUT_POINTINGSTICK", "USEC_INITIALIZED"}) {
+                              "ID_INPUT_POINTINGSTICK", "ID_INPUT_SWITCH", "PRODUCT", "PHYS", "DEVNUM",
+                              "USEC_INITIALIZED"}) {
             const char *value = udev_device_get_property_value(raw.get(), key);
             if (value) d.properties.insert(QLatin1String(key), text(value));
         }

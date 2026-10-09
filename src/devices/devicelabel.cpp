@@ -51,7 +51,12 @@ QString friendlyLabel(const Device &d)
             return caption(QT_TRANSLATE_NOOP("DeviceLabels", "USB power supply"));
         }
     }
-    if (isHdmiAudioJack(d)) {
+    if (isAudioJackSwitch(d)) {
+        const QString name = inputDeviceName(d);
+        if (name.endsWith(" Headphone") || name == "Headphone")
+            return caption(QT_TRANSLATE_NOOP("DeviceLabels", "Headphone jack detection"));
+        if (name.endsWith(" Mic") || name == "Mic")
+            return caption(QT_TRANSLATE_NOOP("DeviceLabels", "Microphone jack detection"));
         static const QRegularExpression pcm(QStringLiteral("HDMI/DP,pcm=([0-9]+)$"));
         return caption(QT_TRANSLATE_NOOP("DeviceLabels", "HDMI/DisplayPort jack detection (PCM %1)"))
             .arg(pcm.match(inputDeviceName(d)).captured(1));
@@ -60,7 +65,7 @@ QString friendlyLabel(const Device &d)
         // Shorten only the kernel-generated I2C HID identity form. Product names
         // from USB/Bluetooth and descriptive input names remain untouched.
         static const QRegularExpression generated(QStringLiteral(
-            "^[A-Z0-9]{4,8}:[0-9]{2} ([0-9A-Fa-f]{4}):([0-9A-Fa-f]{4}) (Mouse|Touchpad)$"));
+            "^([A-Z0-9]{4,8}:[0-9]{2}) ([0-9A-Fa-f]{4}):([0-9A-Fa-f]{4}) (Mouse|Touchpad)$"));
         const auto match = generated.match(inputDeviceName(d));
         const QStringList product = d.properties.value("PRODUCT").split('/');
         bool valid = false;
@@ -69,13 +74,13 @@ QString friendlyLabel(const Device &d)
             bool vendorValid = false, productValid = false;
             const uint vendor = product[1].toUInt(&vendorValid, 16);
             const uint id = product[2].toUInt(&productValid, 16);
-            if (!vendorValid || !productValid || vendor != match.captured(1).toUInt(nullptr, 16)
-                || id != match.captured(2).toUInt(nullptr, 16)) return {};
-            if (match.captured(3) == "Touchpad" && d.properties.value("ID_INPUT_TOUCHPAD") == "1")
-                return caption(QT_TRANSLATE_NOOP("DeviceLabels", "I2C touchpad"));
-            if (match.captured(3) == "Mouse" && d.properties.value("ID_INPUT_MOUSE") == "1"
+            if (!vendorValid || !productValid || vendor != match.captured(2).toUInt(nullptr, 16)
+                || id != match.captured(3).toUInt(nullptr, 16)) return {};
+            if (match.captured(4) == "Touchpad" && d.properties.value("ID_INPUT_TOUCHPAD") == "1")
+                return caption(QT_TRANSLATE_NOOP("DeviceLabels", "Touchpad (%1)")).arg(match.captured(1));
+            if (match.captured(4) == "Mouse" && d.properties.value("ID_INPUT_MOUSE") == "1"
                 && d.properties.value("ID_INPUT_POINTINGSTICK") != "1")
-                return caption(QT_TRANSLATE_NOOP("DeviceLabels", "I2C mouse interface"));
+                return caption(QT_TRANSLATE_NOOP("DeviceLabels", "Mouse (%1)")).arg(match.captured(1));
         }
     }
     return {};
@@ -87,14 +92,15 @@ QString inputDeviceName(const Device &d)
     if (it != d.attributes.cend() && it->state == ReadState::Available && !it->value.isEmpty()) return it->value;
     return unquote(d.properties.value("NAME"));
 }
-bool isHdmiAudioJack(const Device &d)
+bool isAudioJackSwitch(const Device &d)
 {
-    static const QRegularExpression name(QStringLiteral("(?:^| )HDMI/DP,pcm=[0-9]+$"));
+    static const QRegularExpression name(QStringLiteral("(?:^| )(?:HDMI/DP,pcm=[0-9]+|Headphone|Mic)$"));
     return d.subsystem == "input" && d.properties.value("ID_INPUT_SWITCH") == "1"
         && unquote(d.properties.value("PHYS")) == "ALSA"
         && d.properties.value("ID_INPUT_KEYBOARD") != "1"
         && d.properties.value("ID_INPUT_MOUSE") != "1"
         && d.properties.value("ID_INPUT_TOUCHPAD") != "1"
+        && d.properties.value("ID_INPUT_POINTINGSTICK") != "1"
         && name.match(inputDeviceName(d)).hasMatch();
 }
 QString deviceDisplayName(const Device &d, bool includeIdentifiers)

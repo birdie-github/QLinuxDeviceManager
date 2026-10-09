@@ -3,5 +3,5 @@
 
 // Presentation only: retain raw inventory names and perform no metadata reads.
 QString inputDeviceName(const Device &device);
-bool isHdmiAudioJack(const Device &device);
+bool isAudioJackSwitch(const Device &device);
 QString deviceDisplayName(const Device &device, bool includeIdentifiers = false);

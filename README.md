@@ -55,8 +55,9 @@ preserved. All grouped records remain available under Show internal devices.
 Power supplies use reported type/manufacturer/model metadata for readable role
 labels. Battery role placeholders such as `Primary` are retained in tooltips;
 no manufacturer is hardcoded. UCSI supplies retain separate connector numbers.
-Generated I2C mouse/touchpad names receive concise function labels, while
-descriptive product names remain intact. ALSA HDMI/DisplayPort jack-detection
+Generated I2C mouse/touchpad names put the function first and retain the firmware
+identifier in parentheses, while descriptive product names remain intact.
+ALSA headphone, microphone and HDMI/DisplayPort jack-detection
 switches appear as internal audio records rather than ordinary HID devices.
 Raw names and kernel identifiers remain in tooltips. Repeated friendly labels
 receive identifiers to distinguish them; Show internal devices includes IDs.

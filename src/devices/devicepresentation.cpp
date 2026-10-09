@@ -37,7 +37,7 @@ void refinePresentation(QVector<Device> &devices)
     QHash<int, QVector<int>> functions;
     for (int i = 0; i < devices.size(); ++i) {
         const Device &d = devices.at(i);
-        if (isHdmiAudioJack(d)) {
+        if (isAudioJackSwitch(d)) {
             const int card = ancestor(d, devices, lookup, "sound");
             if (card >= 0) devices[i].representedByPath = devices.at(card).path;
         }
@@ -67,7 +67,7 @@ void refinePresentation(QVector<Device> &devices)
     }
     // A single ALSA card may itself be grouped under its PCI audio function.
     for (auto &d : devices) {
-        if (!isHdmiAudioJack(d)) continue;
+        if (!isAudioJackSwitch(d)) continue;
         const auto card = lookup.constFind(d.representedByPath);
         if (card != lookup.cend() && !devices.at(card.value()).representedByPath.isEmpty())
             d.representedByPath = devices.at(card.value()).representedByPath;
