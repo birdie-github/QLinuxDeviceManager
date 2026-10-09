@@ -148,6 +148,10 @@ void Enumerator::run()
             d.attributes.insert("vendor_name", readAttribute(d.path + "/vendor_name"));
             d.attributes.insert("chip_name", readAttribute(d.path + "/chip_name"));
         }
+        if (d.subsystem == "power_supply") {
+            d.attributes.insert("type", readAttribute(d.path + "/type"));
+            d.attributes.insert("manufacturer", readAttribute(d.path + "/manufacturer"));
+        }
         if (!attribute.isEmpty()) d.attributes.insert(attribute, readAttribute(d.path + '/' + attribute));
         nameDevice(d);
         moduleNames.supplement(d);

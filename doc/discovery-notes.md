@@ -79,3 +79,35 @@ drivers/hwmon/coretemp.c, drivers/rtc/rtc-efi.c, kernel/time/alarmtimer.c,
 drivers/pci/pcie/{aer,bwctrl,pme}.c, drivers/pci/hotplug/pciehp_core.c,
 arch/x86/kernel/cpu/microcode/core.c, drivers/regulator/dummy.c,
 net/wireless/reg.c and sound/soc/soc-utils.c.
+
+## Power, pointing-device and audio-jack presentation
+
+The dump reports Mains for ADP1, and Battery with manufacturer HP and model
+Primary for BAT0. Labels use the device's own type/manufacturer/model fields,
+without a fixed manufacturer or inference about primary/secondary battery roles.
+The worker reads only the additional documented type/manufacturer strings;
+failed fresh reads do not reuse stale udev manufacturer values for display.
+Meaningful battery models remain visible; generic role placeholders remain in
+raw metadata/tooltips. Names describe roles, not connection or charging state.
+
+The two UCSI supplies actually end in 001 and 002. Linux constructs their names
+from the controller name followed by its connector number. Display parsing
+requires an exact match with the recorded direct parent, so unrelated suffixes
+are not interpreted as connector numbers. The numbering identifies firmware
+connectors and does not imply a left/right physical location or an attached
+charger. References: drivers/usb/typec/ucsi/psy.c and
+Documentation/ABI/testing/sysfs-class-power in the Linux source.
+
+The three HDMI/DP input records have ALSA physical identity, input-switch flags
+and PCM-qualified jack names. Linux sound/core/jack.c creates these input devices
+to report audio-jack switches. They now belong to audio and are internal by
+default, associated with their sound-card/PCI representative when available.
+PCM numbers are preserved and never presented as physical display-port numbers.
+Keyboard/mouse/touchpad functions with a similar name are not hidden.
+
+The submitted I2C pointing names contain a firmware identifier and HID vendor/
+product numbers, followed by Mouse or Touchpad. Concise captions require the
+generated name form, I2C bus code, matching vendor/product numbers, and the
+corresponding udev capability flag. Descriptive names and other buses retain
+their original product names. Both input functions remain separate; shared HID
+ancestry alone is insufficient to prove that a mouse interface is redundant.

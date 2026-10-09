@@ -1,5 +1,6 @@
 #include "device.h"
 #include "functionnames.h"
+#include "devicelabel.h"
 
 #include <QCoreApplication>
 #include <cstring>
@@ -65,7 +66,8 @@ void classify(Device &d)
         d.category = "disk";
         d.hidden = d.hidden || d.devtype != "disk";
     } else if (s == "input") {
-        if (flag("ID_INPUT_KEYBOARD")) d.category = "keyboard";
+        if (isHdmiAudioJack(d)) { d.category = "audio"; d.hidden = true; }
+        else if (flag("ID_INPUT_KEYBOARD")) d.category = "keyboard";
         else if (flag("ID_INPUT_MOUSE") || flag("ID_INPUT_TOUCHPAD") || flag("ID_INPUT_POINTINGSTICK")) d.category = "mouse";
         else d.category = "hid";
         // Keep inputN functions; event/js/mouse endpoints are redundant in the type view.

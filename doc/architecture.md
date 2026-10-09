@@ -7,6 +7,10 @@
   presentation grouping live in separate modules. No GUI-thread filesystem scans.
 - `DeviceModel`: GUI-thread inventory reconciliation and a custom item model;
   presentation nodes store record IDs, never borrowed inventory pointers.
+  A separate `devicelabel` module formats GUI-translated captions from owned
+  metadata, without filesystem reads. Display labels are computed once during
+  rebuild, used for sorting, and disambiguated within each category with kernel
+  identifiers. Raw inventory names and name sources are never rewritten.
 - `MainWindow`: UI, settings and tree-state restoration. Refresh requests
   serialize/coalesce; stale snapshots are superseded. Categories start collapsed
   on every launch; expanded state is retained only within a running session. Failed scans retain the

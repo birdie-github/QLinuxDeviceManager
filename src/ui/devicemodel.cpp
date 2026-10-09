@@ -1,6 +1,6 @@
 #include "devicemodel.h"
+#include "devicelabel.h"
 #include <QApplication>
-#include <QCoreApplication>
 #include <QIcon>
 #include <QStyle>
 #include <QStringList>
@@ -46,11 +46,7 @@ QVariant DeviceModel::data(const QModelIndex &i, int role) const
     if (role == GenerationRole) return d ? QVariant::fromValue(d->generation) : QVariant();
     if (role == Qt::DisplayRole) {
         if (!d) return categoryLabel(n->category);
-        if (d->name == d->sysname || d->nameSource == "direct kernel driver and kernel name") return d->name;
-        QString name = d->nameTranslated
-            ? QCoreApplication::translate("DeviceFunctions", d->name.toUtf8().constData()) : d->name;
-        if (d->nameCandidate) name = tr("%1 (module candidate)").arg(name);
-        return name + QStringLiteral(" [%1]").arg(d->sysname);
+        return n->label;
     }
     if (role == Qt::DecorationRole)
         return QIcon::fromTheme(categoryIcon(n->category), QApplication::style()->standardIcon(
@@ -59,7 +55,16 @@ QVariant DeviceModel::data(const QModelIndex &i, int role) const
         if (!d) return categoryLabel(n->category).toHtmlEscaped();
         // Escaping prevents device-controlled strings being interpreted as markup.
         QString tooltip = QStringLiteral("%1\n%2\n%3: %4\n%5: %6")
-            .arg(d->name, d->path, tr("Subsystem"), d->subsystem, tr("Name source"), d->nameSource);
+            .arg(n->label, d->path, tr("Subsystem"), d->subsystem, tr("Raw name source"), d->nameSource);
+        tooltip += QStringLiteral("\n%1: %2\n%3: %4")
+            .arg(tr("Raw name"), d->name, tr("Kernel name"), d->sysname);
+        if (d->subsystem == "power_supply") {
+            for (const char *key : {"type", "manufacturer", "model_name"}) {
+                const auto attribute = d->attributes.value(QLatin1String(key));
+                if (attribute.state == ReadState::Available && !attribute.value.isEmpty())
+                    tooltip += QStringLiteral("\n%1: %2").arg(QLatin1String(key), attribute.value);
+            }
+        }
         if (!d->representedByPath.isEmpty())
             tooltip += QStringLiteral("\n%1: %2").arg(tr("Represented by"), d->representedByPath);
         QStringList grouped;
@@ -98,8 +103,18 @@ void DeviceModel::rebuild()
         for (const auto &d : devices_)
             if (d.category == QLatin1String(category.id) && (showInternal_ || !d.hidden)) members.append(&d);
         if (members.isEmpty()) continue;
-        std::sort(members.begin(), members.end(), [](const Device *a, const Device *b) {
-            const int cmp = QString::compare(a->name, b->name, Qt::CaseInsensitive);
+        QHash<QString, QString> labels;
+        QHash<QString, int> counts;
+        for (const Device *d : members) {
+            const QString label = deviceDisplayName(*d, showInternal_);
+            labels.insert(d->path, label);
+            ++counts[label];
+        }
+        for (const Device *d : members)
+            if (counts.value(labels.value(d->path)) > 1)
+                labels[d->path] = deviceDisplayName(*d, true);
+        std::sort(members.begin(), members.end(), [&labels](const Device *a, const Device *b) {
+            const int cmp = QString::compare(labels.value(a->path), labels.value(b->path), Qt::CaseInsensitive);
             return cmp == 0 ? a->path < b->path : cmp < 0;
         });
         auto group = std::make_unique<Node>();
@@ -112,6 +127,7 @@ void DeviceModel::rebuild()
             child->row = static_cast<int>(group->children.size());
             child->category = d->category;
             child->path = d->path;
+            child->label = labels.value(d->path);
             group->children.push_back(std::move(child));
             ++visible_;
         }

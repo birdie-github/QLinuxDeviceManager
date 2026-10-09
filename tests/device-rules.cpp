@@ -3,6 +3,7 @@
 #include "cpumetadata.h"
 #include "devicepresentation.h"
 #include "functionnames.h"
+#include "devicelabel.h"
 #include <cstdio>
 
 static int failures = 0;
@@ -276,5 +277,63 @@ int main()
     refinePresentation(twoAudio);
     check(!twoAudio[0].hidden && !twoAudio[3].hidden,
           "A separate audio controller must not be merged by model or category");
+    Device battery;
+    battery.subsystem = "power_supply";
+    battery.sysname = "BAT0";
+    battery.name = "Primary";
+    battery.properties.insert("POWER_SUPPLY_TYPE", "Battery");
+    battery.properties.insert("POWER_SUPPLY_MANUFACTURER", "ExampleVendor");
+    battery.properties.insert("POWER_SUPPLY_MODEL_NAME", "Primary");
+    check(deviceDisplayName(battery) == "ExampleVendor battery" && battery.name == "Primary",
+          "Battery captions must use reported metadata while preserving the raw name");
+    battery.properties.remove("POWER_SUPPLY_MANUFACTURER");
+    check(deviceDisplayName(battery) == "Battery", "An unknown battery manufacturer must never be inferred");
+    battery.properties.insert("POWER_SUPPLY_MODEL_NAME", "Real model");
+    check(deviceDisplayName(battery) == "Battery (Real model)", "Meaningful battery model identity must survive");
+    Attribute denied;
+    denied.state = ReadState::PermissionDenied;
+    denied.value = "Stale vendor";
+    battery.attributes.insert("manufacturer", denied);
+    battery.properties.insert("POWER_SUPPLY_MANUFACTURER", "Stale vendor");
+    check(!deviceDisplayName(battery).contains("Stale"), "Failed fresh metadata must not reuse a stale manufacturer");
+    Device supply;
+    supply.subsystem = "power_supply";
+    supply.sysname = "ADP1";
+    supply.properties.insert("POWER_SUPPLY_TYPE", "Mains");
+    check(deviceDisplayName(supply) == "AC power adapter", "Mains supply must have a readable role");
+    supply.properties.insert("POWER_SUPPLY_TYPE", "USB");
+    supply.parentPath = "/sys/devices/platform/USBC000:00";
+    supply.sysname = "ucsi-source-psy-USBC000:001";
+    check(deviceDisplayName(supply) == "USB-C power supply (port 1)", "UCSI port number must match its direct controller prefix");
+    supply.sysname = "ucsi-source-psy-USBC000:002";
+    check(deviceDisplayName(supply) == "USB-C power supply (port 2)", "Distinct UCSI supplies must keep distinct port labels");
+    supply.parentPath = "/sys/devices/platform/unrelated";
+    check(deviceDisplayName(supply) == "USB power supply", "An unmatched UCSI name must not imply a connector number");
+    touchpad.properties.insert("PRODUCT", "18/6cb/cfc6/100");
+    touchpad.properties.insert("ID_INPUT_TOUCHPAD", "1");
+    check(deviceDisplayName(touchpad) == "I2C touchpad", "Generated I2C touchpad names should have concise captions");
+    touchpad.properties.insert("PRODUCT", "3/6cb/cfc6/100");
+    check(deviceDisplayName(touchpad).contains("SYNA3517"), "USB input names must not be shortened by I2C rules");
+    touchpad.properties.insert("PRODUCT", "18/6cb/ffff/100");
+    check(deviceDisplayName(touchpad).contains("SYNA3517"), "Mismatched generated identity must retain the original name");
+    Device jack;
+    jack.subsystem = "input";
+    jack.sysname = "input23";
+    jack.path = card.path + "/input23";
+    jack.parentPath = card.path;
+    jack.properties.insert("NAME", "\"sof-hda-dsp HDMI/DP,pcm=3\"");
+    jack.properties.insert("PHYS", "\"ALSA\"");
+    jack.properties.insert("ID_INPUT_SWITCH", "1");
+    nameDevice(jack);
+    check(deviceDisplayName(jack) == "HDMI/DisplayPort jack detection (PCM 3)", "ALSA HDMI switch must describe jack detection, not a monitor");
+    QVector<Device> audioWithJack {audioPci, dsp, card, jack};
+    for (auto &d : audioWithJack) classify(d);
+    refinePresentation(audioWithJack);
+    check(audioWithJack[3].category == "audio" && audioWithJack[3].hidden
+          && audioWithJack[3].representedByPath == audioPci.path,
+          "ALSA switch must leave the default HID list and remain associated with the audio controller");
+    jack.properties.insert("ID_INPUT_KEYBOARD", "1");
+    classify(jack);
+    check(jack.category == "keyboard" && !jack.hidden, "Mixed keyboard input must remain visible despite an audio-like name");
     return failures ? 1 : 0;
 }

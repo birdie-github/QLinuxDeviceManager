@@ -26,6 +26,7 @@ private:
         int row = 0;
         QString category;
         QString path; // Record lookup ID, never a pointer into inventory storage.
+        QString label; // GUI-translated display text, rebuilt with the inventory.
         std::vector<std::unique_ptr<Node>> children;
     };
     Node *node(const QModelIndex &index) const;

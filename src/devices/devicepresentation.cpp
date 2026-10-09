@@ -1,4 +1,5 @@
 #include "devicepresentation.h"
+#include "devicelabel.h"
 #include <QSet>
 
 namespace {
@@ -10,9 +11,10 @@ bool pciClass(const Device &d, uint base, int subclass = -1)
     return valid && (code >> 16) == base
         && (subclass < 0 || ((code >> 8) & 0xff) == static_cast<uint>(subclass));
 }
-// Follow recorded udev parents, stopping at the first PCI function. A bridge or
-// an unrelated outer controller cannot stand in for the directly associated device.
-int pciParent(const Device &d, const QVector<Device> &devices, const QHash<QString, int> &lookup)
+// Follow recorded udev parents to the nearest requested subsystem. PCI callers
+// stop at the first function, so an outer controller cannot represent its child.
+int ancestor(const Device &d, const QVector<Device> &devices, const QHash<QString, int> &lookup,
+             const char *subsystem)
 {
     QString path = d.parentPath;
     QSet<QString> visited;
@@ -21,7 +23,7 @@ int pciParent(const Device &d, const QVector<Device> &devices, const QHash<QStri
         const auto entry = lookup.constFind(path);
         if (entry == lookup.cend()) return -1;
         const Device &parent = devices.at(entry.value());
-        if (parent.subsystem == "pci") return entry.value();
+        if (parent.subsystem == QLatin1String(subsystem)) return entry.value();
         path = parent.parentPath;
     }
     return -1;
@@ -35,8 +37,12 @@ void refinePresentation(QVector<Device> &devices)
     QHash<int, QVector<int>> functions;
     for (int i = 0; i < devices.size(); ++i) {
         const Device &d = devices.at(i);
+        if (isHdmiAudioJack(d)) {
+            const int card = ancestor(d, devices, lookup, "sound");
+            if (card >= 0) devices[i].representedByPath = devices.at(card).path;
+        }
         if (d.hidden || (d.subsystem != "net" && d.subsystem != "nvme" && d.subsystem != "sound")) continue;
-        const int parent = pciParent(d, devices, lookup);
+        const int parent = ancestor(d, devices, lookup, "pci");
         if (parent < 0 || devices.at(parent).hidden) continue;
         if (d.subsystem == "net" && pciClass(devices.at(parent), 2)) {
             functions[parent].append(i);
@@ -58,5 +64,12 @@ void refinePresentation(QVector<Device> &devices)
             // Suppress the extra bus row, never collapse distinct cards/interfaces.
             devices[it.key()].hidden = true;
         }
+    }
+    // A single ALSA card may itself be grouped under its PCI audio function.
+    for (auto &d : devices) {
+        if (!isHdmiAudioJack(d)) continue;
+        const auto card = lookup.constFind(d.representedByPath);
+        if (card != lookup.cend() && !devices.at(card.value()).representedByPath.isEmpty())
+            d.representedByPath = devices.at(card.value()).representedByPath;
     }
 }
