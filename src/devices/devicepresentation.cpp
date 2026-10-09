@@ -32,28 +32,30 @@ void refinePresentation(QVector<Device> &devices)
 {
     QHash<QString, int> lookup;
     for (int i = 0; i < devices.size(); ++i) lookup.insert(devices.at(i).path, i);
-    QHash<int, QVector<int>> networks;
+    QHash<int, QVector<int>> functions;
     for (int i = 0; i < devices.size(); ++i) {
         const Device &d = devices.at(i);
-        if (d.hidden || (d.subsystem != "net" && d.subsystem != "nvme")) continue;
+        if (d.hidden || (d.subsystem != "net" && d.subsystem != "nvme" && d.subsystem != "sound")) continue;
         const int parent = pciParent(d, devices, lookup);
         if (parent < 0 || devices.at(parent).hidden) continue;
         if (d.subsystem == "net" && pciClass(devices.at(parent), 2)) {
-            networks[parent].append(i);
+            functions[parent].append(i);
+        } else if (d.subsystem == "sound" && d.sysname.startsWith("card") && pciClass(devices.at(parent), 4)) {
+            functions[parent].append(i);
         } else if (d.subsystem == "nvme" && pciClass(devices.at(parent), 1, 8)) {
             // PCI function represents the controller; keep namespace disks separately.
             devices[i].hidden = true;
             devices[i].representedByPath = devices.at(parent).path;
         }
     }
-    for (auto it = networks.cbegin(); it != networks.cend(); ++it) {
+    for (auto it = functions.cbegin(); it != functions.cend(); ++it) {
         if (it.value().size() == 1) {
             const int child = it.value().front();
             devices[child].hidden = true;
             devices[child].representedByPath = devices.at(it.key()).path;
         } else {
-            // A multiport device needs its independently useful interface functions.
-            // Suppress the extra aggregate bus row, never collapse distinct interfaces.
+            // Multiple cards/ports need their independently useful function rows.
+            // Suppress the extra bus row, never collapse distinct cards/interfaces.
             devices[it.key()].hidden = true;
         }
     }

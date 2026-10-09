@@ -5,6 +5,24 @@
 FunctionName knownFunctionName(const Device &d)
 {
     struct Entry { const char *id; const char *label; };
+    if (d.subsystem == "usb" && d.devtype == "usb_device" && d.sysname.startsWith("usb")) {
+        bool busValid = false, addressValid = false, vendorValid = false, productValid = false;
+        const uint bus = d.sysname.mid(3).toUInt(&busValid);
+        const uint address = d.properties.value("DEVNUM").toUInt(&addressValid);
+        const QStringList product = d.properties.value("PRODUCT").split('/');
+        if (product.size() == 3 && busValid && bus > 0 && addressValid && address == 1) {
+            const uint vendor = product[0].toUInt(&vendorValid, 16);
+            const uint id = product[1].toUInt(&productValid, 16);
+            // Linux USB core's root-hub descriptor IDs; external hubs have port names.
+            if (vendorValid && productValid && vendor == 0x1d6b) {
+                const char *label = nullptr;
+                if (id == 1) label = QT_TRANSLATE_NOOP("DeviceFunctions", "USB 1.1 root hub");
+                else if (id == 2) label = QT_TRANSLATE_NOOP("DeviceFunctions", "USB 2.0 root hub");
+                else if (id == 3) label = QT_TRANSLATE_NOOP("DeviceFunctions", "USB 3.x root hub");
+                if (label) return {QString::fromLatin1(label), "Linux USB root-hub topology and descriptor identity"};
+            }
+        }
+    }
     // Standard ACPI/PNP identities, not vendor guesses or device-name prefixes.
     // Semantic reference: open-acpica/acpica source/common/ahids.c.
     static const Entry ids[] = {
@@ -44,6 +62,35 @@ FunctionName knownFunctionName(const Device &d)
         for (const auto &entry : ids)
             if (id.compare(QLatin1String(entry.id), Qt::CaseInsensitive) == 0)
                 return {QString::fromLatin1(entry.label), QStringLiteral("standard ACPI/PNP ID: %1").arg(id)};
+    static const Entry platformAliases[] = {
+        {"platform:coretemp", QT_TRANSLATE_NOOP("DeviceFunctions", "Intel CPU temperature monitor")},
+        {"platform:rtc-efi", QT_TRANSLATE_NOOP("DeviceFunctions", "EFI real-time clock interface")},
+        {"platform:alarmtimer", QT_TRANSLATE_NOOP("DeviceFunctions", "Kernel alarm timer")}
+    };
+    if (d.subsystem == "platform")
+        for (const auto &entry : platformAliases)
+            if (alias == QLatin1String(entry.id))
+                return {QString::fromLatin1(entry.label), QStringLiteral("documented kernel platform alias: %1").arg(alias)};
+    static const Entry pciServices[] = {
+        {"aer", QT_TRANSLATE_NOOP("DeviceFunctions", "PCI Express advanced error reporting service")},
+        {"pcie_bwctrl", QT_TRANSLATE_NOOP("DeviceFunctions", "PCI Express bandwidth control service")},
+        {"pcie_pme", QT_TRANSLATE_NOOP("DeviceFunctions", "PCI Express power-management event service")},
+        {"pciehp", QT_TRANSLATE_NOOP("DeviceFunctions", "PCI Express hot-plug service")}
+    };
+    if (d.subsystem == "pci_express")
+        for (const auto &entry : pciServices)
+            if (d.driver == QLatin1String(entry.id))
+                return {QString::fromLatin1(entry.label), QStringLiteral("PCI Express service; direct driver: %1").arg(d.driver)};
+    static const Entry fauxFunctions[] = {
+        {"microcode", QT_TRANSLATE_NOOP("DeviceFunctions", "CPU microcode interface")},
+        {"reg-dummy", QT_TRANSLATE_NOOP("DeviceFunctions", "Dummy voltage regulator")},
+        {"regulatory", QT_TRANSLATE_NOOP("DeviceFunctions", "Wireless regulatory interface")},
+        {"snd-soc-dummy", QT_TRANSLATE_NOOP("DeviceFunctions", "Dummy SoC audio component")}
+    };
+    if (d.subsystem == "faux")
+        for (const auto &entry : fauxFunctions)
+            if (d.sysname == QLatin1String(entry.id))
+                return {QString::fromLatin1(entry.label), QStringLiteral("documented kernel faux function: %1").arg(d.sysname)};
     if (d.subsystem == "serial-base" && d.driver == "port")
         return {QStringLiteral(QT_TRANSLATE_NOOP("DeviceFunctions", "Serial port function")), "serial-base subsystem; direct port binding"};
     if (d.subsystem == "serial-base" && d.driver == "ctrl")

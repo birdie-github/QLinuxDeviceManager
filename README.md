@@ -34,6 +34,10 @@ No parent vendor, model or driver is silently attributed to a child.
 
 Additional naming uses exact standard ACPI/PNP identifiers (including compatible
 IDs), direct HDA codec `chip_name`/`vendor_name`, and USB `product` text.
+Linux USB root hubs receive explicit USB 1.1/2.0/3.x captions, using their
+root-bus names, address and descriptor IDs. Separate USB buses remain separate
+rows. Known platform, PCI Express service and faux kernel functions receive
+readable captions scoped to exact subsystem/alias or driver identities.
 Standard function labels are translated in the view; raw IDs remain visible.
 An optional libkmod fallback reads installed module descriptions through native
 APIs in the enumeration worker. Bound modules are identified through that
@@ -42,6 +46,11 @@ one matching module is required and the label is marked **module candidate**.
 Descriptions explain a software/kernel function, not a hardware marketing
 model, health, binding status or the version of loaded code. Tooltips record the
 naming basis. Missing or ambiguous metadata keeps the previous fallback label.
+
+The default audio view groups a PCI audio function with its single ALSA card.
+If the function owns multiple cards, every card remains visible and the extra
+PCI row is suppressed. USB sound cards and unrelated audio controllers are
+preserved. All grouped records remain available under Show internal devices.
 
 Application categories are deterministic groupings, not kernel device classes:
 

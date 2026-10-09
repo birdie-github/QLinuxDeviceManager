@@ -49,3 +49,33 @@ controller/port objects receive generic function captions; the patch does not
 claim that each such object represents a physical serial connector. Existing
 classification/visibility is unchanged; naming alone cannot resolve tree noise
 or the separate PCI/card audio representations shown in the screenshots.
+
+## Audio grouping and kernel-function captions
+
+The submitted dump has one PCI audio function and one ALSA card below its DSP
+platform child. The default view now groups this pair using recorded udev
+ancestry, stopping at the first PCI function and requiring an audio class.
+It never merges equal names. Multiple ALSA cards retain individual rows, and
+a USB sound card cannot be represented by its upstream PCI USB controller.
+
+Linux USB root hubs have bus names `usbN`, device address 1 and Linux Foundation
+descriptor IDs 1d6b:0001/0002/0003. These identify USB 1.1/2.0/3.x families;
+0003 alone does not identify a particular USB 3 minor revision. The four hubs
+in the dump belong to separate buses and remain visible independently.
+
+Exact platform aliases label coretemp, rtc-efi and alarmtimer. Direct
+`pci_express` service bindings label aer, pcie_bwctrl, pcie_pme and pciehp.
+Exact `faux` function names label microcode, reg-dummy, regulatory and
+snd-soc-dummy as kernel interfaces or dummy components, not physical devices.
+These captions precede optional module descriptions and work without libkmod.
+
+HPIC0003 and INTC1025 remain raw ACPI identities by request; vendor-specific
+model mappings are not added. They have no PCI vendor/device identity in the
+dump. The udev vendor database text (Headplay/Interphase) is not used to infer
+their manufacturer, and an ancestor's PCI identity is not copied to them.
+
+Caption references are the Linux kernel's drivers/usb/core/hcd.c,
+drivers/hwmon/coretemp.c, drivers/rtc/rtc-efi.c, kernel/time/alarmtimer.c,
+drivers/pci/pcie/{aer,bwctrl,pme}.c, drivers/pci/hotplug/pciehp_core.c,
+arch/x86/kernel/cpu/microcode/core.c, drivers/regulator/dummy.c,
+net/wireless/reg.c and sound/soc/soc-utils.c.

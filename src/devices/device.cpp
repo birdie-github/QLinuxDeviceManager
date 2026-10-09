@@ -139,6 +139,16 @@ void nameDevice(Device &d)
             return;
         }
     }
+    // Replace generic database root-hub text only for verified Linux root hubs.
+    if (d.subsystem == "usb") {
+        const FunctionName rootHub = knownFunctionName(d);
+        if (!rootHub.label.isEmpty()) {
+            d.name = rootHub.label;
+            d.nameSource = rootHub.source;
+            d.nameTranslated = true;
+            return;
+        }
+    }
     for (const char *key : {"ID_MODEL_FROM_DATABASE", "ID_MODEL", "NAME"}) {
         if (std::strcmp(key, "ID_MODEL") == 0 && d.subsystem == "usb"
             && d.devtype == "usb_device" && attributeName("product")) return;

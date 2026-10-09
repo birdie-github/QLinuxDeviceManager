@@ -34,9 +34,11 @@ The inventory retains every discovered record and its real parent/binding.
 After classification, presentation refinement follows explicit udev parent
 links to the nearest PCI function. Network functions pair only with PCI network
 class devices, and NVMe class controllers pair only with PCI class 01/08.
-A single network interface or NVMe class record is hidden in favor of the PCI
-controller row. Multiport network interfaces remain visible while the redundant
-PCI aggregate row is hidden. Missing parents or unrelated classes never justify
+A sound card pairs only with a PCI audio function (class 04), including through
+intermediate DSP platform records. A single network interface, ALSA card or NVMe
+class record is hidden in favor of the PCI controller row. Multiple network
+interfaces or ALSA cards remain visible while the redundant PCI aggregate row
+is hidden. Missing parents or unrelated classes never justify
 suppression. The internal-device toggle reveals every retained record.
 
 Hardware database lookups are local and optional through the existing libudev
@@ -50,10 +52,12 @@ kernel-name fallbacks and explicit read states.
 ## Function descriptions for unresolved devices
 
 The naming priority remains direct device identity/model metadata first, then
-selected direct sysfs strings, exact standard ACPI/PNP IDs, optional module
+selected direct sysfs strings, exact standard ACPI/PNP and kernel function IDs, optional module
 descriptions, and existing kernel/driver fallbacks. Function labels are stored
 as untranslated text and translated by the UI. Raw kernel names accompany them.
 No name lookup changes record IDs, category, driver binding or visibility.
+Verified Linux USB root-hub captions override generic database/product text;
+external USB devices retain the usual model-name priority.
 
 `ModuleNames` owns its libkmod context in the enumeration worker. It reads the
 running kernel's installed module indexes without modprobe.d overrides or
