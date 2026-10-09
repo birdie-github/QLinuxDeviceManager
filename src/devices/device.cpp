@@ -1,0 +1,121 @@
+#include "device.h"
+
+#include <QCoreApplication>
+
+const QVector<Category> &categories()
+{
+    static const QVector<Category> list = {
+        {"audio", QT_TRANSLATE_NOOP("Categories", "Audio devices"), "audio-card"},
+        {"battery", QT_TRANSLATE_NOOP("Categories", "Batteries and power supplies"), "battery"},
+        {"bluetooth", QT_TRANSLATE_NOOP("Categories", "Bluetooth"), "bluetooth"},
+        {"camera", QT_TRANSLATE_NOOP("Categories", "Cameras and video devices"), "camera-web"},
+        {"disk", QT_TRANSLATE_NOOP("Categories", "Disk drives"), "drive-harddisk"},
+        {"display", QT_TRANSLATE_NOOP("Categories", "Display adapters"), "video-display"},
+        {"hid", QT_TRANSLATE_NOOP("Categories", "Human interface devices"), "input-gaming"},
+        {"keyboard", QT_TRANSLATE_NOOP("Categories", "Keyboards"), "input-keyboard"},
+        {"mouse", QT_TRANSLATE_NOOP("Categories", "Mice and pointing devices"), "input-mouse"},
+        {"monitor", QT_TRANSLATE_NOOP("Categories", "Display outputs"), "video-display"},
+        {"network", QT_TRANSLATE_NOOP("Categories", "Network adapters"), "network-wired"},
+        {"cpu", QT_TRANSLATE_NOOP("Categories", "Processors"), "cpu"},
+        {"storage", QT_TRANSLATE_NOOP("Categories", "Storage controllers"), "drive-harddisk"},
+        {"system", QT_TRANSLATE_NOOP("Categories", "System devices"), "computer"},
+        {"usb", QT_TRANSLATE_NOOP("Categories", "USB controllers and devices"), "drive-removable-media-usb"},
+        {"other", QT_TRANSLATE_NOOP("Categories", "Other devices"), "preferences-system"}
+    };
+    return list;
+}
+QString categoryLabel(const QString &id)
+{
+    for (const auto &c : categories())
+        if (id == QLatin1String(c.id))
+            return QCoreApplication::translate("Categories", c.label);
+    return QCoreApplication::translate("Categories", "Other devices");
+}
+QString categoryIcon(const QString &id)
+{
+    for (const auto &c : categories())
+        if (id == QLatin1String(c.id))
+            return QString::fromLatin1(c.icon);
+    return QStringLiteral("preferences-system");
+}
+void classify(Device &d)
+{
+    const QString &s = d.subsystem;
+    const QString &n = d.sysname;
+    const auto flag = [&d](const char *key) { return d.properties.value(QLatin1String(key)) == "1"; };
+    d.category = "other";
+    d.hidden = d.path.startsWith("/sys/devices/virtual/");
+    if (s == "pci") {
+        bool ok = false;
+        const uint code = d.properties.value("PCI_CLASS").toUInt(&ok, 16);
+        const uint base = code >> 16;
+        const uint sub = (code >> 8) & 0xff;
+        if (ok && base == 1) d.category = "storage";
+        else if (ok && base == 2) d.category = "network";
+        else if (ok && base == 3) d.category = "display";
+        else if (ok && base == 4) d.category = "audio";
+        else if (ok && base == 0x0c && sub == 3) d.category = "usb";
+        else d.category = "system";
+    } else if (s == "usb") {
+        d.category = "usb";
+        d.hidden = d.hidden || d.devtype != "usb_device";
+    } else if (s == "block") {
+        d.category = "disk";
+        d.hidden = d.hidden || d.devtype != "disk";
+    } else if (s == "input") {
+        if (flag("ID_INPUT_KEYBOARD")) d.category = "keyboard";
+        else if (flag("ID_INPUT_MOUSE") || flag("ID_INPUT_TOUCHPAD") || flag("ID_INPUT_POINTINGSTICK")) d.category = "mouse";
+        else d.category = "hid";
+        // Keep inputN functions; event/js/mouse endpoints are redundant in the type view.
+        d.hidden = d.hidden || !n.startsWith("input");
+    } else if (s == "hid" || s == "hidraw") {
+        d.category = "hid";
+        d.hidden = true;
+    } else if (s == "sound") {
+        d.category = "audio";
+        d.hidden = d.hidden || !n.startsWith("card");
+    } else if (s == "drm") {
+        d.category = n.contains('-') ? "monitor" : "display";
+        // A connector is an output, not evidence of an attached monitor.
+        d.hidden = true;
+    } else if (s == "net") d.category = "network";
+    else if (s == "bluetooth") {
+        d.category = "bluetooth";
+        d.hidden = d.hidden || !n.startsWith("hci") || n.contains(':');
+    } else if (s == "video4linux") d.category = "camera";
+    else if (s == "power_supply") d.category = "battery";
+    else if (s == "cpu") d.category = "cpu";
+    else if (s == "nvme" || s == "scsi_host" || s == "ata_port") {
+        d.category = "storage";
+        d.hidden = d.hidden || s != "nvme";
+    } else if (s == "platform" || s == "acpi" || s == "pnp") {
+        d.category = "system";
+        d.hidden = d.hidden || (s == "acpi" && d.driver.isEmpty());
+    } else {
+        // Unrecognized directly bound physical functions remain useful fallbacks.
+        d.hidden = d.hidden || d.driver.isEmpty();
+    }
+}
+void nameDevice(Device &d)
+{
+    for (const char *key : {"ID_MODEL_FROM_DATABASE", "ID_MODEL", "NAME"}) {
+        const QString value = d.properties.value(QLatin1String(key));
+        if (!value.isEmpty()) {
+            d.name = value;
+            d.nameSource = QStringLiteral("udev: %1").arg(QLatin1String(key));
+            return;
+        }
+    }
+    d.name = d.sysname.isEmpty() ? d.path : d.sysname;
+    d.nameSource = "kernel name";
+}
+void reconcile(QVector<Device> &next, const QVector<Device> &previous, quint64 &generation)
+{
+    QHash<QString, const Device *> old;
+    for (const auto &d : previous) old.insert(d.path, &d);
+    for (auto &d : next) {
+        const Device *before = old.value(d.path, nullptr);
+        d.generation = before && before->incarnation == d.incarnation
+            ? before->generation : ++generation;
+    }
+}

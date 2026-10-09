@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=QLinuxDeviceManager
+Comment=View Linux hardware and device information
+Exec=qlinuxdevicemanager
+Icon=computer
+Terminal=false
+Categories=System;HardwareSettings;
+StartupNotify=true

@@ -1,0 +1,25 @@
+{
+  "identity": {
+    "name": "QLinuxDeviceManager",
+    "executable": "qlinuxdevicemanager",
+    "bundle_namespace": "io.github.birdie-github"
+  },
+  "release": {
+    "version": "0.1.0",
+    "date": "2026-10-09"
+  },
+  "project": {
+    "repository": "https://github.com/birdie-github/QLinuxDeviceManager",
+    "license": "GPL-3.0"
+  },
+  "resources": {
+    "embedded": "resources/embedded",
+    "root": "resources/external",
+    "translations": "translations"
+  },
+  "platform": {
+    "os": "Linux",
+    "minimum_qt": "6.2",
+    "cpp_standard": 17
+  }
+}

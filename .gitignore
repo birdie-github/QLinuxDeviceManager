@@ -1,0 +1,9 @@
+/build*/
+*.user
+BUILD/
+*.bak
+*.orig
+*.rej
+*.patch
+*.diff
+.directory

@@ -1,0 +1,4 @@
+#pragma once
+#define QLDM_NAME "@APP_NAME@"
+#define QLDM_VERSION "@APP_VERSION@"
+#define QLDM_REPOSITORY "@APP_REPOSITORY@"
