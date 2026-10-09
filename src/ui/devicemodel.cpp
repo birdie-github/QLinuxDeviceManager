@@ -1,5 +1,6 @@
 #include "devicemodel.h"
 #include "devicelabel.h"
+#include "resourceformat.h"
 #include <QApplication>
 #include <QIcon>
 #include <QStyle>
@@ -19,7 +20,8 @@ bool sameMetadata(const Device &a, const Device &b)
         || a.name != b.name || a.nameSource != b.nameSource || a.nameTranslated != b.nameTranslated
         || a.nameCandidate != b.nameCandidate || a.representedByPath != b.representedByPath
         || a.propertySources != b.propertySources || a.category != b.category
-        || a.incarnation != b.incarnation || a.hidden != b.hidden || a.attributes.size() != b.attributes.size())
+        || a.incarnation != b.incarnation || a.hidden != b.hidden || a.attributes.size() != b.attributes.size()
+        || !sameDeviceResources(a.resources, b.resources))
         return false;
     for (auto it = a.attributes.cbegin(); it != a.attributes.cend(); ++it) {
         const auto other = b.attributes.constFind(it.key());
@@ -61,13 +63,16 @@ QVariant DeviceModel::data(const QModelIndex &i, int role) const
 {
     if (!i.isValid()) return {};
     const Node *n = node(i);
-    const auto found = lookup_.constFind(n->path);
+    const auto found = lookup_.constFind(n->path.isEmpty() ? n->ownerPath : n->path);
     const Device *d = found == lookup_.cend() ? nullptr : &devices_.at(found.value());
     if (d && d->generation != n->generation) d = nullptr;
     if (role == NodeKeyRole) return n->key;
     if (role == CategoryRole) return n->category;
-    if (role == PathRole) return d ? QVariant(d->path) : QVariant();
-    if (role == GenerationRole) return d ? QVariant::fromValue(d->generation) : QVariant();
+    if (role == ResourceRole) return !n->ownerPath.isEmpty();
+    if (role == OwnerPathRole) return d && !n->ownerPath.isEmpty() ? QVariant(d->path) : QVariant();
+    if (role == OwnerGenerationRole) return d && !n->ownerPath.isEmpty() ? QVariant::fromValue(d->generation) : QVariant();
+    if (role == PathRole) return d && !n->path.isEmpty() ? QVariant(d->path) : QVariant();
+    if (role == GenerationRole) return d && !n->path.isEmpty() ? QVariant::fromValue(d->generation) : QVariant();
     if (role == Qt::DisplayRole) return n->label;
     if (role == Qt::DecorationRole && n->key == "computer")
         return QIcon::fromTheme("computer", QApplication::style()->standardIcon(QStyle::SP_ComputerIcon));
@@ -75,6 +80,8 @@ QVariant DeviceModel::data(const QModelIndex &i, int role) const
         return QIcon::fromTheme(categoryIcon(n->category), QApplication::style()->standardIcon(
             d ? QStyle::SP_ComputerIcon : QStyle::SP_DirIcon));
     if (role == Qt::ToolTipRole) {
+        if (!n->description.isEmpty())
+            return QStringLiteral("<qt>%1</qt>").arg(n->description.toHtmlEscaped().replace('\n', "<br>"));
         if (!d) return n->label.toHtmlEscaped();
         // Escaping prevents device-controlled strings being interpreted as markup.
         QString tooltip = QStringLiteral("%1\n%2\n%3: %4\n%5: %6")
@@ -197,10 +204,13 @@ void DeviceModel::synchronize(Node *parentNode, Node *desired, const QSet<QStrin
         }
         Node *current = parentNode->children[i].get();
         const bool changed = current->label != next->label || current->category != next->category
-            || current->context != next->context || changedPaths.contains(current->path);
+            || current->context != next->context || current->description != next->description
+            || changedPaths.contains(current->path);
         current->label = next->label;
         current->category = next->category;
         current->context = next->context;
+        current->description = next->description;
+        current->ownerPath = next->ownerPath;
         // Metadata, grouped tooltips and filter matches may change without a label change.
         if (changed) {
             const QModelIndex index = createIndex(current->row, 0, current);
@@ -263,7 +273,8 @@ void DeviceModel::rebuild()
     const QString hostname = QSysInfo::machineHostName();
     Node *computer = add(&root_, "computer", hostname.isEmpty() ? tr("This computer") : hostname, {});
     const auto deviceNode = [&](Node *parent, const Device &d) {
-        Node *item = add(parent, "device:" + d.path, labels.value(d.path), d.category, d.path);
+        const QString suffix = view_ == View::ResourcesByType ? ':' + parent->key : QString();
+        Node *item = add(parent, "device:" + d.path + suffix, labels.value(d.path), d.category, d.path);
         item->generation = d.generation;
         return item;
     };
@@ -283,11 +294,35 @@ void DeviceModel::rebuild()
         groups.insert(key, result);
         return result;
     };
-    if (view_ == View::Connection) {
+    const bool resourcesByType = view_ == View::ResourcesByType;
+    const bool resourcesByConnection = view_ == View::ResourcesByConnection;
+    const auto hasResources = [](const Device &d) { return d.resources && d.resources->hasInformation(); };
+    const auto resourceNode = [&](Node *parent, const Device &d, const ResourceRow &row) {
+        QString label = tr("%1: %2").arg(row.type, row.setting);
+        if (!row.details.isEmpty()) label += QStringLiteral(" — ") + row.details;
+        Node *item = add(parent, parent->key + "/resource:" + row.key, label, d.category);
+        item->ownerPath = d.path;
+        item->generation = d.generation;
+        item->description = label + '\n' + tr("Device: %1").arg(labels.value(d.path))
+            + '\n' + tr("Source: %1").arg(row.source);
+    };
+    if (resourcesByType) {
+        for (const Device *d : members) {
+            if ((!showInternal_ && d->hidden) || !hasResources(*d)) continue;
+            QHash<QString, Node *> deviceGroups;
+            for (const ResourceRow &row : resourceRows(*d->resources)) {
+                const QString &type = row.group;
+                Node *category = group(computer, "resource-type:" + type, row.type, "other");
+                Node *item = deviceGroups.value(type, nullptr);
+                if (!item) { item = deviceNode(category, *d); deviceGroups.insert(type, item); }
+                resourceNode(item, *d, row);
+            }
+        }
+    } else if (view_ == View::Connection || resourcesByConnection) {
         // Only real inventory parent links; hidden ancestors provide context.
         QSet<QString> included;
         for (const Device *d : members) {
-            if (!showInternal_ && d->hidden) continue;
+            if ((!showInternal_ && d->hidden) || (resourcesByConnection && !hasResources(*d))) continue;
             QString path = d->path;
             QSet<QString> chain;
             while (lookup_.contains(path) && !chain.contains(path)) {
@@ -310,7 +345,11 @@ void DeviceModel::rebuild()
             building.remove(d.path);
             return item;
         };
-        for (const Device *d : members) if (included.contains(d->path)) ensure(*d);
+        for (const Device *d : members) if (included.contains(d->path)) {
+            Node *item = ensure(*d);
+            if (resourcesByConnection && (showInternal_ || !d->hidden) && hasResources(*d))
+                for (const ResourceRow &row : resourceRows(*d->resources)) resourceNode(item, *d, row);
+        }
     } else {
         for (const Device *d : members) {
             if (!showInternal_ && d->hidden) continue;
@@ -348,6 +387,7 @@ void DeviceModel::rebuild()
         }
     }
     // Stable sibling order, including connection ancestors inserted before children.
+    QSet<QString> visiblePaths;
     std::function<void(Node *)> sort = [&](Node *parent) {
         std::sort(parent->children.begin(), parent->children.end(), [](const auto &a, const auto &b) {
             const int cmp = QString::compare(a->label, b->label, Qt::CaseInsensitive);
@@ -356,11 +396,12 @@ void DeviceModel::rebuild()
         for (size_t row = 0; row < parent->children.size(); ++row) {
             Node *child = parent->children[row].get();
             child->row = static_cast<int>(row);
-            if (!child->path.isEmpty()) ++visible_;
+            if (!child->path.isEmpty()) visiblePaths.insert(child->path);
             sort(child);
         }
     };
     sort(&root_);
+    visible_ = static_cast<int>(visiblePaths.size());
 }
 QModelIndex DeviceModel::findDevice(const QString &path, quint64 generation) const
 {
@@ -371,6 +412,23 @@ QModelIndex DeviceModel::findDevice(const QString &path, quint64 generation) con
             if (child->path == path) return createIndex(child->row, 0, child.get());
             const QModelIndex found = find(child.get());
             if (found.isValid()) return found;
+        }
+        return {};
+    };
+    return find(&root_);
+}
+
+QModelIndex DeviceModel::findNode(const QString &key, const QString &path, quint64 generation) const
+{
+    const auto record = lookup_.constFind(path);
+    if (record == lookup_.cend() || devices_.at(record.value()).generation != generation) return {};
+    std::function<QModelIndex(const Node *)> find = [&](const Node *parent) -> QModelIndex {
+        for (const auto &child : parent->children) {
+            if (child->key == key && child->generation == generation
+                && (child->path == path || child->ownerPath == path))
+                return createIndex(child->row, 0, child.get());
+            const QModelIndex result = find(child.get());
+            if (result.isValid()) return result;
         }
         return {};
     };
@@ -388,12 +446,14 @@ QVector<SearchRecord> DeviceModel::searchRecords() const
 {
     QVector<SearchRecord> records;
     records.reserve(visible_);
+    QSet<QString> seen;
     QHash<QString, QStringList> grouped;
     for (const Device &d : devices_)
         if (!d.representedByPath.isEmpty()) grouped[d.representedByPath].append(d.path);
     std::function<void(const Node *)> collect = [&](const Node *parent) {
         for (const auto &child : parent->children) {
-            if (!child->path.isEmpty()) {
+            if (!child->path.isEmpty() && !seen.contains(child->path)) {
+                seen.insert(child->path);
                 const Device &d = devices_.at(lookup_.value(child->path));
                 records.append({d, child->label, grouped.value(d.path).join('\n')});
             }
@@ -412,6 +472,8 @@ QString DeviceModel::viewId(View view)
     case View::DevicesByDriver: return "devicesByDriver";
     case View::DriversByDevice: return "driversByDevice";
     case View::DriversByType: return "driversByType";
+    case View::ResourcesByType: return "resourcesByType";
+    case View::ResourcesByConnection: return "resourcesByConnection";
     }
     return "type";
 }
@@ -423,6 +485,8 @@ QString DeviceModel::viewLabel(View view)
     case View::DevicesByDriver: return tr("Devices by driver");
     case View::DriversByDevice: return tr("Drivers by device");
     case View::DriversByType: return tr("Drivers by type");
+    case View::ResourcesByType: return tr("Resources by type");
+    case View::ResourcesByConnection: return tr("Resources by connection");
     }
     return {};
 }

@@ -32,6 +32,13 @@
 #include <utility>
 #include <unistd.h>
 
+namespace {
+QModelIndex propertyTarget(QModelIndex index)
+{
+    if (index.data(DeviceModel::ResourceRole).toBool()) index = index.parent();
+    return index;
+}
+}
 MainWindow::MainWindow()
 {
     setWindowTitle(tr("QLinuxDeviceManager"));
@@ -105,13 +112,13 @@ MainWindow::MainWindow()
     connect(propertiesAction_, &QAction::triggered, this, &MainWindow::openProperties);
     connect(tree_, &QTreeView::doubleClicked, this, [this](const QModelIndex &index) {
         if (index.data(DeviceModel::NodeKeyRole).toString() == "computer"
-            || !index.data(DeviceModel::PathRole).toString().isEmpty()) openProperties();
+            || !propertyTarget(index).data(DeviceModel::PathRole).toString().isEmpty()) openProperties();
     });
     tree_->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(tree_, &QWidget::customContextMenuRequested, this, [this](const QPoint &position) {
         const QModelIndex index = tree_->indexAt(position);
         if (index.data(DeviceModel::NodeKeyRole).toString() != "computer"
-            && index.data(DeviceModel::PathRole).toString().isEmpty()) return;
+            && propertyTarget(index).data(DeviceModel::PathRole).toString().isEmpty()) return;
         tree_->setCurrentIndex(index);
         QMenu menu(this);
         menu.addAction(propertiesAction_);
@@ -123,7 +130,8 @@ MainWindow::MainWindow()
     const QString savedView = viewSettings.value("view/tree", "type").toString();
     for (const auto mode : {DeviceModel::View::Type, DeviceModel::View::Connection,
                            DeviceModel::View::DevicesByDriver, DeviceModel::View::DriversByDevice,
-                           DeviceModel::View::DriversByType}) {
+                           DeviceModel::View::DriversByType, DeviceModel::View::ResourcesByType,
+                           DeviceModel::View::ResourcesByConnection}) {
         expanded_.insert(DeviceModel::viewId(mode) + ":computer");
         auto *choice = view->addAction(DeviceModel::viewLabel(mode));
         choice->setCheckable(true);
@@ -289,8 +297,10 @@ void MainWindow::rememberTree()
     };
     visit({});
     const QModelIndex current = tree_->currentIndex();
-    selectedPath_ = current.data(DeviceModel::PathRole).toString();
-    selectedGeneration_ = current.data(DeviceModel::GenerationRole).toULongLong();
+    selectedNodeKey_ = current.data(DeviceModel::NodeKeyRole).toString();
+    const QModelIndex target = propertyTarget(current);
+    selectedPath_ = target.data(DeviceModel::PathRole).toString();
+    selectedGeneration_ = target.data(DeviceModel::GenerationRole).toULongLong();
 }
 void MainWindow::restoreTree()
 {
@@ -304,7 +314,9 @@ void MainWindow::restoreTree()
         }
     };
     visit({});
-    const QModelIndex selected = filter_->mapFromSource(model_->findDevice(selectedPath_, selectedGeneration_));
+    QModelIndex source = model_->findNode(selectedNodeKey_, selectedPath_, selectedGeneration_);
+    if (!source.isValid()) source = model_->findDevice(selectedPath_, selectedGeneration_);
+    const QModelIndex selected = filter_->mapFromSource(source);
     if (selected.isValid()) {
         for (QModelIndex parent = selected.parent(); parent.isValid(); parent = parent.parent())
             tree_->setExpanded(parent, true);
@@ -320,7 +332,7 @@ void MainWindow::updateStatus()
 {
     if (closing_) return;
     propertiesAction_->setEnabled(tree_->currentIndex().data(DeviceModel::NodeKeyRole).toString() == "computer"
-        || !tree_->currentIndex().data(DeviceModel::PathRole).toString().isEmpty());
+        || !propertyTarget(tree_->currentIndex()).data(DeviceModel::PathRole).toString().isEmpty());
     if (busy_) { statusBar()->showMessage(tr("Refreshing devices…")); return; }
     QString message = tr("%1 shown / %2 discovered").arg(filter_->visibleCount()).arg(model_->inventoryCount());
     if (filter_->active() && deepSearch_->isChecked()) {
@@ -362,7 +374,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 void MainWindow::openProperties()
 {
     if (closing_) return;
-    const QModelIndex index = tree_->currentIndex();
+    const QModelIndex index = propertyTarget(tree_->currentIndex());
     if (index.data(DeviceModel::NodeKeyRole).toString() == "computer") {
         openSystemInformation();
         return;

@@ -5,6 +5,9 @@
 #include <QString>
 #include <QVector>
 #include <QSet>
+#include <memory>
+
+struct DeviceResources;
 
 enum class ReadState { Available, Unavailable, PermissionDenied, Removed, Error, Unsupported, NotApplicable };
 struct Attribute {
@@ -33,6 +36,7 @@ struct Device {
     QString incarnation;      // Directory identity plus optional udev initialization stamp.
     quint64 generation = 0;   // Assigned by the GUI's inventory reconciliation.
     bool hidden = false;
+    std::shared_ptr<const DeviceResources> resources; // Immutable resource snapshot; worker-collected.
 };
 
 struct Inventory {

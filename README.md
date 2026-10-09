@@ -4,9 +4,9 @@ A lightweight Linux hardware viewer using C++17, Qt6 Widgets and libudev,
 with a conventional desktop interface inspired by Windows Device Manager.
 Licensed under GPLv3 (see LICENSE).
 
-## Current scope: Phase 4
+## Current scope: Phase 5
 
-Five live inventory views (see below), a read-only **Refresh (F5)** action, selection, themed icons,
+Five live device inventory views and two resource views (see below), a read-only **Refresh (F5)** action, selection, themed icons,
 and persistent window geometry, toolbar visibility and visibility settings.
 Categories start collapsed on every launch; expansion is preserved during
 refreshes and visibility changes within the running session. Run as a normal user; no daemon, device-management
@@ -138,9 +138,10 @@ Properties are collected on demand in one dedicated worker; opening another
 record closes the previous dialog and supersedes its request. No hardware changes
 are available. Reload properties rereads the same instance. F5 still refreshes
 only the inventory. A removed/replaced device retains a visibly marked snapshot
-and disables Reload when detected by a property read or successful F5 refresh.
-Live hotplug detection belongs to Phase 4; unplug/replug entirely between reads
-may still escape detection under the existing instance-tracking limitations.
+and disables Reload when detected by a property read or accepted inventory update.
+Live removal events distinguish unplug/replug at the same path; detected event loss
+invalidates previous identities conservatively. Kernel observations remain snapshots,
+and undetected event loss can still limit instance tracking.
 
 UEFI Details includes a hex/ASCII dump of the first **64 KiB** of the complete
 variable file, including its attribute prefix, with an explicit truncation notice
@@ -225,7 +226,7 @@ A user-supplied HP laptop diagnostic dump was inspected offline: 16 logical
 Intel Core Ultra X7 358H CPUs, one PCI Wi-Fi adapter plus `wlo1`, and one PCI
 NVMe controller plus `nvme0`. See [doc/discovery-notes.md](doc/discovery-notes.md).
 This is evidence from the dump, not a runtime application test. GUI/category
-acceptance still requires real-machine testing. Later phases cover additional resources, storage metadata and narrowly authorized operations.
+acceptance still requires real-machine testing. Later phases cover storage metadata and narrowly authorized operations.
 
 Relevant API/design references:
 - https://www.kernel.org/doc/html/latest/admin-guide/sysfs-rules.html
@@ -234,7 +235,7 @@ Relevant API/design references:
 
 ## Alternative tree views
 
-All five views have one computer root labelled with the local hostname
+All seven views have one computer root labelled with the local hostname
 (`This computer` if unavailable). It starts expanded; the existing view contents
 start collapsed. Root expansion is retained per view within the session.
 The root remains visible when filtering finds no devices and is excluded from
@@ -338,3 +339,40 @@ invalidates old identities. Monitoring recovery retries automatically; its statu
 is visible. A 30-second reconciliation also catches silent drift and EFI directory
 changes. F5 remains available throughout and never rescans a hardware bus.
 No subprocess, elevation, extra library or hardware-management action is added.
+
+## Resource views
+
+View → Resources by type groups reported assignments as resource kind → device →
+assignment. View → Resources by connection follows actual inventory parent links,
+with assignment rows under their reporting devices. Both retain the hostname root,
+use the existing virtual/internal visibility setting, and preserve selection and
+expansion during live updates. Connection ancestors are retained for context; they
+do not acquire their children's assignments. Devices with no supported resource
+information are omitted unless needed as ancestors. A resource kind appears only
+when an assignment or explicit read/parse error is available.
+
+The current collector covers PCI memory/MMIO and I/O ranges, BAR slots, expansion
+ROM/bridge resources, reported IRQs and every readable MSI/MSI-X vector. PnP metadata
+also supplies IRQs, DMA channels and bus/address ranges where the kernel exposes
+them. Unassigned, disabled, zeroed/masked and restricted observations retain their
+explicit states. Unsupported buses do not receive guessed parent resources or
+Windows-only resource categories.
+
+The tree and device Resources tab use the same native collector and formatter,
+including documented flags, allocation states and source attribution. Tree resource
+snapshots are collected in the existing inventory worker, refreshed by live events,
+F5 and periodic reconciliation. The tab collects its own snapshot on opening or
+Reload, so observations made at different times may differ. No additional worker,
+external utility, permission change or PCI BAR-content access is added.
+
+Double-click or Properties on an assignment opens its reporting device's dialog.
+Resource rows are not extra devices: shown counts and deep-search inputs count each
+visible device once even when it occurs under multiple resource types. Ordinary
+filtering matches assignment captions/settings as well as device names; deep search
+uses the existing metadata collector. Tooltips identify the reporting device and
+source. The chosen view persists across launches, with the root expanded and other
+branches initially collapsed.
+
+Shared interrupts and overlapping ranges are reported without asserting exclusive
+ownership or conflicts. No global /proc entry is attributed by a device-name guess;
+these views currently use directly associated PCI/PnP sysfs metadata only.

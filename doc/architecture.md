@@ -416,3 +416,39 @@ verified only.
 API references:
 - https://www.freedesktop.org/software/systemd/man/latest/udev_monitor_receive_device.html
 - https://doc.qt.io/qt-6/qabstractitemmodel.html#beginMoveRows
+
+## Phase 5: resource projections
+
+The existing enumerator collects bounded PCI/PnP resource metadata relative to a
+pinned device directory between the existing before/after instance checks. Each
+Device holds an immutable shared DeviceResources value snapshot; no filesystem
+access moves to the model. Resource changes participate in metadata comparison,
+so live/F5/periodic snapshots update assignment rows even if a device label and
+generation remain unchanged. Properties retains its independently timed collection.
+
+resourceformat is a Qt Core-only formatter shared by the Resources tab and both
+resource projections. It preserves the existing translation context and tab text,
+exposes untranslated group IDs, and supplies stable row keys based on source/type/
+slot/range/mode with duplicate suffixes. Presentation never claims exclusive
+ownership or a conflict from shared IRQs, range overlaps or resource flags.
+
+Resources by type gives each type its own device membership node; their expansion
+keys are distinct, while record identity remains path plus generation. Resources by
+connection closes resource-bearing eligible devices over real inventoried parents.
+Hidden context ancestors retain record identity, while hidden assignments follow
+the internal-device setting. Unsupported/missing resource information contributes
+no manufactured ranges. Error observations remain visible in a metadata group/row.
+
+Assignment nodes have ResourceRole and separate owner-path/generation roles, but
+no PathRole/GenerationRole device identity. UI actions target their direct device
+parent, validated through the current model generation. Node-key restoration keeps
+an assignment selection when it still exists and falls back to the reporting
+device after its assignment changes; replacing that instance invalidates both.
+Unique paths deduplicate model/proxy counts and deep-search inputs across repeated
+type memberships. Name filtering also accepts assignment text and recursively
+retains its reporting device and ancestors. View changes read no metadata.
+
+Source-level/fixture coverage includes shared formatting, multiple type membership,
+resource-text filtering, actual hidden ancestry, snapshot equality, hot removal,
+and generation-safe assignment ownership/selection. No build or GUI test is run
+for this delivery.

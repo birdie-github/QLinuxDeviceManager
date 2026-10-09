@@ -1,3 +1,4 @@
+#include "resourceformat.h"
 #include "propertiesdialog.h"
 #include "devicelabel.h"
 #include <QApplication>
@@ -249,51 +250,8 @@ void PropertiesDialog::rebuildResources()
     };
     if (!data.pnpState.isEmpty())
         copy.append(tr("PnP device state: %1").arg(data.pnpState == "active" ? tr("Active") : tr("Disabled")));
-    for (const DeviceResource &resource : data.items) {
-        QString type;
-        switch (resource.type) {
-        case DeviceResource::Type::Memory: type = tr("Memory range"); break;
-        case DeviceResource::Type::Io: type = tr("I/O range"); break;
-        case DeviceResource::Type::Irq: type = tr("IRQ"); break;
-        case DeviceResource::Type::Dma: type = tr("DMA channel"); break;
-        case DeviceResource::Type::Bus: type = tr("Bus range"); break;
-        }
-        QString setting;
-        switch (resource.allocation) {
-        case DeviceResource::Allocation::Assigned:
-            if (resource.type == DeviceResource::Type::Irq || resource.type == DeviceResource::Type::Dma)
-                setting = QString::number(resource.start);
-            else {
-                const int width = resource.type == DeviceResource::Type::Memory ? 16 : 4;
-                setting = QStringLiteral("%1 – %2").arg(resource.start, width, 16, QLatin1Char('0'))
-                    .arg(resource.end, width, 16, QLatin1Char('0')).toUpper();
-            }
-            break;
-        case DeviceResource::Allocation::Unassigned: setting = tr("Unassigned"); break;
-        case DeviceResource::Allocation::Disabled: setting = tr("Disabled"); break;
-        case DeviceResource::Allocation::Unavailable: setting = tr("Address unavailable (zeroed or masked)"); break;
-        }
-        QStringList details;
-        if (resource.pci) {
-            if (resource.index < 6) details.append(tr("BAR %1").arg(resource.index));
-            else if (resource.index == 6) details.append(tr("Expansion ROM"));
-            else details.append(tr("PCI resource %1").arg(resource.index));
-        }
-        // Decode only stable flags; never interpret overlap or BUSY as a conflict.
-        if (resource.flags & 0x00002000) details.append(tr("Prefetchable"));
-        if (resource.flags & 0x00004000) details.append(tr("Read-only"));
-        if (resource.flags & 0x00100000) details.append(tr("64-bit memory"));
-        if (resource.flags & 0x00200000) details.append(tr("Bridge window"));
-        if (resource.pci)
-            details.append(tr("Flags: %1").arg(QStringLiteral("0x%1").arg(resource.flags, 0, 16)));
-        if (resource.mode == "msi") details.append(QStringLiteral("MSI"));
-        else if (resource.mode == "msix") details.append(QStringLiteral("MSI-X"));
-        else if (resource.mode == "reported") details.append(tr("Reported irq attribute; active mode not established"));
-        if (data.pnpState == "disabled") details.append(tr("PnP device disabled"));
-        row(type, setting, details.join("; "), resource.source);
-    }
-    for (const ResourceIssue &problem : data.issues)
-        row(tr("Resource metadata"), propertyReadValue(problem.error), tr("Read or parse failed"), problem.source);
+    for (const ResourceRow &entry : resourceRows(data))
+        row(entry.type, entry.setting, entry.details, entry.source);
     resourcesText_ = copy.join("\n\n");
 }
 void PropertiesDialog::copyResources(bool selectedOnly)

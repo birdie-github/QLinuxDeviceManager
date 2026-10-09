@@ -78,6 +78,7 @@ private:
     bool closing_ = false;
     QSet<QString> expanded_;
     QString selectedPath_;
+    QString selectedNodeKey_;
     quint64 selectedGeneration_ = 0;
     QString scanNote_;
 };

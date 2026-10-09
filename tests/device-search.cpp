@@ -1,6 +1,7 @@
 #include "devicesearch.h"
 #include "devicefilter.h"
 #include "devicemodel.h"
+#include "resourceformat.h"
 #include <QCoreApplication>
 #include <cstdio>
 #include <QPersistentModelIndex>
@@ -194,5 +195,94 @@ int main(int argc, char **argv)
         model.setInventory({renamed, child, usb});
         check(stable.isValid() && model.visibleCount() == 3, "Addition retains unrelated rows in every projection");
     }
+    // Resource projections share formatting, retain real ancestry and count
+    // unique devices rather than vectors, ranges or repeated type memberships.
+    auto resources = std::make_shared<DeviceResources>();
+    DeviceResource vector;
+    vector.type = DeviceResource::Type::Irq;
+    vector.start = vector.end = 121;
+    vector.mode = "msix";
+    vector.source = pci.path + "/msi_irqs/121";
+    resources->items.append(vector);
+    DeviceResource memory;
+    memory.type = DeviceResource::Type::Memory;
+    memory.start = 0x80000000;
+    memory.end = 0x80000fff;
+    memory.index = 0;
+    memory.pci = true;
+    memory.flags = 0x00102200;
+    memory.source = pci.path + "/resource";
+    resources->items.append(memory);
+    const auto formatted = resourceRows(*resources);
+    check(formatted.size() == 2 && formatted.at(0).setting == "121"
+          && formatted.at(0).details.contains("MSI-X") && formatted.at(1).details.contains("BAR 0")
+          && formatted.at(1).details.contains("Prefetchable"), "Shared resource formatter preserves vectors/BAR flags");
+    Device bus = pci;
+    bus.path = "/sys/devices/pci-root";
+    bus.name = "Real parent context";
+    bus.hidden = true;
+    bus.resources.reset();
+    pci.resources = resources;
+    pci.parentPath = bus.path;
+    auto childResources = std::make_shared<DeviceResources>(*resources);
+    for (auto &entry : childResources->items)
+        entry.source.replace(pci.path, child.path);
+    child.resources = childResources;
+    // Shared IRQ/range evidence stays on both devices, without conflict inference.
+    model.setInventory({bus, pci, child, usb});
+    model.setView(DeviceModel::View::ResourcesByType);
+    check(model.rowCount(model.index(0, 0)) == 2 && model.visibleCount() == 2
+          && model.searchRecords().size() == 2 && filter.visibleCount() == 2,
+          "Type view groups memory/IRQ while deduplicating device counts and search inputs");
+    pciGeneration = currentGeneration(pci.path);
+    auto resourceOwner = model.findDevice(pci.path, pciGeneration);
+    auto resourceIndex = model.index(0, 0, resourceOwner);
+    check(resourceIndex.data(DeviceModel::ResourceRole).toBool()
+          && !resourceIndex.data(DeviceModel::PathRole).isValid()
+          && resourceIndex.data(DeviceModel::OwnerPathRole).toString() == pci.path
+          && resourceIndex.data(DeviceModel::OwnerGenerationRole).toULongLong() == pciGeneration,
+          "Resource rows carry an instance-scoped owner without becoming device records");
+    const QString resourceKey = resourceIndex.data(DeviceModel::NodeKeyRole).toString();
+    QPersistentModelIndex stableResource(resourceIndex);
+    Device cloned = pci;
+    cloned.resources = std::make_shared<const DeviceResources>(*resources);
+    check(!model.setInventory({bus, cloned, child, usb}) && stableResource.isValid(),
+          "Equivalent owned resource snapshots do not rebuild the model");
+    check(model.findNode(resourceKey, pci.path, pciGeneration).isValid(),
+          "Resource selection restores its exact node by device generation");
+    auto changedResources = std::make_shared<DeviceResources>(*resources);
+    changedResources->items[0].start = changedResources->items[0].end = 122;
+    changedResources->items[0].source = pci.path + "/msi_irqs/122";
+    Device reassigned = pci;
+    reassigned.resources = changedResources;
+    QPersistentModelIndex sameOwner(resourceOwner);
+    check(model.setInventory({bus, reassigned, child, usb}) && sameOwner.isValid()
+          && !stableResource.isValid() && currentGeneration(pci.path) == pciGeneration,
+          "Resource-only changes update assignment rows without replacing the reporting device");
+    model.setInventory({bus, pci, child, usb});
+    filter.setQuery("121", false);
+    check(filter.visibleCount() == 2, "Name filtering finds resource settings and retains both shared owners");
+    filter.setQuery({}, false);
+    model.setView(DeviceModel::View::ResourcesByConnection);
+    resourceOwner = model.findDevice(pci.path, pciGeneration);
+    check(resourceOwner.parent().data(DeviceModel::PathRole).toString() == bus.path
+          && model.visibleCount() == 3 && model.searchRecords().size() == 3,
+          "Connection view retains real hidden ancestry and excludes unrelated no-resource devices");
+    childIndex = model.findDevice(child.path, currentGeneration(child.path));
+    check(childIndex.parent() == resourceOwner && model.rowCount(childIndex) == 2,
+          "Connection view follows recorded parents and adds direct resource children");
+    filter.setQuery("121", false);
+    check(filter.visibleCount() == 3, "Resource filtering retains connection-context ancestors");
+    filter.setQuery({}, false);
+    childGeneration = currentGeneration(child.path);
+    model.setInventory({bus, pci, usb});
+    check(model.visibleCount() == 2 && !model.findDevice(child.path, childGeneration).isValid(),
+          "Resource connection updates remove vanished records");
+    model.setView(DeviceModel::View::ResourcesByType);
+    resourceOwner = model.findDevice(pci.path, pciGeneration);
+    QPersistentModelIndex replacedResource(model.index(0, 0, resourceOwner));
+    model.setInventory({bus, pci, usb}, {pci.path});
+    check(!replacedResource.isValid() && !model.findNode(resourceKey, pci.path, pciGeneration).isValid(),
+          "A replaced device cannot inherit resource selection or an old owner generation");
     return failures ? 1 : 0;
 }

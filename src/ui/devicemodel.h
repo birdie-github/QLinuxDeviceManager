@@ -9,8 +9,10 @@
 class DeviceModel final : public QAbstractItemModel {
     Q_OBJECT
 public:
-    enum { PathRole = Qt::UserRole + 1, GenerationRole, CategoryRole, NodeKeyRole };
-    enum class View { Type, Connection, DevicesByDriver, DriversByDevice, DriversByType };
+    enum { PathRole = Qt::UserRole + 1, GenerationRole, CategoryRole, NodeKeyRole,
+           ResourceRole, OwnerPathRole, OwnerGenerationRole };
+    enum class View { Type, Connection, DevicesByDriver, DriversByDevice, DriversByType,
+                      ResourcesByType, ResourcesByConnection };
     View view() const { return view_; }
     void setView(View view);
     static QString viewId(View view);
@@ -27,6 +29,7 @@ public:
     std::optional<Device> device(const QString &path, quint64 generation) const;
     void setShowInternal(bool show);
     QModelIndex findDevice(const QString &path, quint64 generation) const;
+    QModelIndex findNode(const QString &key, const QString &path, quint64 generation) const;
     QVector<SearchRecord> searchRecords() const;
     int visibleCount() const { return visible_; }
     int inventoryCount() const { return static_cast<int>(devices_.size()); }
@@ -40,6 +43,8 @@ private:
         quint64 generation = 0; // Projection identity; replacements are removed/inserted.
         QString path; // Record lookup ID, never a pointer into inventory storage.
         QString label; // GUI-translated display text, rebuilt with the inventory.
+        QString ownerPath; // Resource rows target this device, but are not device records.
+        QString description; // Plain resource metadata/provenance for tooltips.
         std::vector<std::unique_ptr<Node>> children;
     };
     Node *node(const QModelIndex &index) const;

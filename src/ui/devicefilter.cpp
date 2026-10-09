@@ -37,9 +37,11 @@ bool DeviceFilter::filterAcceptsRow(int row, const QModelIndex &parent) const
     if (!active()) return true;
     const QModelIndex index = sourceModel()->index(row, 0, parent);
     if (index.data(DeviceModel::NodeKeyRole).toString() == "computer") return true;
+    if (index.data(DeviceModel::ResourceRole).toBool()
+        && index.data(Qt::DisplayRole).toString().contains(query_, Qt::CaseInsensitive)) return true;
     const QString path = index.data(DeviceModel::PathRole).toString();
     if (path.isEmpty()) {
-        // Keep driver/module relationship children when their device matches.
+        // Keep driver/module/resource children when their reporting device matches.
         for (QModelIndex owner = parent; owner.isValid(); owner = owner.parent()) {
             const QString ownerPath = owner.data(DeviceModel::PathRole).toString();
             if (ownerPath.isEmpty()) continue;
@@ -57,16 +59,17 @@ bool DeviceFilter::filterAcceptsRow(int row, const QModelIndex &parent) const
 }
 int DeviceFilter::visibleCount() const
 {
-    int count = 0;
+    QSet<QString> paths;
     std::function<void(const QModelIndex &)> visit = [&](const QModelIndex &parent) {
         for (int row = 0; row < rowCount(parent); ++row) {
             const QModelIndex child = index(row, 0, parent);
-            if (!child.data(DeviceModel::PathRole).toString().isEmpty()) ++count;
+            const QString path = child.data(DeviceModel::PathRole).toString();
+            if (!path.isEmpty()) paths.insert(path);
             visit(child);
         }
     };
     visit({});
-    return count;
+    return static_cast<int>(paths.size());
 }
 QString DeviceFilter::matchReason(const QModelIndex &index) const
 {

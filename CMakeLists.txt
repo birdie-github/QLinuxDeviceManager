@@ -26,6 +26,7 @@ add_executable(qlinuxdevicemanager
     src/devices/monitorstate.h src/devices/monitorstate.cpp
     src/devices/deviceproperties.h src/devices/deviceproperties.cpp
     src/devices/deviceresources.h src/devices/deviceresources.cpp
+    src/devices/resourceformat.h src/devices/resourceformat.cpp
     src/devices/cpumetadata.h src/devices/cpumetadata.cpp
     src/devices/functionnames.h src/devices/functionnames.cpp
     src/devices/devicelabel.h src/devices/devicelabel.cpp
@@ -97,6 +98,7 @@ if(BUILD_TESTING)
         src/devices/device.cpp src/devices/device.h
         src/devices/devicelabel.cpp src/devices/devicelabel.h
         src/devices/propertytext.cpp src/devices/propertytext.h
+        src/devices/resourceformat.cpp src/devices/resourceformat.h
         src/devices/efivariables.cpp src/devices/efivariables.h
         src/devices/functionnames.cpp src/devices/functionnames.h
         src/ui/devicemodel.cpp src/ui/devicemodel.h

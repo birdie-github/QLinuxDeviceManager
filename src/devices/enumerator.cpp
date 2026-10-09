@@ -16,6 +16,7 @@
 #include <poll.h>
 #include <QElapsedTimer>
 #include "monitorstate.h"
+#include "deviceresources.h"
 
 namespace {
 QString text(const char *value)
@@ -155,6 +156,20 @@ Inventory Enumerator::collect()
             d.attributes.insert("manufacturer", readAttribute(d.path + "/manufacturer"));
         }
         if (!attribute.isEmpty()) d.attributes.insert(attribute, readAttribute(d.path + '/' + attribute));
+        if (d.subsystem == "pci" || d.subsystem == "pnp") {
+            DeviceResources resources;
+            const int fd = open(path.constData(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+            if (fd >= 0) {
+                resources = collectDeviceResources(fd, d);
+                close(fd);
+            } else {
+                const int error = errno;
+                resources.issues.append({d.path, {error == EACCES || error == EPERM
+                    ? ReadState::PermissionDenied : error == ENOENT ? ReadState::Unavailable
+                    : error == ENODEV ? ReadState::Removed : ReadState::Error, {}, error}});
+            }
+            d.resources = std::make_shared<const DeviceResources>(std::move(resources));
+        }
         nameDevice(d);
         moduleNames.supplement(d);
         struct stat after {};
