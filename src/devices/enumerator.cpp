@@ -2,6 +2,7 @@
 #include "cpumetadata.h"
 #include "devicepresentation.h"
 #include "modulenames.h"
+#include "efivariables.h"
 
 #include <libudev.h>
 #include <memory>
@@ -165,5 +166,6 @@ void Enumerator::run()
         result.devices.append(std::move(d));
     }
     if (!isInterruptionRequested()) refinePresentation(result.devices);
+    if (!isInterruptionRequested()) appendEfiVariables(result);
     finish();
 }

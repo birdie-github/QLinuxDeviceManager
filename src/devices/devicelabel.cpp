@@ -1,4 +1,5 @@
 #include "devicelabel.h"
+#include "efivariables.h"
 #include <QCoreApplication>
 #include <QRegularExpression>
 #include <QStringList>
@@ -105,6 +106,10 @@ bool isAudioJackSwitch(const Device &d)
 }
 QString deviceDisplayName(const Device &d, bool includeIdentifiers)
 {
+    if (d.subsystem == "efivarfs") {
+        const QString label = efiVariableLabel(d.name);
+        return includeIdentifiers ? label + QStringLiteral(" [%1]").arg(d.properties.value("EFI_VENDOR_GUID")) : label;
+    }
     QString label = friendlyLabel(d);
     if (!label.isEmpty())
         return includeIdentifiers ? label + QStringLiteral(" [%1]").arg(d.sysname) : label;

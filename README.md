@@ -62,6 +62,19 @@ switches appear as internal audio records rather than ordinary HID devices.
 Raw names and kernel identifiers remain in tooltips. Repeated friendly labels
 receive identifiers to distinguish them; Show internal devices includes IDs.
 
+**UEFI variables** lists regular files with the world-read permission bit set
+under `/sys/firmware/efi/efivars`. This is a separate firmware category, not a
+claim that variables are hardware devices. Enumeration reads directory entries
+and file metadata only; variable contents are not opened, parsed or cached.
+Concatenated filename words are separated for display. Original names remain
+in tooltips, and namespace GUIDs/full filenames appear only with Show internal
+devices enabled. Equal names in different namespaces retain separate rows with
+numbered namespace labels. Restricted files remain excluded even when running
+as root or showing internal devices. Missing/inaccessible efivarfs yields no
+category; this does not prevent ordinary device discovery. Permission bits do
+not guarantee that another security policy will permit a future value read.
+Hex dumps in a future properties view are not implemented yet.
+
 Application categories are deterministic groupings, not kernel device classes:
 
 | Records | Group and default visibility |

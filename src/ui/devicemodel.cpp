@@ -55,9 +55,11 @@ QVariant DeviceModel::data(const QModelIndex &i, int role) const
         if (!d) return categoryLabel(n->category).toHtmlEscaped();
         // Escaping prevents device-controlled strings being interpreted as markup.
         QString tooltip = QStringLiteral("%1\n%2\n%3: %4\n%5: %6")
-            .arg(n->label, d->path, tr("Subsystem"), d->subsystem, tr("Raw name source"), d->nameSource);
+            .arg(n->label, d->subsystem == "efivarfs" && !showInternal_ ? d->parentPath : d->path,
+                 tr("Subsystem"), d->subsystem, tr("Raw name source"), d->nameSource);
         tooltip += QStringLiteral("\n%1: %2\n%3: %4")
-            .arg(tr("Raw name"), d->name, tr("Kernel name"), d->sysname);
+            .arg(tr("Raw name"), d->name, tr("Kernel name"),
+                 d->subsystem == "efivarfs" && !showInternal_ ? d->name : d->sysname);
         if (d->subsystem == "power_supply") {
             for (const char *key : {"type", "manufacturer", "model_name"}) {
                 const auto attribute = d->attributes.value(QLatin1String(key));
@@ -110,9 +112,14 @@ void DeviceModel::rebuild()
             labels.insert(d->path, label);
             ++counts[label];
         }
-        for (const Device *d : members)
-            if (counts.value(labels.value(d->path)) > 1)
-                labels[d->path] = deviceDisplayName(*d, true);
+        QHash<QString, int> namespaceNumbers;
+        for (const Device *d : members) {
+            const QString label = labels.value(d->path);
+            if (counts.value(label) <= 1) continue;
+            if (d->subsystem == "efivarfs" && !showInternal_)
+                labels[d->path] = tr("%1 (namespace %2)").arg(label).arg(++namespaceNumbers[label]);
+            else labels[d->path] = deviceDisplayName(*d, true);
+        }
         std::sort(members.begin(), members.end(), [&labels](const Device *a, const Device *b) {
             const int cmp = QString::compare(labels.value(a->path), labels.value(b->path), Qt::CaseInsensitive);
             return cmp == 0 ? a->path < b->path : cmp < 0;

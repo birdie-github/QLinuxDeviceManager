@@ -26,6 +26,7 @@ add_executable(qlinuxdevicemanager
     src/devices/cpumetadata.h src/devices/cpumetadata.cpp
     src/devices/functionnames.h src/devices/functionnames.cpp
     src/devices/devicelabel.h src/devices/devicelabel.cpp
+    src/devices/efivariables.h src/devices/efivariables.cpp
     src/devices/modulenames.h src/devices/modulenames.cpp
     src/devices/devicepresentation.h src/devices/devicepresentation.cpp
     src/ui/devicemodel.h src/ui/devicemodel.cpp
@@ -65,6 +66,7 @@ if(BUILD_TESTING)
         src/devices/cpumetadata.cpp src/devices/cpumetadata.h
         src/devices/functionnames.cpp src/devices/functionnames.h
         src/devices/devicelabel.cpp src/devices/devicelabel.h
+        src/devices/efivariables.cpp src/devices/efivariables.h
         src/devices/devicepresentation.cpp src/devices/devicepresentation.h)
     target_include_directories(device-rules-test PRIVATE src/devices)
     target_link_libraries(device-rules-test PRIVATE Qt6::Widgets)

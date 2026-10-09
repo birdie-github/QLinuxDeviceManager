@@ -23,6 +23,7 @@ const QVector<Category> &categories()
         {"storage", QT_TRANSLATE_NOOP("Categories", "Storage controllers"), "drive-harddisk"},
         {"system", QT_TRANSLATE_NOOP("Categories", "System devices"), "computer"},
         {"usb", QT_TRANSLATE_NOOP("Categories", "USB controllers and devices"), "drive-removable-media-usb"},
+        {"efi", QT_TRANSLATE_NOOP("Categories", "UEFI variables"), "preferences-system"},
         {"other", QT_TRANSLATE_NOOP("Categories", "Other devices"), "preferences-system"}
     };
     return list;

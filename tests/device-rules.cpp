@@ -4,6 +4,7 @@
 #include "devicepresentation.h"
 #include "functionnames.h"
 #include "devicelabel.h"
+#include "efivariables.h"
 #include <cstdio>
 
 static int failures = 0;
@@ -350,5 +351,30 @@ int main()
     jack.properties.insert("ID_INPUT_KEYBOARD", "1");
     classify(jack);
     check(jack.category == "keyboard" && !jack.hidden, "Mixed keyboard input must remain visible despite an audio-like name");
+    QString efiName, efiGuid;
+    check(splitEfiVariableFilename("BootCurrent-8BE4DF61-93CA-11D2-AA0D-00E098032B8C", efiName, efiGuid)
+          && efiName == "BootCurrent" && efiGuid == "8be4df61-93ca-11d2-aa0d-00e098032b8c",
+          "EFI filenames must separate the complete namespace GUID from the original variable name");
+    check(efiVariableLabel(efiName) == "Boot Current" && efiVariableLabel("Boot000A") == "Boot 000A"
+          && efiVariableLabel("SecureBoot") == "Secure Boot" && efiVariableLabel("PKDefault") == "PK Default",
+          "EFI labels must split concatenated words while preserving acronyms and entry identifiers");
+    check(efiVariableLabel("WiMAXModuleID") == "WiMAX Module ID"
+          && efiVariableLabel("OfflineUniqueIDEKPubCRC") == "Offline Unique ID EK Pub CRC"
+          && efiVariableLabel("LoaderDevicePartUUID") == "Loader Device Part UUID"
+          && efiVariableLabel("AMITCGPPIVAR") == "AMITCGPPIVAR"
+          && efiVariableLabel("EDID1Nv") == "EDID1 Nv"
+          && efiVariableLabel("SmbiosV3EntryPointTable") == "Smbios V3 Entry Point Table",
+          "EFI word boundaries must preserve mixed-case terms and capital runs without swallowing ID or version boundaries");
+    check(splitEfiVariableFilename("Vendor-Setting-8be4df61-93ca-11d2-aa0d-00e098032b8c", efiName, efiGuid)
+          && efiName == "Vendor-Setting", "Variable names may themselves contain hyphens");
+    check(!splitEfiVariableFilename("BootCurrent-not-a-guid", efiName, efiGuid)
+          && efiName.isEmpty() && efiGuid.isEmpty(), "Malformed EFI filenames must not retain stale metadata");
+    Device efiVariable;
+    efiVariable.subsystem = "efivarfs";
+    efiVariable.name = "BootCurrent";
+    efiVariable.properties.insert("EFI_VENDOR_GUID", "8be4df61-93ca-11d2-aa0d-00e098032b8c");
+    check(deviceDisplayName(efiVariable) == "Boot Current"
+          && deviceDisplayName(efiVariable, true).contains(efiVariable.properties.value("EFI_VENDOR_GUID")),
+          "GUIDs must stay out of default labels and remain available in the internal view");
     return failures ? 1 : 0;
 }

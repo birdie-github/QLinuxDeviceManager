@@ -88,3 +88,31 @@ References:
 - https://github.com/kmod-project/kmod/blob/master/libkmod/libkmod.h
 - https://github.com/open-acpica/acpica/blob/master/source/common/ahids.c
 - https://github.com/torvalds/linux/blob/master/sound/hda/core/sysfs.c
+
+## UEFI variable directory inventory
+
+`efivariables` adds metadata-only records after ordinary udev presentation
+refinement. The worker opens the fixed efivarfs directory without following a
+directory symlink, examines at most 4096 entries and checks interruption between
+entries. `fstatat` without symlink following accepts only regular files with
+S_IROTH set. It never opens a variable value, reads a firmware runtime service,
+mounts efivarfs or changes permissions. The public-file filter is independent
+of effective UID and the internal-device toggle.
+
+Each record retains its full filename/path as its inventory identity and its
+GUID as owned metadata. Names must end in a complete canonical-format GUID;
+the preceding original variable name is retained verbatim. The display formatter
+separates word/acronym boundaries and separators, preserves standard mixed-case
+terms such as WiMAX, NVMe and PCIe, and keeps unknown capital runs intact. ID is
+separated at word boundaries and in the known IDEK compound; EDID, UUID and IDLE
+remain whole rather than applying an arbitrary split to every ID substring.
+It assigns no semantic meaning to vendor variables. Tooltips suppress GUID-bearing filenames and paths
+unless the internal view is enabled. Equal display names are disambiguated with
+namespace ordinals in path order; these ordinals are presentation labels, not
+firmware namespace identifiers. The existing incarnation/generation rules apply
+to variable records, and inventory totals now include firmware-variable rows.
+
+Directory enumeration is not an atomic firmware snapshot. Entries may disappear
+or change permissions concurrently; refresh reconciles the observed metadata.
+Read-only hex inspection in properties would require a separate bounded value
+reader that rechecks access and identity, but is outside this change.
