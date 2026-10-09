@@ -358,17 +358,17 @@ int main(int argc, char **argv)
     storageSnapshot.values.insert("udev/ID_FS_UUID", {ReadState::Available, "uuid", 0});
     storageSnapshot.device.properties.insert("DM_UUID", "dm-uuid");
     storageSnapshot.device.attributes.insert("size", {ReadState::Available, "2", 0});
-    int storageEntries = 0;
+    int excludedStorageEntries = 0;
     for (const PropertyEntry &entry : propertyEntries(storageSnapshot)) {
         if (entry.tab == 3 || entry.id == "udev/ID_FS_UUID" || entry.id == "inventory/DM_UUID"
             || entry.id == "inventory/sysfs/size") {
-            ++storageEntries;
+            ++excludedStorageEntries;
             check(!isDetailsProperty(entry, storageDevice), "Storage fields never enter Details, including advanced fields");
         }
         if (entry.id == "name" || entry.id == "module/type")
             check(isDetailsProperty(entry, storageDevice), "Generic device and driver properties remain in Details");
     }
-    check(storageEntries > 3, "Details exclusion fixture exercises storage and raw metadata");
+    check(excludedStorageEntries > 3, "Details exclusion fixture exercises storage and raw metadata");
     check(isDetailsProperty({"udev/ID_SERIAL", "Serial", "value", {}, true, 2}, device),
           "Raw non-storage device identity remains available");
     return failures ? 1 : 0;
