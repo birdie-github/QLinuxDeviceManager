@@ -78,7 +78,8 @@ void appendEfiVariables(Inventory &inventory)
     if (fd < 0) return; // EFI/efivarfs may be absent or unavailable to this account.
     DIR *raw = fdopendir(fd);
     if (!raw) { close(fd); return; }
-    std::unique_ptr<DIR, decltype(&closedir)> entries(raw, &closedir);
+    const auto closeDirectory = [](DIR *directory) { closedir(directory); };
+    std::unique_ptr<DIR, decltype(closeDirectory)> entries(raw, closeDirectory);
     QVector<Device> variables;
     int examined = 0;
     while (!QThread::currentThread()->isInterruptionRequested()) {
