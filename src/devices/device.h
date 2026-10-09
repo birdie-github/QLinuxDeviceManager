@@ -5,7 +5,7 @@
 #include <QString>
 #include <QVector>
 
-enum class ReadState { Available, Unavailable, PermissionDenied, Removed, Error };
+enum class ReadState { Available, Unavailable, PermissionDenied, Removed, Error, Unsupported, NotApplicable };
 struct Attribute {
     ReadState state = ReadState::Unavailable;
     QString value;

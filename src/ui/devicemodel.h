@@ -2,6 +2,7 @@
 #include "device.h"
 #include <QAbstractItemModel>
 #include <memory>
+#include <optional>
 #include <vector>
 
 class DeviceModel final : public QAbstractItemModel {
@@ -16,6 +17,7 @@ public:
     QVariant data(const QModelIndex &index, int role) const override;
     QVariant headerData(int section, Qt::Orientation orientation, int role) const override;
     void setInventory(QVector<Device> devices);
+    std::optional<Device> device(const QString &path, quint64 generation) const;
     void setShowInternal(bool show);
     QModelIndex findDevice(const QString &path, quint64 generation) const;
     int visibleCount() const { return visible_; }

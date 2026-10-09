@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 #include "devicemodel.h"
+#include "propertiesdialog.h"
 #include "projectmetadata.h"
 
 #include <QAction>
@@ -44,6 +45,23 @@ MainWindow::MainWindow()
     refreshAction_->setShortcut(QKeySequence(Qt::Key_F5));
     refreshAction_->setToolTip(tr("Re-enumerate existing kernel devices; does not rescan buses."));
     connect(refreshAction_, &QAction::triggered, this, &MainWindow::refresh);
+    propertiesAction_ = action->addAction(QIcon::fromTheme("document-properties",
+        style()->standardIcon(QStyle::SP_FileDialogInfoView)), tr("&Properties…"));
+    propertiesAction_->setShortcut(QKeySequence(Qt::ALT | Qt::Key_Return));
+    propertiesAction_->setEnabled(false);
+    connect(propertiesAction_, &QAction::triggered, this, &MainWindow::openProperties);
+    connect(tree_, &QTreeView::doubleClicked, this, [this](const QModelIndex &index) {
+        if (!index.data(DeviceModel::PathRole).toString().isEmpty()) openProperties();
+    });
+    tree_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(tree_, &QWidget::customContextMenuRequested, this, [this](const QPoint &position) {
+        const QModelIndex index = tree_->indexAt(position);
+        if (index.data(DeviceModel::PathRole).toString().isEmpty()) return;
+        tree_->setCurrentIndex(index);
+        QMenu menu(this);
+        menu.addAction(propertiesAction_);
+        menu.exec(tree_->viewport()->mapToGlobal(position));
+    });
     auto *view = menuBar()->addMenu(tr("&View"));
     internalAction_ = view->addAction(tr("Show &virtual and internal devices"));
     internalAction_->setCheckable(true);
@@ -76,6 +94,7 @@ MainWindow::MainWindow()
     toolbar->setObjectName("mainToolbar");
     toolbar->setIconSize(QSize(20, 20));
     toolbar->addAction(refreshAction_);
+    toolbar->addAction(propertiesAction_);
     view->addAction(toolbar->toggleViewAction());
     statusBar();
 
@@ -88,12 +107,15 @@ MainWindow::MainWindow()
     connect(tree_->selectionModel(), &QItemSelectionModel::currentChanged, this,
             [this](const QModelIndex &, const QModelIndex &) { updateStatus(); });
     connect(&worker_, &QThread::finished, this, &MainWindow::acceptInventory, Qt::QueuedConnection);
+    connect(&propertiesWorker_, &QThread::finished, this, &MainWindow::acceptProperties, Qt::QueuedConnection);
     QTimer::singleShot(0, this, &MainWindow::refresh);
 }
 MainWindow::~MainWindow()
 {
     worker_.requestInterruption();
+    propertiesWorker_.requestInterruption();
     worker_.wait(); // Fallback for destruction without a normal window close.
+    propertiesWorker_.wait();
 }
 void MainWindow::refresh()
 {
@@ -128,6 +150,16 @@ void MainWindow::acceptInventory()
     }
     rememberTree();
     model_->setInventory(std::move(inventory.devices));
+    if (propertiesDialog_) {
+        const Device &target = propertiesDialog_->device();
+        const auto current = model_->device(target.path, target.generation);
+        propertiesDialog_->reconcileInstance(current ? &*current : nullptr);
+        if (propertiesDialog_->isRemoved()) {
+            pendingProperties_.reset();
+            ++propertiesRequest_;
+            propertiesWorker_.requestInterruption();
+        }
+    }
     scanNote_ = inventory.skipped ? tr("%1 records unavailable or removed during enumeration").arg(inventory.skipped) : QString();
     restoreTree();
     updateStatus();
@@ -160,6 +192,7 @@ void MainWindow::restoreTree()
 void MainWindow::updateStatus()
 {
     if (closing_) return;
+    propertiesAction_->setEnabled(!tree_->currentIndex().data(DeviceModel::PathRole).toString().isEmpty());
     if (worker_.isRunning()) { statusBar()->showMessage(tr("Refreshing devices…")); return; }
     QString message = tr("%1 shown / %2 discovered").arg(model_->visibleCount()).arg(model_->inventoryCount());
     if (!scanNote_.isEmpty()) message += QStringLiteral(" — ") + scanNote_;
@@ -179,10 +212,73 @@ void MainWindow::closeEvent(QCloseEvent *event)
 {
     if (!closing_) saveSettings();
     closing_ = true;
-    if (worker_.isRunning()) {
+    pendingProperties_.reset();
+    if (worker_.isRunning() || propertiesWorker_.isRunning()) {
         worker_.requestInterruption();
+        propertiesWorker_.requestInterruption();
         setEnabled(false);
-        statusBar()->showMessage(tr("Waiting for device enumeration to finish…"));
+        statusBar()->showMessage(tr("Waiting for device metadata reads to finish…"));
         event->ignore(); // Keep the event loop alive; finished() closes the window.
     } else event->accept();
+}
+
+void MainWindow::openProperties()
+{
+    if (closing_) return;
+    const QModelIndex index = tree_->currentIndex();
+    const auto record = model_->device(index.data(DeviceModel::PathRole).toString(),
+                                      index.data(DeviceModel::GenerationRole).toULongLong());
+    if (!record) return;
+    if (propertiesDialog_ && propertiesDialog_->device().path == record->path
+        && propertiesDialog_->device().generation == record->generation) {
+        propertiesDialog_->show();
+        propertiesDialog_->raise();
+        propertiesDialog_->activateWindow();
+        return;
+    }
+    if (propertiesDialog_) propertiesDialog_->close();
+    auto *dialog = new PropertiesDialog(*record, this);
+    propertiesDialog_ = dialog;
+    connect(dialog, &PropertiesDialog::reloadRequested, this, &MainWindow::requestProperties);
+    connect(dialog, &QDialog::finished, this, [this, dialog] {
+        if (propertiesDialog_ != dialog) return;
+        propertiesDialog_.clear();
+        pendingProperties_.reset();
+        ++propertiesRequest_;
+        propertiesWorker_.requestInterruption();
+    });
+    dialog->show(); // Modeless: tree Refresh stays available while properties are open.
+    requestProperties();
+}
+void MainWindow::requestProperties()
+{
+    if (closing_ || !propertiesDialog_ || propertiesDialog_->isRemoved()) return;
+    pendingProperties_ = propertiesDialog_->device();
+    ++propertiesRequest_;
+    propertiesDialog_->setBusy(true);
+    if (propertiesBusy_) {
+        propertiesWorker_.requestInterruption();
+        return; // Only the latest pending request survives.
+    }
+    propertiesWorker_.setRequest(*pendingProperties_, propertiesRequest_);
+    pendingProperties_.reset();
+    propertiesBusy_ = true;
+    propertiesWorker_.start();
+}
+void MainWindow::acceptProperties()
+{
+    propertiesWorker_.wait(); // Join final thread-local cleanup before reusing it.
+    DeviceProperties result = propertiesWorker_.takeResult();
+    propertiesBusy_ = false;
+    if (closing_) { close(); return; }
+    if (pendingProperties_ && propertiesDialog_ && !propertiesDialog_->isRemoved()) {
+        propertiesWorker_.setRequest(*pendingProperties_, propertiesRequest_);
+        pendingProperties_.reset();
+        propertiesBusy_ = true;
+        propertiesWorker_.start();
+        return;
+    }
+    pendingProperties_.reset();
+    if (propertiesDialog_ && result.request == propertiesRequest_)
+        propertiesDialog_->acceptResult(std::move(result));
 }

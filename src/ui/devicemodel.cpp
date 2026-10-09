@@ -150,3 +150,10 @@ QModelIndex DeviceModel::findDevice(const QString &path, quint64 generation) con
             if (child->path == path) return createIndex(child->row, 0, child.get());
     return {};
 }
+
+std::optional<Device> DeviceModel::device(const QString &path, quint64 generation) const
+{
+    const auto it = lookup_.constFind(path);
+    if (it == lookup_.cend() || devices_.at(it.value()).generation != generation) return std::nullopt;
+    return devices_.at(it.value()); // Owned copy; callers never retain inventory pointers.
+}

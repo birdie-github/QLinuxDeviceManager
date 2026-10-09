@@ -114,5 +114,65 @@ to variable records, and inventory totals now include firmware-variable rows.
 
 Directory enumeration is not an atomic firmware snapshot. Entries may disappear
 or change permissions concurrently; refresh reconciles the observed metadata.
-Read-only hex inspection in properties would require a separate bounded value
-reader that rechecks access and identity, but is outside this change.
+The separate Phase 2 properties reader below provides bounded hex inspection
+with renewed permission and identity checks; enumeration remains metadata-only.
+
+## Phase 2: device properties
+
+`DeviceModel::device` returns an owned record copy matched by path and generation,
+including records hidden by the visibility filter. The modeless properties dialog
+holds that identity and never borrows a pointer into the inventory. Only one
+properties dialog is open at a time; opening another device closes the previous
+one. The tree and Refresh remain usable while a dialog is open.
+
+`PropertiesReader` is a second, window-owned worker, separate from enumeration.
+It reads properties only when Properties is opened or Reload properties is
+requested. There are at most two worker threads, one active properties request
+and one superseding pending request. Closing a dialog invalidates its request;
+late results cannot reach a subsequent dialog. Normal shutdown requests
+interruption and keeps the GUI event loop running until both workers finish.
+Already-running kernel reads and libkmod calls cannot be forcibly canceled.
+
+The properties reader pins the selected sysfs directory with a descriptor and
+checks its device/inode identity against the inventory. It also checks the udev
+initialization stamp, rechecks the path after collection and rejects a changed
+driver link. Documented direct driver/module links are followed explicitly;
+no ancestor binding is presented as the child's binding. This improves detection
+of observed replacement but is not an atomic kernel snapshot or a guarantee
+against every hotplug or driver-rebinding race. The Phase 1 inter-scan instance
+limitation still applies until Phase 4 adds udev monitoring.
+
+Collection produces raw `Attribute` values, provenance and bytes. The dialog
+alone translates labels, interprets presence/binding/USB authorization, and
+formats hex. Sysfs reads use a subsystem-specific allowlist of text metadata;
+there is no recursive scan, resource/MMIO access, SMART query or firmware method
+evaluation. Text values are limited to 4096 bytes; libkmod output is restricted
+to selected fields and at most 4096 metadata entries. Raw values and inventory
+naming provenance are available through advanced Details. The copy-all action
+includes only currently enabled basic/advanced properties and their sources.
+
+The Driver tab separates direct binding, owning module, running module version,
+and installed `.modinfo` values. A live/coming/going module initstate establishes
+modular code. Missing module links, versions or initstate do not establish a
+built-in driver; ambiguous cases remain undetermined. Installed versions,
+authors, licenses, descriptions and firmware declarations can differ from code
+already running after an update. Firmware declarations are filenames, not proof
+of loaded firmware or firmware versions. Libkmod remains optional; no subprocess,
+module insertion or removal is used. Other firmware revisions are shown only
+where directly reported by the selected device (currently NVMe).
+
+EFI value collection first checks the entry's identity, regular-file type and
+world-read bit, then repeats those checks on the opened descriptor. A final
+identity/permission check precedes publishing. This filter also applies to root.
+At most 65536 bytes plus a one-byte truncation probe are read; larger values
+receive an explicit truncation caption. Details renders the entire file prefix
+and payload as hex/ASCII without decoding. Namespace GUIDs, full filenames and
+full variable paths remain advanced-only, including in copy-all output.
+Permissions or contents may still change concurrently; this is a bounded
+read-only observation, not an atomic firmware snapshot.
+
+Removal/replacement detected by a property read or successful inventory refresh
+freezes the existing dialog, labels it as a removed snapshot and disables Reload.
+Selection, Details and copying remain available. No live removal notification is
+claimed before Phase 4. Failed reads preserve the previous snapshot with an
+explicit error banner, rather than replacing errors with blank or healthy values.
