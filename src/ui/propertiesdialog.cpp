@@ -195,7 +195,7 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     // The tab appears only after collection finds resource records or read errors.
     auto *eventsPage = new QWidget(tabs);
     auto *eventsLayout = new QVBoxLayout(eventsPage);
-    eventsNotice_ = plainLabel(QString(), eventsPage);
+    eventsNotice_ = plainLabel(tr("ℹ️ Live udev events since the application started"), eventsPage);
     eventsLayout->addWidget(eventsNotice_);
     eventsTable_ = new QTableWidget(0, 3, eventsPage);
     eventsTable_->setHorizontalHeaderLabels({tr("Observed time"), tr("Event type"), tr("Description")});
@@ -272,7 +272,7 @@ void PropertiesDialog::markRemoved()
 {
     removed_ = true;
     eventScope_ += '\n' + tr("Removed/replaced device: retained events are a read-only instance snapshot.");
-    eventsNotice_->setText(eventScope_);
+    eventsNotice_->setToolTip("<qt>" + eventScope_.toHtmlEscaped().replace('\n', "<br>") + "</qt>");
     reload_->setEnabled(false);
     banner_->show();
     banner_->setText(tr("Device removed or replaced. This dialog is a read-only snapshot; close it and reopen Properties for the current device."));
@@ -463,7 +463,7 @@ void PropertiesDialog::updateEvents(const DeviceEventsSnapshot &history, const Q
         eventScope_ += '\n' + tr("Removed/replaced device: retained events are a read-only instance snapshot.");
     }
     if (next.isEmpty()) eventScope_ += '\n' + tr("No retained live events for this instance. This does not establish that the device has had no errors.");
-    eventsNotice_->setText(eventScope_);
+    eventsNotice_->setToolTip("<qt>" + eventScope_.toHtmlEscaped().replace('\n', "<br>") + "</qt>");
     bool unchanged = next.size() == displayedEvents_.size();
     for (int i = 0; unchanged && i < next.size(); ++i) {
         const DeviceEvent &a = next.at(i);

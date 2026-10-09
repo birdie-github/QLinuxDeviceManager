@@ -444,8 +444,9 @@ application session: receipt timestamp (local time with UTC offset), raw event
 type, translated description and selectable details. Details include monotonic
 elapsed time, udev sequence, exact kernel path, subsystem, device type, event
 payload driver, optional initialization stamp and the local instance token.
-Missing payload data is labelled unavailable. Copy selection and Copy all events
-include the scope/coverage notice. Event observation does not establish hardware
+Missing payload data is labelled unavailable. The Events tab shows a compact
+information caption; hover over it for the full scope/coverage notice.
+Copy selection and Copy all events include that full notice. Event observation does not establish hardware
 health or prove that a reported driver transition succeeded permanently.
 
 The existing monitor worker maintains a ring of at most **1024 events globally**;
