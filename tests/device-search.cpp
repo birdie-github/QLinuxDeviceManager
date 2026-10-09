@@ -5,6 +5,7 @@
 #include "propertytext.h"
 #include "storagepresentation.h"
 #include <QCoreApplication>
+#include <QObject>
 #include <cstdio>
 #include <QPersistentModelIndex>
 
@@ -188,8 +189,9 @@ int main(int argc, char **argv)
     // Live updates keep persistent indexes and replace observed instances.
     int resets = 0;
     int changes = 0;
-    QObject::connect(&model, &QAbstractItemModel::modelReset, [&] { ++resets; });
-    QObject::connect(&model, &QAbstractItemModel::dataChanged, [&] { ++changes; });
+    QObject observationContext; // Disconnect before the captured counters leave scope.
+    QObject::connect(&model, &QAbstractItemModel::modelReset, &observationContext, [&] { ++resets; });
+    QObject::connect(&model, &QAbstractItemModel::dataChanged, &observationContext, [&] { ++changes; });
     model.setInventory({pci, child, usb});
     auto currentGeneration = [&](const QString &path) {
         for (const auto &entry : model.searchRecords())
