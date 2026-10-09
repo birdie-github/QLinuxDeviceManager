@@ -157,3 +157,19 @@ std::optional<Device> DeviceModel::device(const QString &path, quint64 generatio
     if (it == lookup_.cend() || devices_.at(it.value()).generation != generation) return std::nullopt;
     return devices_.at(it.value()); // Owned copy; callers never retain inventory pointers.
 }
+
+QVector<SearchRecord> DeviceModel::searchRecords() const
+{
+    QVector<SearchRecord> records;
+    records.reserve(visible_);
+    QHash<QString, QStringList> grouped;
+    for (const Device &d : devices_)
+        if (!d.representedByPath.isEmpty()) grouped[d.representedByPath].append(d.path);
+    for (const auto &group : root_.children) {
+        for (const auto &child : group->children) {
+            const Device &d = devices_.at(lookup_.value(child->path));
+            records.append({d, child->label, grouped.value(d.path).join('\n')});
+        }
+    }
+    return records;
+}

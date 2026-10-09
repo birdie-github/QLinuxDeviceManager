@@ -18,6 +18,9 @@ struct DeviceProperties {
     quint64 request = 0;
 };
 
+// Worker-thread collector shared by Properties and deep search. No GUI objects.
+DeviceProperties collectDeviceProperties(const Device &device);
+
 // One window-owned worker, shared by successive dialogs. Requests serialize.
 class PropertiesReader final : public QThread {
     Q_OBJECT

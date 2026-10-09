@@ -5,8 +5,13 @@
 #include <optional>
 #include <QMainWindow>
 #include <QSet>
+#include <QTimer>
+#include "devicesearch.h"
 
 class QAction;
+class QLineEdit;
+class QCheckBox;
+class DeviceFilter;
 class DeviceModel;
 class QTreeView;
 class QCloseEvent;
@@ -19,8 +24,14 @@ public:
     ~MainWindow() override;
 protected:
     void closeEvent(QCloseEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
 private:
     void refresh();
+    void applyFilter();
+    void cancelSearch();
+    void startSearch();
+    void acceptSearchBatch(const SearchBatch &batch);
+    void searchFinished();
     void openProperties();
     void requestProperties();
     void acceptProperties();
@@ -31,6 +42,20 @@ private:
     void saveSettings();
     DeviceModel *model_ = nullptr;
     QTreeView *tree_ = nullptr;
+    DeviceFilter *filter_ = nullptr;
+    QWidget *filterBar_ = nullptr;
+    QLineEdit *filterEdit_ = nullptr;
+    QCheckBox *deepSearch_ = nullptr;
+    QAction *filterAction_ = nullptr;
+    QTimer filterTimer_;
+    DeepSearchWorker searchWorker_;
+    quint64 searchRequest_ = 0;
+    quint64 searchRevision_ = 1;
+    bool searchBusy_ = false;
+    bool searchPending_ = false;
+    int searchDone_ = 0;
+    int searchTotal_ = 0;
+    int searchUnavailable_ = 0;
     QAction *refreshAction_ = nullptr;
     QAction *internalAction_ = nullptr;
     QAction *propertiesAction_ = nullptr;

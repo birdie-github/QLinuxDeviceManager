@@ -31,6 +31,9 @@ add_executable(qlinuxdevicemanager
     src/devices/efivariables.h src/devices/efivariables.cpp
     src/devices/modulenames.h src/devices/modulenames.cpp
     src/devices/devicepresentation.h src/devices/devicepresentation.cpp
+    src/devices/devicesearch.h src/devices/devicesearch.cpp
+    src/devices/propertytext.h src/devices/propertytext.cpp
+    src/ui/devicefilter.h src/ui/devicefilter.cpp
     src/ui/devicemodel.h src/ui/devicemodel.cpp
     src/ui/mainwindow.h src/ui/mainwindow.cpp
     src/ui/propertiesdialog.h src/ui/propertiesdialog.cpp)
@@ -79,4 +82,22 @@ if(BUILD_TESTING)
     target_include_directories(device-resources-test PRIVATE src/devices)
     target_link_libraries(device-resources-test PRIVATE Qt6::Core)
     add_test(NAME device-resources COMMAND device-resources-test)
+    add_executable(device-search-test tests/device-search.cpp
+        src/devices/devicesearch.cpp src/devices/devicesearch.h
+        src/devices/deviceproperties.cpp src/devices/deviceproperties.h
+        src/devices/deviceresources.cpp src/devices/deviceresources.h
+        src/devices/device.cpp src/devices/device.h
+        src/devices/devicelabel.cpp src/devices/devicelabel.h
+        src/devices/propertytext.cpp src/devices/propertytext.h
+        src/devices/efivariables.cpp src/devices/efivariables.h
+        src/devices/functionnames.cpp src/devices/functionnames.h
+        src/ui/devicemodel.cpp src/ui/devicemodel.h
+        src/ui/devicefilter.cpp src/ui/devicefilter.h)
+    target_include_directories(device-search-test PRIVATE src/devices src/ui)
+    target_link_libraries(device-search-test PRIVATE Qt6::Widgets PkgConfig::UDEV)
+    if(QLDM_WITH_KMOD AND TARGET PkgConfig::KMOD)
+        target_link_libraries(device-search-test PRIVATE PkgConfig::KMOD)
+        target_compile_definitions(device-search-test PRIVATE QLDM_HAVE_KMOD)
+    endif()
+    add_test(NAME device-search COMMAND device-search-test)
 endif()

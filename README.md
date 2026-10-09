@@ -191,6 +191,11 @@ under `QLinuxDeviceManager` in the normal Qt configuration location.
 A Linux desktop entry is installed; icons follow the system theme with Qt
 fallbacks. Further desktop integration and UI polish belong to Phase 9.
 
+Use **View → Filter** or **Ctrl+F** to show the full-width search bar. Names are
+searched by default; **Deep search** includes advanced properties, resources and
+numbers, collecting metadata in the background. Escape or Ctrl+F hides the bar
+and clears the filter. Deep-search metadata is cached until F5 refresh.
+
 ## Source layout
 
 - `src/devices/`: inventory records, classification, bounded CPU metadata,

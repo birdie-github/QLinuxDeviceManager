@@ -232,3 +232,50 @@ The common interfaces above expose allocations rather than a Windows-style
 per-device conflict verdict. A conflict field is therefore omitted; neither
 sharing nor address containment is used to manufacture one. Broader Resources
 by type/connection tree views from Phase 5 remain outside this change.
+
+## Device filtering
+
+View → Filter (Ctrl+F) reveals a window-width row above the tree. The edit
+stretches between its label and Deep search checkbox. Ctrl+F or Escape in the
+main tree/filter hides the row and clears the query. Properties keeps its own
+Escape handling. Launch starts with the filter hidden and Deep search off.
+Matching is a case-insensitive literal substring after trimming the query;
+there are no regular expressions, wildcards or numeric interval queries.
+
+Ordinary filtering uses exactly the model's displayed device label, including
+any visible disambiguating identifiers. Categories survive only when a child
+matches. Search temporarily expands matching categories; clearing restores the
+unfiltered category expansion and selection, if that instance is still visible.
+The existing virtual/internal visibility setting applies before both searches.
+
+Deep search includes all General, Driver and Details text (advanced entries as
+well), provenance, inventory properties/attributes, grouped-record paths, EFI
+hex/ASCII and resource types, ranges, flags and IRQs. The Properties text
+formatter is shared and uses Qt Core only. Known numeric identifiers and
+resource numbers also get hexadecimal and decimal aliases; arbitrary product
+names and serial strings are not parsed as numbers. Only metadata already
+exposed by this application is collected; search does not walk arbitrary sysfs
+files or decode EFI payloads. Existing collection limits and access restrictions
+still apply. Failed property reads retain searchable last-inventory metadata
+and are counted in the status bar; partial results from invalidated reads are
+discarded. Search results are observations, not live device state.
+
+A single additional serial QThread collects metadata using the same pinned,
+instance-checked collector as Properties, even for unopened dialogs. A 150 ms
+input debounce coalesces typing. Owned batches report matches and progress;
+request IDs reject obsolete batches, and each match must still have the source
+model's generation. Edits, visibility changes, refresh and close interrupt old
+work. Thread reuse waits for finished delivery and final cleanup. The GUI never
+performs device metadata reads. Selected metadata-only hits show their matching
+field in the status bar.
+
+Documents cache within one inventory/visibility revision, with a 64 MiB payload
+budget. Over-budget records are still fully searched but not cached. F5 clears
+this cache on accepted inventory refresh, so dynamic metadata is not repeatedly
+read on every keystroke. Properties reload has its independent snapshot and does
+not update search's cache; use F5 to refresh search observations. Cancellation is
+cooperative and cannot interrupt an already blocked kernel read.
+
+The device-search fixture checks cover numeric aliases, raw/EFI text, invalidated
+property reads, exact displayed labels, category retention, hidden records and
+stale-generation matches. They need compilation/execution on the target machine.

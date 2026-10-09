@@ -1,5 +1,6 @@
 #pragma once
 #include "device.h"
+#include "devicesearch.h"
 #include <QAbstractItemModel>
 #include <memory>
 #include <optional>
@@ -20,6 +21,7 @@ public:
     std::optional<Device> device(const QString &path, quint64 generation) const;
     void setShowInternal(bool show);
     QModelIndex findDevice(const QString &path, quint64 generation) const;
+    QVector<SearchRecord> searchRecords() const;
     int visibleCount() const { return visible_; }
     int inventoryCount() const { return static_cast<int>(devices_.size()); }
 private:

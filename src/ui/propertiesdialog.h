@@ -1,6 +1,7 @@
 #pragma once
 
 #include "deviceproperties.h"
+#include "propertytext.h"
 #include <QDialog>
 #include <QVector>
 
@@ -26,14 +27,6 @@ public:
 signals:
     void reloadRequested();
 private:
-    struct Entry {
-        QString id;
-        QString label;
-        QString value;
-        QString source;
-        bool advanced = false;
-        int tab = 2;
-    };
     void rebuild();
     void rebuildDetails();
     void rebuildResources();
@@ -41,7 +34,7 @@ private:
     void showDetail();
     void copyAll();
     DeviceProperties snapshot_;
-    QVector<Entry> entries_;
+    QVector<PropertyEntry> entries_;
     QLabel *banner_ = nullptr;
     QTabWidget *tabs_ = nullptr;
     QWidget *resourcesPage_ = nullptr;

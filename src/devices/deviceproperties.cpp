@@ -182,12 +182,10 @@ DeviceProperties PropertiesReader::takeResult()
     Q_ASSERT(!isRunning());
     return std::move(result_);
 }
-void PropertiesReader::run()
+DeviceProperties collectDeviceProperties(const Device &device)
 {
     DeviceProperties result;
-    result.device = device_;
-    result.request = request_;
-    const auto finish = [&] { result_ = std::move(result); };
+    result.device = device;
     const Device &d = result.device;
     const bool efi = d.subsystem == "efivarfs";
     const QByteArray path = d.path.toUtf8();
@@ -196,35 +194,34 @@ void PropertiesReader::run()
         if (lstat(path.constData(), &entry) != 0) {
             result.error = errno;
             result.state = errno == ENOENT || errno == ENODEV ? ReadState::Removed : failure(errno).state;
-            finish(); return;
+            return result;
         }
-        if (inodeIdentity(entry) != d.incarnation) { result.state = ReadState::Removed; finish(); return; }
+        if (inodeIdentity(entry) != d.incarnation) { result.state = ReadState::Removed; return result; }
         if (!S_ISREG(entry.st_mode) || !(entry.st_mode & S_IROTH)) {
             result.state = ReadState::PermissionDenied;
             result.error = EACCES;
-            finish(); return;
+            return result;
         }
     }
     Descriptor deviceFd(open(path.constData(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW | (efi ? 0 : O_DIRECTORY)));
     if (deviceFd.fd < 0) {
         result.error = errno;
         result.state = errno == ENOENT || errno == ENODEV ? ReadState::Removed : failure(errno).state;
-        finish();
-        return;
+        return result;
     }
     struct stat before {};
     if (fstat(deviceFd.fd, &before) != 0) {
-        result.error = errno; result.state = ReadState::Error; finish(); return;
+        result.error = errno; result.state = ReadState::Error; return result;
     }
     const QString identity = inodeIdentity(before);
     const bool sameIdentity = efi ? identity == d.incarnation : d.incarnation.startsWith(identity + ':');
-    if (!sameIdentity) { result.state = ReadState::Removed; finish(); return; }
+    if (!sameIdentity) { result.state = ReadState::Removed; return result; }
     result.state = ReadState::Available;
     if (efi) {
         if (!S_ISREG(before.st_mode) || !(before.st_mode & S_IROTH)) {
             result.state = ReadState::PermissionDenied;
             result.error = EACCES;
-            finish(); return;
+            return result;
         }
         int error = 0;
         result.efiBytes = readBytes(deviceFd.fd, efiLimit, error);
@@ -241,10 +238,10 @@ void PropertiesReader::run()
         if (!raw) {
             result.state = ReadState::Error;
             result.error = context ? EIO : ENOMEM;
-            finish(); return;
+            return result;
         }
         const QString stamp = boundedText(udev_device_get_property_value(raw.get(), "USEC_INITIALIZED")).value;
-        if (identity + ':' + stamp != d.incarnation) { result.state = ReadState::Removed; finish(); return; }
+        if (identity + ':' + stamp != d.incarnation) { result.state = ReadState::Removed; return result; }
         // Selected udev metadata only; no unbounded property dump.
         for (const char *key : {"ID_VENDOR_FROM_DATABASE", "ID_VENDOR", "ID_MODEL_FROM_DATABASE", "ID_MODEL",
                 "ID_BUS", "ID_PATH", "ID_PATH_TAG", "ID_SERIAL", "ID_SERIAL_SHORT", "ID_REVISION",
@@ -288,11 +285,11 @@ void PropertiesReader::run()
         else if (d.subsystem == "video4linux") attributes = {"name", "index"};
         else if (d.subsystem == "sound" && d.sysname.startsWith("card")) attributes = {"id"};
         for (const QString &key : attributes) {
-            if (isInterruptionRequested()) break;
+            if (QThread::currentThread()->isInterruptionRequested()) break;
             const QByteArray name = key.toLatin1();
             sysfs(result, deviceFd.fd, name.constData());
         }
-        if (!isInterruptionRequested()) result.resources = collectDeviceResources(deviceFd.fd, d);
+        if (!QThread::currentThread()->isInterruptionRequested()) result.resources = collectDeviceResources(deviceFd.fd, d);
         // Binding can change during a read even if the device instance remains.
         const Attribute afterLink = linkTarget(deviceFd.fd, "driver");
         if (afterLink.state != driverLink.state || afterLink.value != driverLink.value || afterLink.error != driverLink.error) {
@@ -310,6 +307,12 @@ void PropertiesReader::run()
         result.error = EACCES;
         result.efiBytes.clear();
     }
-    if (isInterruptionRequested()) { result.state = ReadState::Error; result.error = ECANCELED; }
-    finish();
+    if (QThread::currentThread()->isInterruptionRequested()) { result.state = ReadState::Error; result.error = ECANCELED; }
+    return result;
+}
+
+void PropertiesReader::run()
+{
+    result_ = collectDeviceProperties(device_);
+    result_.request = request_;
 }
