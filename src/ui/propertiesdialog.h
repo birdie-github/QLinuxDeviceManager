@@ -2,6 +2,7 @@
 
 #include "deviceproperties.h"
 #include "propertytext.h"
+#include "storagepresentation.h"
 #include <QDialog>
 #include <QVector>
 
@@ -32,7 +33,8 @@ private:
     void rebuildDetails();
     void rebuildResources();
     void rebuildStorage();
-    void showStorageEntity();
+    void showVolume();
+    void showHealth();
     void copyResources(bool selectedOnly);
     void showDetail();
     void copyAll();
@@ -49,8 +51,16 @@ private:
     QFormLayout *driver_ = nullptr;
     QFormLayout *storage_ = nullptr;
     QWidget *storagePage_ = nullptr;
-    QComboBox *storageEntity_ = nullptr;
-    QPlainTextEdit *storageNotes_ = nullptr;
+    QWidget *volumesPage_ = nullptr;
+    QWidget *healthPage_ = nullptr;
+    QTableWidget *volumesTable_ = nullptr;
+    QPlainTextEdit *volumeDetails_ = nullptr;
+    QComboBox *healthDrive_ = nullptr;
+    QPlainTextEdit *healthDetails_ = nullptr;
+    QLabel *storageNotice_ = nullptr;
+    QLabel *volumesNotice_ = nullptr;
+    QLabel *healthNotice_ = nullptr;
+    StoragePresentation storagePresentation_;
     QComboBox *property_ = nullptr;
     QPlainTextEdit *value_ = nullptr;
     QLabel *source_ = nullptr;

@@ -356,6 +356,7 @@ StorageProperties collectStorageProperties(const Device &device, bool cachedServ
         const QByteArray encoded = path.toUtf8();
         std::unique_ptr<udev_device, decltype(&udev_device_unref)> raw(
             context ? udev_device_new_from_syspath(context.get(), encoded.constData()) : nullptr, &udev_device_unref);
+        metadata(entity, raw.get(), "DEVNAME", QT_TRANSLATE_NOOP("Storage", "Device node"));
         const Attribute number = textFile(path + "/dev");
         field(entity.fields, "dev", QT_TRANSLATE_NOOP("Storage", "Major:minor"), number, path + "/dev");
         Attribute capacity = textFile(path + "/size");

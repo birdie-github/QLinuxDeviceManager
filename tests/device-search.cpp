@@ -3,6 +3,7 @@
 #include "devicemodel.h"
 #include "resourceformat.h"
 #include "propertytext.h"
+#include "storagepresentation.h"
 #include <QCoreApplication>
 #include <cstdio>
 #include <QPersistentModelIndex>
@@ -312,5 +313,63 @@ int main(int argc, char **argv)
     model.setInventory({bus, pci, usb}, {pci.path});
     check(!replacedResource.isValid() && !model.findNode(resourceKey, pci.path, pciGeneration).isValid(),
           "A replaced device cannot inherit resource selection or an old owner generation");
+    // Storage presentation stays independent of widgets and live services.
+    StorageProperties storage;
+    storage.applicable = true;
+    const auto sf = [](const QString &id, const QString &value, StorageField::Format format = StorageField::Format::Text) {
+        return StorageField {id, "Fixture", {ReadState::Available, value, 0}, "fixture:" + id, format};
+    };
+    StorageEntity nativeBlock {"/sys/devices/fixture/block/sda", {
+        sf("DEVNAME", "/dev/sda"), sf("dev", "8:0"), sf("capacity", "1024", StorageField::Format::Bytes),
+        sf("ID_FS_TYPE", "ext4"), sf("ID_FS_LABEL", "data"), sf("mounts", "/data")}};
+    StorageEntity cachedBlock {"/org/freedesktop/UDisks2/block_devices/sda", {
+        sf("org.freedesktop.UDisks2.Block/IdType", "xfs")}};
+    StorageEntity cachedDrive {"/org/freedesktop/UDisks2/drives/fixture", {
+        sf("org.freedesktop.UDisks2.Drive/Model", "Fixture Drive"),
+        sf("org.freedesktop.UDisks2.Drive/Size", "4096", StorageField::Format::Bytes),
+        sf("org.freedesktop.UDisks2.Drive.Ata/SmartFailing", "0", StorageField::Format::AtaHealth)}};
+    storage.entities = {nativeBlock, cachedBlock, cachedDrive};
+    storage.links = {{nativeBlock.id, cachedBlock.id, "UDisks2 block metadata", "UDisks2 Block.DeviceNumber / sysfs dev"},
+                     {cachedBlock.id, cachedDrive.id, "Storage relationship", "org.freedesktop.UDisks2.Block.Drive"}};
+    auto presented = storagePresentation(storage, nativeBlock.id);
+    check(presented.volumes.size() == 1 && presented.volumes.front().name == "/dev/sda — data",
+          "An exact native/service block mapping produces one recognizable volume");
+    check(storageFieldsText(presented.volumes.front().fields).contains("Conflicting metadata:"),
+          "Conflicting block content metadata remains explicit with both sources");
+    check(presented.health.size() == 1 && presented.health.front().name.contains("/dev/sda")
+          && storageRowsText(presented.health).contains("not a guarantee of health"),
+          "Health is per drive, names its mapped block and preserves cached scope");
+    check(storageFieldsText(presented.overview).contains("Block capacity:")
+          && storageFieldsText(presented.overview).contains("Drive capacity:"),
+          "Physical drive capacity is separate from selected block capacity");
+    storage.links.removeFirst();
+    check(storagePresentation(storage, nativeBlock.id).volumes.size() == 2,
+          "Matching object basenames without an exact mapping never merge entities");
+    storage.entities = {nativeBlock};
+    storage.links.clear();
+    presented = storagePresentation(storage, nativeBlock.id);
+    check(presented.health.size() == 1 && storageRowsText(presented.health).contains("Unavailable"),
+          "Native-only snapshots explicitly report unavailable cached health");
+    Device storageDevice = device;
+    storageDevice.subsystem = "block";
+    DeviceProperties storageSnapshot;
+    storageSnapshot.device = storageDevice;
+    storageSnapshot.storage = storage;
+    storageSnapshot.values.insert("udev/ID_FS_UUID", {ReadState::Available, "uuid", 0});
+    storageSnapshot.device.properties.insert("DM_UUID", "dm-uuid");
+    storageSnapshot.device.attributes.insert("size", {ReadState::Available, "2", 0});
+    int storageEntries = 0;
+    for (const PropertyEntry &entry : propertyEntries(storageSnapshot)) {
+        if (entry.tab == 3 || entry.id == "udev/ID_FS_UUID" || entry.id == "inventory/DM_UUID"
+            || entry.id == "inventory/sysfs/size") {
+            ++storageEntries;
+            check(!isDetailsProperty(entry, storageDevice), "Storage fields never enter Details, including advanced fields");
+        }
+        if (entry.id == "name" || entry.id == "module/type")
+            check(isDetailsProperty(entry, storageDevice), "Generic device and driver properties remain in Details");
+    }
+    check(storageEntries > 3, "Details exclusion fixture exercises storage and raw metadata");
+    check(isDetailsProperty({"udev/ID_SERIAL", "Serial", "value", {}, true, 2}, device),
+          "Raw non-storage device identity remains available");
     return failures ? 1 : 0;
 }

@@ -382,8 +382,15 @@ these views currently use directly associated PCI/PnP sysfs metadata only.
 
 ## Storage properties (Phase 6)
 
-Block devices and NVMe controllers have a **Storage** tab with an entity selector,
-source tooltips, relationship notes and a Copy storage snapshot button. Native metadata
+Block devices and NVMe controllers have separate **Storage**, **Volumes** and
+**Health** tabs. Storage shows the selected device overview; Volumes lists related
+layers, content and mounts, with identifiers and explicit relationships beneath
+the selected row. Health shows each related drive's cached evidence separately.
+Exact kernel/UDisks2 block mappings share one volume row. Source tooltips and
+per-tab copy buttons retain provenance; compact notice hints contain collection
+scope and failures. Storage metadata is excluded from the Details property
+selector and its copy output, including advanced raw storage fields. Deep search
+retains the native storage facts. Native metadata
 includes capacity (kernel `size` is always in 512-byte units), logical/physical
 sector sizes, kernel removable-media and read-only flags, udev model/vendor,
 serial, revision, transport, partition and cached filesystem identifiers.
@@ -392,7 +399,7 @@ Missing, restricted and failed reads are explicit; no raw disk node is opened,
 filesystem probed, filesystem mounted or encryption unlocked.
 
 Partitions are available through **Show virtual and internal devices**, and a
-disk's Storage snapshot also includes related partitions. Kernel partition
+disk's Volumes tab also includes related partitions. Kernel partition
 ancestry and `slaves`/`holders` links expose backing and using devices, including
 encrypted/device-mapper, LVM and software RAID layers. Each canonical block
 path appears once. Related volumes may span other drives: explicit links preserve

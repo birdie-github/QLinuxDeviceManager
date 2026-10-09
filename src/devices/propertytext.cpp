@@ -20,8 +20,7 @@ QString propertyReadValue(const Attribute &a)
     }
     return {};
 }
-namespace {
-QString storageValue(const StorageField &field)
+QString storageFieldValue(const StorageField &field)
 {
     const Attribute &value = field.value;
     if (value.state != ReadState::Available) return propertyReadValue(value);
@@ -61,6 +60,7 @@ QString storageValue(const StorageField &field)
     }
     return {};
 }
+namespace {
 QString hexDump(const QByteArray &bytes)
 {
     QStringList lines;
@@ -99,12 +99,12 @@ QVector<PropertyEntry> propertyEntries(const DeviceProperties &snapshot, bool re
         add("storage/scope", QCoreApplication::translate("Storage", "Storage snapshot"),
             QCoreApplication::translate("Storage", "Each entity is a separate storage layer; capacities are not added. Health is cached UDisks2 evidence, separate from operational status. Reload never requests SMART updates or self-tests. Deep search includes native metadata only."), {}, false, 3);
         for (const StorageField &note : snapshot.storage.notes)
-            add("storage/note/" + note.id, QCoreApplication::translate("Storage", note.label), storageValue(note), note.source, false, 3);
+            add("storage/note/" + note.id, QCoreApplication::translate("Storage", note.label), storageFieldValue(note), note.source, false, 3);
         for (const StorageEntity &entity : snapshot.storage.entities) {
             const QString prefix = "storage/entity/" + entity.id;
             add(prefix, QCoreApplication::translate("Storage", "Storage entity"), entity.id, {}, false, 3);
             for (const StorageField &field : entity.fields)
-                add(prefix + '/' + field.id, QCoreApplication::translate("Storage", field.label), storageValue(field), field.source, false, 3);
+                add(prefix + '/' + field.id, QCoreApplication::translate("Storage", field.label), storageFieldValue(field), field.source, false, 3);
         }
         int index = 0;
         for (const StorageLink &edge : snapshot.storage.links)
@@ -241,4 +241,28 @@ QVector<PropertyEntry> propertyEntries(const DeviceProperties &snapshot, bool re
     if (snapshot.resources.hasInformation())
         add("resources", QCoreApplication::translate("PropertiesDialog", "Resources"), resourcesText, QCoreApplication::translate("PropertiesDialog", "Direct device resource metadata"));
     return entries;
+}
+
+// Storage identity and content belong to the storage tabs even in advanced mode.
+// Generic device/bus/driver facts remain available for all device classes.
+bool isDetailsProperty(const PropertyEntry &entry, const Device &device)
+{
+    if (entry.tab == 3 || entry.id.startsWith("storage/")) return false;
+    if (device.subsystem != "block" && device.subsystem != "nvme") return true;
+    QString key = entry.id;
+    for (const QString &prefix : {QStringLiteral("inventory/sysfs/"), QStringLiteral("inventory/"),
+                                  QStringLiteral("udev/"), QStringLiteral("sysfs/")}) {
+        if (key.startsWith(prefix)) { key.remove(0, prefix.size()); break; }
+    }
+    for (const QString &prefix : {QStringLiteral("ID_FS_"), QStringLiteral("ID_PART_"),
+                                  QStringLiteral("ID_ATA"), QStringLiteral("ID_NVME"),
+                                  QStringLiteral("ID_SCSI"), QStringLiteral("ID_DRIVE_"), QStringLiteral("ID_CDROM"),
+                                  QStringLiteral("DM_"), QStringLiteral("MD_"),
+                                  QStringLiteral("queue/"), QStringLiteral("dm/"), QStringLiteral("md/")})
+        if (key.startsWith(prefix)) return false;
+    const QStringList keys {"ID_MODEL", "ID_MODEL_ENC", "ID_VENDOR", "ID_VENDOR_ENC",
+        "ID_SERIAL", "ID_SERIAL_SHORT", "ID_REVISION", "ID_BUS", "ID_WWN", "ID_WWN_WITH_EXTENSION",
+        "DEVNAME", "DISKSEQ", "size", "dev", "partition", "start", "ro", "removable",
+        "model", "vendor", "serial", "rev", "firmware_rev", "wwid"};
+    return !keys.contains(key);
 }

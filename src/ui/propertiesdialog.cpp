@@ -105,13 +105,8 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     storagePage_ = new QWidget(tabs);
     storagePage_->hide();
     auto *storageLayout = new QVBoxLayout(storagePage_);
-    auto *storageLabel = new QLabel(tr("Storage &entity:"), storagePage_);
-    storageEntity_ = new QComboBox(storagePage_);
-    storageEntity_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
-    storageEntity_->setMinimumContentsLength(24);
-    storageLabel->setBuddy(storageEntity_);
-    storageLayout->addWidget(storageLabel);
-    storageLayout->addWidget(storageEntity_);
+    storageNotice_ = plainLabel(tr("ℹ️ Storage snapshot for this device"), storagePage_);
+    storageLayout->addWidget(storageNotice_);
     auto *storageScroll = new QScrollArea(storagePage_);
     storageScroll->setWidgetResizable(true);
     storageScroll->setFrameShape(QFrame::NoFrame);
@@ -120,22 +115,77 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     storage_->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     storage_->setRowWrapPolicy(QFormLayout::WrapLongRows);
     storageScroll->setWidget(storageFormPage);
-    storageLayout->addWidget(storageScroll, 2);
-    storageNotes_ = new QPlainTextEdit(storagePage_);
-    storageNotes_->setReadOnly(true);
-    storageLayout->addWidget(storageNotes_, 1);
-    auto *copyStorage = new QPushButton(tr("Copy storage snapshot"), storagePage_);
+    storageLayout->addWidget(storageScroll, 1);
+    auto *copyStorage = new QPushButton(tr("Copy storage overview"), storagePage_);
     storageLayout->addWidget(copyStorage);
-    connect(storageEntity_, &QComboBox::currentIndexChanged, this, &PropertiesDialog::showStorageEntity);
     connect(copyStorage, &QPushButton::clicked, this, [this] {
-        QStringList text;
-        for (const PropertyEntry &entry : entries_) {
-            if (entry.tab != 3) continue;
-            QString item = entry.label + ":\n" + entry.value;
-            if (!entry.source.isEmpty()) item += '\n' + tr("Source: %1").arg(entry.source);
-            text.append(item);
-        }
-        QApplication::clipboard()->setText(text.join("\n\n"));
+        QApplication::clipboard()->setText(storageFieldsText(storagePresentation_.overview)
+            + "\n\n" + storagePresentation_.notes);
+    });
+
+    volumesPage_ = new QWidget(tabs);
+    volumesPage_->hide();
+    auto *volumesLayout = new QVBoxLayout(volumesPage_);
+    volumesNotice_ = plainLabel(tr("ℹ️ Related volumes and mounts"), volumesPage_);
+    volumesLayout->addWidget(volumesNotice_);
+    volumesTable_ = new QTableWidget(0, 5, volumesPage_);
+    volumesTable_->setHorizontalHeaderLabels({tr("Device / label"), tr("Layer"), tr("Capacity"), tr("Content"), tr("Mount points")});
+    volumesTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    volumesTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    volumesTable_->setSelectionMode(QAbstractItemView::SingleSelection);
+    volumesTable_->verticalHeader()->hide();
+    volumesTable_->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+    volumesTable_->horizontalHeader()->setStretchLastSection(true);
+    volumesTable_->setColumnWidth(0, 180);
+    volumesTable_->setColumnWidth(1, 110);
+    volumesTable_->setColumnWidth(2, 180);
+    volumesLayout->addWidget(volumesTable_, 2);
+    volumeDetails_ = new QPlainTextEdit(volumesPage_);
+    volumeDetails_->setReadOnly(true);
+    volumesLayout->addWidget(volumeDetails_, 1);
+    auto *volumeButtons = new QHBoxLayout;
+    auto *copyVolume = new QPushButton(tr("Copy selected volume"), volumesPage_);
+    auto *copyVolumes = new QPushButton(tr("Copy all volumes"), volumesPage_);
+    volumeButtons->addWidget(copyVolume);
+    volumeButtons->addWidget(copyVolumes);
+    volumeButtons->addStretch();
+    volumesLayout->addLayout(volumeButtons);
+    connect(volumesTable_, &QTableWidget::currentCellChanged, this, [this] { showVolume(); });
+    connect(copyVolume, &QPushButton::clicked, this, [this] {
+        QApplication::clipboard()->setText(volumeDetails_->toPlainText());
+    });
+    connect(copyVolumes, &QPushButton::clicked, this, [this] {
+        QApplication::clipboard()->setText(storageRowsText(storagePresentation_.volumes));
+    });
+
+    healthPage_ = new QWidget(tabs);
+    healthPage_->hide();
+    auto *healthLayout = new QVBoxLayout(healthPage_);
+    healthNotice_ = plainLabel(tr("ℹ️ Cached drive health"), healthPage_);
+    healthLayout->addWidget(healthNotice_);
+    auto *healthLabel = new QLabel(tr("&Drive:"), healthPage_);
+    healthDrive_ = new QComboBox(healthPage_);
+    healthDrive_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    healthDrive_->setMinimumContentsLength(24);
+    healthLabel->setBuddy(healthDrive_);
+    healthLayout->addWidget(healthLabel);
+    healthLayout->addWidget(healthDrive_);
+    healthDetails_ = new QPlainTextEdit(healthPage_);
+    healthDetails_->setReadOnly(true);
+    healthLayout->addWidget(healthDetails_, 1);
+    auto *healthButtons = new QHBoxLayout;
+    auto *copyHealth = new QPushButton(tr("Copy selected drive health"), healthPage_);
+    auto *copyAllHealth = new QPushButton(tr("Copy all drive health"), healthPage_);
+    healthButtons->addWidget(copyHealth);
+    healthButtons->addWidget(copyAllHealth);
+    healthButtons->addStretch();
+    healthLayout->addLayout(healthButtons);
+    connect(healthDrive_, &QComboBox::currentIndexChanged, this, &PropertiesDialog::showHealth);
+    connect(copyHealth, &QPushButton::clicked, this, [this] {
+        QApplication::clipboard()->setText(healthDetails_->toPlainText());
+    });
+    connect(copyAllHealth, &QPushButton::clicked, this, [this] {
+        QApplication::clipboard()->setText(storageRowsText(storagePresentation_.health));
     });
     auto *details = new QWidget(tabs);
     auto *detailsLayout = new QVBoxLayout(details);
@@ -300,7 +350,8 @@ void PropertiesDialog::rebuildDetails()
     const QSignalBlocker blocker(property_);
     property_->clear();
     for (const PropertyEntry &entry : entries_)
-        if (!entry.advanced || advanced_->isChecked()) property_->addItem(entry.label, entry.id);
+        if (isDetailsProperty(entry, device()) && (!entry.advanced || advanced_->isChecked()))
+            property_->addItem(entry.label, entry.id);
     const int index = property_->findData(previous);
     property_->setCurrentIndex(index < 0 ? 0 : index);
     showDetail();
@@ -323,7 +374,7 @@ void PropertiesDialog::copyAll()
 {
     QStringList values;
     for (const PropertyEntry &entry : entries_) {
-        if (entry.advanced && !advanced_->isChecked()) continue;
+        if (!isDetailsProperty(entry, device()) || (entry.advanced && !advanced_->isChecked())) continue;
         QString text = entry.label + ":\n" + entry.value;
         if (!entry.source.isEmpty()) text += '\n' + tr("Source: %1").arg(entry.source);
         values.append(text);
@@ -384,51 +435,89 @@ void PropertiesDialog::copyResources(bool selectedOnly)
 
 void PropertiesDialog::rebuildStorage()
 {
-    const int existing = tabs_->indexOf(storagePage_);
-    if (snapshot_.storage.applicable && existing < 0) tabs_->addTab(storagePage_, tr("Storage"));
-    else if (!snapshot_.storage.applicable && existing >= 0) {
-        tabs_->removeTab(existing);
-        storagePage_->hide();
+    for (const auto &page : {qMakePair(storagePage_, tr("Storage")),
+                             qMakePair(volumesPage_, tr("Volumes")), qMakePair(healthPage_, tr("Health"))}) {
+        const int existing = tabs_->indexOf(page.first);
+        if (snapshot_.storage.applicable && existing < 0) tabs_->addTab(page.first, page.second);
+        else if (!snapshot_.storage.applicable && existing >= 0) {
+            tabs_->removeTab(existing);
+            page.first->hide();
+        }
     }
-    const QString previous = storageEntity_->currentData().toString();
-    const QSignalBlocker blocker(storageEntity_);
-    storageEntity_->clear();
-    for (const StorageEntity &entity : snapshot_.storage.entities) {
-        storageEntity_->addItem(tr("%1 — %2").arg(QFileInfo(entity.id).fileName(),
-            entity.id.startsWith("/sys/") ? tr("Kernel metadata") : tr("UDisks2 metadata")), entity.id);
-        storageEntity_->setItemData(storageEntity_->count() - 1, entity.id.toHtmlEscaped(), Qt::ToolTipRole);
-    }
-    int selected = storageEntity_->findData(previous);
-    if (selected < 0) selected = storageEntity_->findData(device().path);
-    storageEntity_->setCurrentIndex(selected < 0 ? 0 : selected);
-    QStringList notes;
-    for (const PropertyEntry &entry : entries_) {
-        if (entry.tab != 3 || entry.id.startsWith("storage/entity/")) continue;
-        QString text = entry.label + ":\n" + entry.value;
-        if (!entry.source.isEmpty()) text += '\n' + tr("Source: %1").arg(entry.source);
-        notes.append(text);
-    }
-    storageNotes_->setPlainText(notes.join("\n\n"));
-    showStorageEntity();
-}
-void PropertiesDialog::showStorageEntity()
-{
+    const QString previousVolume = volumesTable_->currentRow() >= 0
+        ? volumesTable_->item(volumesTable_->currentRow(), 0)->data(Qt::UserRole).toString() : QString();
+    const QString previousDrive = healthDrive_->currentData().toString();
+    storagePresentation_ = storagePresentation(snapshot_.storage, device().path);
+    const QString scope = tr("Read-only metadata snapshot. Each entity is a separate layer; capacities are not added. "
+        "Kernel and UDisks2 block records are merged only by their exact device-number mapping. "
+        "Source paths remain in tooltips and copied text. Deep search includes native metadata only.");
+    const auto hint = [](QLabel *label, const QString &text) {
+        label->setToolTip("<qt>" + text.toHtmlEscaped().replace('\n', "<br>") + "</qt>");
+    };
+    hint(storageNotice_, scope + "\n\n" + storagePresentation_.notes);
+    hint(volumesNotice_, scope + '\n' + tr("Related volumes may span several drives. Mount points cover only the application "
+        "mount namespace. No filesystem is probed, mounted or unlocked.") + "\n\n" + storagePresentation_.notes);
+    hint(healthNotice_, tr("Cached UDisks2 health only, separate from device operational status. "
+        "Reload does not request SMART updates or self-tests. Missing evidence is unavailable; "
+        "no reported warning does not guarantee health. Related drives are shown separately.")
+        + "\n\n" + storagePresentation_.notes);
     clearForm(storage_);
-    const QString id = storageEntity_->currentData().toString();
-    QSet<QString> fields;
-    for (const StorageEntity &entity : snapshot_.storage.entities) {
-        if (entity.id != id) continue;
-        const QString prefix = "storage/entity/" + entity.id;
-        fields.insert(prefix);
-        for (const StorageField &field : entity.fields) fields.insert(prefix + '/' + field.id);
-        break;
+    for (const StorageDisplayField &field : storagePresentation_.overview) {
+        auto *label = plainLabel(field.value, storagePage_);
+        label->setToolTip(field.source.toHtmlEscaped());
+        storage_->addRow(field.label + ':', label);
     }
-    for (const PropertyEntry &entry : entries_) {
-        if (!fields.contains(entry.id)) continue;
-        auto *label = plainLabel(entry.value, storagePage_);
-        label->setToolTip(entry.source.toHtmlEscaped());
-        storage_->addRow(entry.label + ':', label);
+    {
+        const QSignalBlocker blocker(volumesTable_);
+        volumesTable_->setRowCount(0);
+        int selected = -1;
+        for (const StorageDisplayRow &entry : storagePresentation_.volumes) {
+            const int row = volumesTable_->rowCount();
+            volumesTable_->insertRow(row);
+            const QStringList columns {entry.name, entry.kind, entry.capacity, entry.filesystem, entry.mounts};
+            for (int column = 0; column < columns.size(); ++column) {
+                auto *item = new QTableWidgetItem(columns[column]);
+                item->setToolTip(entry.source.toHtmlEscaped());
+                volumesTable_->setItem(row, column, item);
+            }
+            volumesTable_->item(row, 0)->setData(Qt::UserRole, entry.id);
+            if (entry.id == previousVolume || (previousVolume.isEmpty() && entry.id == device().path)) selected = row;
+        }
+        if (selected < 0 && volumesTable_->rowCount()) selected = 0;
+        volumesTable_->setCurrentCell(selected, 0);
     }
+    showVolume();
+    {
+        const QSignalBlocker blocker(healthDrive_);
+        healthDrive_->clear();
+        for (const StorageDisplayRow &entry : storagePresentation_.health) {
+            healthDrive_->addItem(entry.name, entry.id);
+            healthDrive_->setItemData(healthDrive_->count() - 1, entry.source.toHtmlEscaped(), Qt::ToolTipRole);
+        }
+        const int selected = healthDrive_->findData(previousDrive);
+        healthDrive_->setCurrentIndex(selected < 0 ? 0 : selected);
+    }
+    showHealth();
+}
+void PropertiesDialog::showVolume()
+{
+    const int row = volumesTable_->currentRow();
+    if (row < 0 || row >= storagePresentation_.volumes.size()) {
+        volumeDetails_->setPlainText(tr("No related volume metadata available."));
+        return;
+    }
+    const StorageDisplayRow &entry = storagePresentation_.volumes[row];
+    volumeDetails_->setPlainText(entry.name + '\n' + storageFieldsText(entry.fields));
+}
+void PropertiesDialog::showHealth()
+{
+    const int row = healthDrive_->currentIndex();
+    if (row < 0 || row >= storagePresentation_.health.size()) {
+        healthDetails_->setPlainText(tr("Cached health unavailable."));
+        return;
+    }
+    const StorageDisplayRow &entry = storagePresentation_.health[row];
+    healthDetails_->setPlainText(entry.name + '\n' + storageFieldsText(entry.fields));
 }
 
 void PropertiesDialog::updateEvents(const DeviceEventsSnapshot &history, const QString &monitorNote)
