@@ -20,6 +20,12 @@ QString propertyReadValue(const Attribute &a)
     }
     return {};
 }
+QString detailsPropertyStatus(const PropertyEntry &entry)
+{
+    if (entry.state == ReadState::Available)
+        return entry.value.isEmpty() ? QCoreApplication::translate("PropertiesDialog", "Empty value").toLower() : QString();
+    return propertyReadValue({entry.state, {}, entry.error}).toLower();
+}
 QString storageFieldValue(const StorageField &field)
 {
     const Attribute &value = field.value;
@@ -87,13 +93,14 @@ QVector<PropertyEntry> propertyEntries(const DeviceProperties &snapshot, bool re
     const bool efi = d.subsystem == "efivarfs";
     const Attribute notApplicable {ReadState::NotApplicable, {}, 0};
     const auto add = [&](const QString &id, const QString &label, const QString &value,
-                           const QString &source = QString(), bool advanced = false, int tab = 2) {
-        entries.append({id, label, value, source, advanced, tab});
+                           const QString &source = QString(), bool advanced = false, int tab = 2,
+                           ReadState state = ReadState::Available, int error = 0) {
+        entries.append({id, label, value, source, advanced, tab, state, error});
     };
     const auto raw = [&](const QString &id) { return snapshot.values.value(id); };
     const auto addRaw = [&](const QString &id, const QString &label, int tab, const Attribute &fallback = Attribute()) {
         const Attribute a = snapshot.values.value(id, fallback);
-        add(id, label, propertyReadValue(a), snapshot.sources.value(id), false, tab);
+        add(id, label, propertyReadValue(a), snapshot.sources.value(id), false, tab, a.state, a.error);
     };
     if (snapshot.storage.applicable) {
         add("storage/scope", QCoreApplication::translate("Storage", "Storage snapshot"),
@@ -136,13 +143,13 @@ QVector<PropertyEntry> propertyEntries(const DeviceProperties &snapshot, bool re
             }
         }
     }
-    add("manufacturer", QCoreApplication::translate("PropertiesDialog", "Manufacturer"), propertyReadValue(manufacturer), manufacturerSource, false, 0);
+    add("manufacturer", QCoreApplication::translate("PropertiesDialog", "Manufacturer"), propertyReadValue(manufacturer), manufacturerSource, false, 0, manufacturer.state, manufacturer.error);
     Attribute bus = raw("udev/ID_BUS");
     if (bus.state != ReadState::Available) bus = raw("driver/bus");
     if (efi) bus = notApplicable;
     add("bus", QCoreApplication::translate("PropertiesDialog", "Bus / subsystem"), efi ? propertyReadValue(bus)
         : bus.state == ReadState::Available ? bus.value + " / " + d.subsystem : d.subsystem,
-        QCoreApplication::translate("PropertiesDialog", "Device udev metadata and direct driver bus"), false, 0);
+        QCoreApplication::translate("PropertiesDialog", "Device udev metadata and direct driver bus"), false, 0, efi ? ReadState::NotApplicable : ReadState::Available);
     add("location", QCoreApplication::translate("PropertiesDialog", "Location"), efi ? d.parentPath : d.path, QCoreApplication::translate("PropertiesDialog", "Kernel path"), false, 0);
     QString status;
     if (removed) status = QCoreApplication::translate("PropertiesDialog", "Removed or replaced; showing a snapshot.");
@@ -167,7 +174,7 @@ QVector<PropertyEntry> propertyEntries(const DeviceProperties &snapshot, bool re
     if (efi) binding = notApplicable;
     const QString driverName = !efi && binding.state == ReadState::Available && binding.value.isEmpty()
         ? QCoreApplication::translate("PropertiesDialog", "No directly bound driver") : propertyReadValue(binding);
-    add("driver/name", QCoreApplication::translate("PropertiesDialog", "Bound kernel driver"), driverName, efi ? QString() : d.path + "/driver", false, 0);
+    add("driver/name", QCoreApplication::translate("PropertiesDialog", "Bound kernel driver"), driverName, efi ? QString() : d.path + "/driver", false, 0, binding.state, binding.error);
     QStringList identifiers;
     for (const QString &key : {QStringLiteral("PCI_ID"), QStringLiteral("PCI_SUBSYS_ID"), QStringLiteral("PRODUCT"),
                              QStringLiteral("ID_VENDOR_ID"), QStringLiteral("ID_MODEL_ID"), QStringLiteral("ID_SERIAL_SHORT")}) {
@@ -182,8 +189,9 @@ QVector<PropertyEntry> propertyEntries(const DeviceProperties &snapshot, bool re
             identifiers.append(key + ": " + propertyReadValue(a));
     }
     add("identifiers", QCoreApplication::translate("PropertiesDialog", "Hardware identifiers"), efi ? propertyReadValue(notApplicable)
-        : identifiers.isEmpty() ? QCoreApplication::translate("PropertiesDialog", "Unavailable") : identifiers.join('\n'), QCoreApplication::translate("PropertiesDialog", "Selected udev and direct sysfs identifiers"), false, 0);
-    add("driver/binding", QCoreApplication::translate("PropertiesDialog", "Bound kernel driver"), driverName, efi ? QString() : d.path + "/driver", false, 1);
+        : identifiers.isEmpty() ? QCoreApplication::translate("PropertiesDialog", "Unavailable") : identifiers.join('\n'), QCoreApplication::translate("PropertiesDialog", "Selected udev and direct sysfs identifiers"), false, 0,
+        efi ? ReadState::NotApplicable : identifiers.isEmpty() ? ReadState::Unavailable : ReadState::Available);
+    add("driver/binding", QCoreApplication::translate("PropertiesDialog", "Bound kernel driver"), driverName, efi ? QString() : d.path + "/driver", false, 1, binding.state, binding.error);
     const Attribute moduleFallback = efi || (binding.state == ReadState::Available && binding.value.isEmpty())
         ? notApplicable : Attribute();
     addRaw("driver/bus", QCoreApplication::translate("PropertiesDialog", "Driver bus"), 1, moduleFallback);
@@ -192,7 +200,9 @@ QVector<PropertyEntry> propertyEntries(const DeviceProperties &snapshot, bool re
     add("module/type", QCoreApplication::translate("PropertiesDialog", "Built-in or modular"), type.state == ReadState::Available ? QCoreApplication::translate("PropertiesDialog", "Modular (kernel initstate evidence)")
         : type.state == ReadState::NotApplicable || type.state == ReadState::PermissionDenied || type.state == ReadState::Error
             ? propertyReadValue(type) : QCoreApplication::translate("PropertiesDialog", "Undetermined; a missing module link/version does not prove a built-in driver."),
-        snapshot.sources.value("module/type"), false, 1);
+        snapshot.sources.value("module/type"), false, 1,
+        type.state == ReadState::NotApplicable || type.state == ReadState::PermissionDenied || type.state == ReadState::Error
+            ? type.state : ReadState::Available, type.error);
     addRaw("module/runtime_version", QCoreApplication::translate("PropertiesDialog", "Running module version"), 1, moduleFallback);
     const QStringList fields {"filename", "version", "description", "author", "license", "firmware"};
     const QStringList labels {QCoreApplication::translate("PropertiesDialog", "Installed module filename"), QCoreApplication::translate("PropertiesDialog", "Installed module version"), QCoreApplication::translate("PropertiesDialog", "Installed module description"),
@@ -201,21 +211,22 @@ QVector<PropertyEntry> propertyEntries(const DeviceProperties &snapshot, bool re
     addRaw("sysfs/firmware_rev", QCoreApplication::translate("PropertiesDialog", "Reported device firmware revision"), 1,
         d.subsystem == "nvme" ? Attribute() : notApplicable);
     add("module/note", QCoreApplication::translate("PropertiesDialog", "Metadata scope"), efi ? propertyReadValue(notApplicable)
-        : QCoreApplication::translate("PropertiesDialog", "Installed metadata may differ from code already loaded before an update. Declared firmware names do not prove firmware is loaded or report its version."), {}, false, 1);
+        : QCoreApplication::translate("PropertiesDialog", "Installed metadata may differ from code already loaded before an update. Declared firmware names do not prove firmware is loaded or report its version."), {}, false, 1,
+        efi ? ReadState::NotApplicable : ReadState::Available);
     // Interpreted facts plus curated raw values, keeping provenance beside each.
-    add("parent", QCoreApplication::translate("PropertiesDialog", "Parent device path"), d.parentPath.isEmpty() ? QCoreApplication::translate("PropertiesDialog", "Unavailable") : d.parentPath, QCoreApplication::translate("PropertiesDialog", "Recorded ancestry"), efi);
+    add("parent", QCoreApplication::translate("PropertiesDialog", "Parent device path"), d.parentPath.isEmpty() ? QCoreApplication::translate("PropertiesDialog", "Unavailable") : d.parentPath, QCoreApplication::translate("PropertiesDialog", "Recorded ancestry"), efi, 2, d.parentPath.isEmpty() ? ReadState::Unavailable : ReadState::Available);
     add("raw_name", QCoreApplication::translate("PropertiesDialog", "Original name"), d.name, d.nameSource, true);
     add("name_source", QCoreApplication::translate("PropertiesDialog", "Name source"), d.nameSource, {}, true);
     add("sysname", QCoreApplication::translate("PropertiesDialog", "Kernel name"), d.sysname, {}, true);
     add("path", QCoreApplication::translate("PropertiesDialog", "Full kernel path"), d.path, {}, true);
     if (!efi) add("driver/path", QCoreApplication::translate("PropertiesDialog", "Direct driver path"), propertyReadValue(raw("driver/path")),
-        snapshot.sources.value("driver/path"), true);
+        snapshot.sources.value("driver/path"), true, 2, raw("driver/path").state, raw("driver/path").error);
     QStringList keys = snapshot.values.keys();
     keys.sort();
     for (const QString &key : keys) {
         if (!key.startsWith("udev/") && !key.startsWith("sysfs/")) continue;
         if (key == "sysfs/firmware_rev") continue; // Already exposed on the Driver tab.
-        add(key, key, propertyReadValue(raw(key)), snapshot.sources.value(key), true);
+        add(key, key, propertyReadValue(raw(key)), snapshot.sources.value(key), true, 2, raw(key).state, raw(key).error);
     }
     keys = d.properties.keys();
     keys.sort();
@@ -227,7 +238,7 @@ QVector<PropertyEntry> propertyEntries(const DeviceProperties &snapshot, bool re
     keys = d.attributes.keys();
     keys.sort();
     for (const QString &key : keys)
-        add("inventory/sysfs/" + key, QCoreApplication::translate("PropertiesDialog", "Inventory attribute: %1").arg(key), propertyReadValue(d.attributes.value(key)), QCoreApplication::translate("PropertiesDialog", "Last inventory; see name source for derived naming metadata"), true);
+        add("inventory/sysfs/" + key, QCoreApplication::translate("PropertiesDialog", "Inventory attribute: %1").arg(key), propertyReadValue(d.attributes.value(key)), QCoreApplication::translate("PropertiesDialog", "Last inventory; see name source for derived naming metadata"), true, 2, d.attributes.value(key).state, d.attributes.value(key).error);
     if (efi) {
         const Attribute hex = raw("efi/hex");
         QString dump = propertyReadValue(hex);
@@ -236,7 +247,7 @@ QVector<PropertyEntry> propertyEntries(const DeviceProperties &snapshot, bool re
             if (snapshot.efiTruncated) dump += '\n' + QCoreApplication::translate("PropertiesDialog", "Truncated: first 65536 bytes shown.");
         }
         add("efi/hex", QCoreApplication::translate("PropertiesDialog", "UEFI variable — hex dump"), dump,
-            QCoreApplication::translate("PropertiesDialog", "Complete efivarfs file bytes, including the attribute prefix; contents are not decoded."));
+            QCoreApplication::translate("PropertiesDialog", "Complete efivarfs file bytes, including the attribute prefix; contents are not decoded."), false, 2, hex.state, hex.error);
     }
     return entries;
 }

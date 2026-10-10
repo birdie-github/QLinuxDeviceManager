@@ -32,6 +32,32 @@ int main(int argc, char **argv)
     io.start = 0x300; io.end = 0x31f;
     io.source = "/sys/devices/fixture/resource";
     properties.resources.items.append(io);
+    DeviceProperties statusFixture = properties;
+    statusFixture.device.properties.clear();
+    statusFixture.values.remove("sysfs/vendor");
+    statusFixture.values.insert("sysfs/model", {ReadState::Available, "Unavailable", 0});
+    statusFixture.values.insert("sysfs/serial", {ReadState::Unavailable, {}, 0});
+    statusFixture.values.insert("sysfs/revision", {ReadState::PermissionDenied, {}, 13});
+    for (const PropertyEntry &entry : propertyEntries(statusFixture)) {
+        if (entry.id == "sysfs/model")
+            check(detailsPropertyStatus(entry).isEmpty(), "A literal status-like device value remains meaningful");
+        if (entry.id == "sysfs/serial")
+            check(entry.state == ReadState::Unavailable && detailsPropertyStatus(entry) == "unavailable",
+                  "Unavailable raw properties retain status independently of displayed text");
+        if (entry.id == "sysfs/revision")
+            check(entry.state == ReadState::PermissionDenied && detailsPropertyStatus(entry) == "permission denied",
+                  "Permission-denied properties remain distinct from unavailable properties");
+        if (entry.id == "identifiers")
+            check(entry.state == ReadState::Unavailable, "Missing derived hardware identifiers carry an unavailable status");
+    }
+    PropertyEntry failedProperty {"failed", "Failure", "localized explanation", {}, false, 2, ReadState::Error, 5};
+    check(detailsPropertyStatus(failedProperty) == "read error (errno 5)", "Read error suffix preserves errno");
+    DeviceProperties efiStatus = properties;
+    efiStatus.device.subsystem = "efivarfs";
+    for (const PropertyEntry &entry : propertyEntries(efiStatus))
+        if (entry.id == "identifiers")
+            check(entry.state == ReadState::NotApplicable && detailsPropertyStatus(entry) == "not applicable",
+                  "UEFI hardware identifiers carry their derived not-applicable status");
     auto document = deviceSearchDocument({device, "Visible device", {}}, properties);
     check(!searchDocumentMatch(document, "casesensitiveserial").isEmpty(), "Raw metadata is case insensitive");
     check(!searchDocumentMatch(document, "32902").isEmpty(), "PCI vendor has decimal alias");

@@ -380,9 +380,16 @@ void PropertiesDialog::rebuildDetails()
     const QString previous = property_->currentData().toString();
     const QSignalBlocker blocker(property_);
     property_->clear();
-    for (const PropertyEntry &entry : entries_)
-        if (isDetailsProperty(entry, device()) && (!entry.advanced || advanced_->isChecked()))
-            property_->addItem(entry.label, entry.id);
+    QVector<const PropertyEntry *> available, other;
+    for (const PropertyEntry &entry : entries_) {
+        if (!isDetailsProperty(entry, device()) || (entry.advanced && !advanced_->isChecked())) continue;
+        if (detailsPropertyStatus(entry).isEmpty()) available.append(&entry);
+        else other.append(&entry);
+    }
+    for (const PropertyEntry *entry : available) property_->addItem(entry->label, entry->id);
+    if (!available.isEmpty() && !other.isEmpty()) property_->insertSeparator(property_->count());
+    for (const PropertyEntry *entry : other)
+        property_->addItem(tr("%1 (%2)").arg(entry->label, detailsPropertyStatus(*entry)), entry->id);
     const int index = property_->findData(previous);
     property_->setCurrentIndex(index < 0 ? 0 : index);
     showDetail();
