@@ -38,6 +38,20 @@ Attribute readBinary(const QString &path, QByteArray &bytes, bool efivar)
     if (efivar) bytes.remove(0, 4);
     return {ReadState::Available, {}, 0};
 }
+QString certificateDisplayName(const QSslCertificate &certificate, bool issuer)
+{
+    QStringList parts;
+    // Organization/unit identify distro certificates better than a generic CN.
+    for (auto attribute : {QSslCertificate::OrganizationalUnitName, QSslCertificate::Organization,
+                           QSslCertificate::CommonName}) {
+        const QStringList values = issuer ? certificate.issuerInfo(attribute) : certificate.subjectInfo(attribute);
+        for (const QString &value : values) {
+            const QString text = value.simplified();
+            if (!text.isEmpty() && !parts.contains(text)) parts.append(text);
+        }
+    }
+    return parts.join(" — ");
+}
 QString certificateName(const QSslCertificate &certificate, bool issuer)
 {
     QStringList fields;
@@ -91,7 +105,8 @@ MokCertificates parseMokCertificates(const QByteArray &payload)
                 return invalid(EINVAL);
             const QSslCertificate &certificate = certificates.first();
             result.certificates.append({certificateName(certificate, false), certificateName(certificate, true),
-                certificate.expiryDate().toUTC().toString(Qt::ISODate)});
+                certificate.expiryDate().toUTC().toString(Qt::ISODate),
+                certificateDisplayName(certificate, false), certificateDisplayName(certificate, true)});
         }
         offset += size;
     }

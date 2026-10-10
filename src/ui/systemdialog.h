@@ -3,6 +3,7 @@
 #include <QDialog>
 #include <QHash>
 #include <QStringList>
+class QGridLayout;
 class QLabel;
 class QPushButton;
 
@@ -16,7 +17,9 @@ signals:
     void refreshRequested();
 private:
     QString displayValue(const QString &key, const Attribute &value) const;
+    void rebuildMok();
     void copyAll();
+    QGridLayout *mokForm_ = nullptr;
     QHash<QString, QLabel *> fields_;
     QStringList order_;
     QHash<QString, QString> captions_;

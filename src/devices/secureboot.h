@@ -3,7 +3,10 @@
 #include <QByteArray>
 #include <QVector>
 
-struct MokCertificate { QString subject, issuer, expires; };
+struct MokCertificate {
+    QString subject, issuer, expires;
+    QString subjectDisplay, issuerDisplay;
+};
 struct MokCertificates {
     Attribute status;
     QVector<MokCertificate> certificates;

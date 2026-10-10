@@ -3,8 +3,10 @@
 #include <QApplication>
 #include <QThread>
 #include <QClipboard>
+#include <QDateTime>
 #include <QDialogButtonBox>
 #include <QGridLayout>
+#include <QFont>
 #include <QSizePolicy>
 #include <QGroupBox>
 #include <QLabel>
@@ -62,10 +64,24 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
     field(os, "kernel", tr("Kernel version"));
     field(os, "build", tr("Kernel build"));
     field(os, "boot", tr("Boot mode"));
-    field(os, "secure_boot", tr("Secure Boot"));
-    field(os, "mok", tr("MOK certificates"));
     field(os, "virtualization", tr("Virtualization environment"));
     field(os, "uptime", tr("Uptime"));
+    auto *secureBoot = group(tr("Secure Boot"));
+    field(secureBoot, "secure_boot", tr("Status"));
+    captions_.insert("secure_boot", tr("Secure Boot"));
+    auto *mokTitle = new QLabel(tr("MOK certificates"), page);
+    mokTitle->setTextFormat(Qt::PlainText);
+    QFont headingFont = mokTitle->font();
+    headingFont.setBold(true);
+    mokTitle->setFont(headingFont);
+    secureBoot->addWidget(mokTitle, 1, 0, 1, 2);
+    auto *mokPage = new QWidget(page);
+    mokForm_ = new QGridLayout(mokPage);
+    mokForm_->setContentsMargins(0, 0, 0, 0);
+    mokForm_->setColumnStretch(1, 1);
+    secureBoot->addWidget(mokPage, 2, 0, 1, 2);
+    order_.append("mok");
+    captions_.insert("mok", tr("MOK certificates"));
     auto *hardware = group(tr("Hardware and firmware"));
     field(hardware, "manufacturer", tr("System manufacturer"));
     field(hardware, "model", tr("System model"));
@@ -85,7 +101,13 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
     // Use one font-derived caption width for every section, so values align.
     int captionWidth = 0;
     for (const QLabel *name : names) captionWidth = qMax(captionWidth, name->sizeHint().width());
+    for (const QString &caption : {tr("Owner:"), tr("Issuer:"), tr("Expires:")}) {
+        const QLabel name(caption);
+        captionWidth = qMax(captionWidth, name.sizeHint().width());
+    }
     for (QGridLayout *form : forms) form->setColumnMinimumWidth(0, captionWidth);
+    mokForm_->setColumnMinimumWidth(0, captionWidth);
+    rebuildMok();
     groups->addStretch();
     scroll->setWidget(page);
     layout->addWidget(scroll, 1);
@@ -161,25 +183,86 @@ QString SystemDialog::displayValue(const QString &key, const Attribute &value) c
     }
     return value.value;
 }
+void SystemDialog::rebuildMok()
+{
+    while (QLayoutItem *item = mokForm_->takeAt(0)) {
+        delete item->widget();
+        delete item;
+    }
+    const MokCertificates &mok = snapshot_.mok;
+    const QString scope = snapshot_.sources.value("mok") + '\n'
+        + tr("Exposed runtime MOK certificates. Issuer and expiration are certificate metadata, "
+             "not verification of the signer or proof that this key signed the running kernel. Dates are UTC. "
+             "Firmware db certificates and pending enrollments are not included.");
+    int row = 0;
+    const auto label = [this](const QString &text) {
+        auto *value = new QLabel(text, mokForm_->parentWidget());
+        value->setTextFormat(Qt::PlainText);
+        value->setWordWrap(true);
+        value->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
+        value->setAlignment(Qt::AlignLeading | Qt::AlignTop);
+        QSizePolicy policy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        policy.setHeightForWidth(true);
+        value->setSizePolicy(policy);
+        value->setMinimumWidth(120);
+        return value;
+    };
+    const auto hint = [&scope](QLabel *value, const QString &details) {
+        value->setToolTip("<qt>" + (scope + "\n\n" + details).toHtmlEscaped().replace('\n', "<br>") + "</qt>");
+    };
+    const auto message = [&](const QString &text) {
+        auto *value = label(text);
+        hint(value, {});
+        mokForm_->addWidget(value, row++, 0, 1, 2);
+    };
+    if (mok.status.state != ReadState::Available || mok.certificates.isEmpty()) {
+        message(displayValue("mok", {}));
+        return;
+    }
+    const auto known = [this](const QString &text) { return text.isEmpty() ? tr("Unavailable") : text; };
+    int index = 0;
+    for (const MokCertificate &certificate : mok.certificates) {
+        if (mok.certificates.size() > 1) message(tr("Certificate %1").arg(++index));
+        const auto field = [&](const QString &caption, const QString &text, const QString &details) {
+            auto *name = new QLabel(caption, mokForm_->parentWidget());
+            name->setTextFormat(Qt::PlainText);
+            auto *value = label(text);
+            hint(name, details);
+            hint(value, details);
+            mokForm_->addWidget(name, row, 0, Qt::AlignLeading | Qt::AlignTop);
+            mokForm_->addWidget(value, row++, 1);
+        };
+        const QString owner = certificate.subjectDisplay.isEmpty() ? certificate.subject : certificate.subjectDisplay;
+        const QString issuer = !certificate.subject.isEmpty() && certificate.subject == certificate.issuer
+            ? tr("Same as owner")
+            : (certificate.issuerDisplay.isEmpty() ? certificate.issuer : certificate.issuerDisplay);
+        const QDateTime expires = QDateTime::fromString(certificate.expires, Qt::ISODate);
+        const QString date = expires.isValid()
+            ? tr("%1 UTC").arg(QLocale().toString(expires.toUTC(), "d MMM yyyy, HH:mm:ss")) : known(certificate.expires);
+        field(tr("Owner:"), known(owner), certificate.subject);
+        field(tr("Issuer:"), known(issuer), certificate.issuer);
+        field(tr("Expires:"), date, certificate.expires);
+    }
+    if (mok.otherSignatures)
+        message(tr("%1 non-certificate signatures omitted").arg(mok.otherSignatures));
+}
 void SystemDialog::acceptResult(SystemProperties result)
 {
     Q_ASSERT(QThread::isMainThread());
     snapshot_ = std::move(result);
     for (const QString &key : order_) {
+        if (key == "mok") continue; // Certificate rows are rebuilt separately.
         fields_.value(key)->setText(displayValue(key, snapshot_.values.value(key)));
         QString source = snapshot_.sources.value(key);
         if (key == "secure_boot")
             source += '\n' + tr("Firmware SecureBoot state; does not establish shim validation or kernel lockdown policy.");
-        if (key == "mok")
-            source += '\n' + tr("Exposed runtime MOK certificates. Issuer and expiration are certificate metadata, "
-                "not verification of the signer or proof that this key signed the running kernel. Dates are UTC. "
-                "Firmware db certificates and pending enrollments are not included.");
         if (key == "memory")
             source += '\n' + tr("System reserved is reported physical RAM minus Linux MemTotal. "
                                  "It includes all memory unavailable to Linux, not just firmware reservations. "
                                  "It is omitted if physical capacity is unavailable or smaller than usable RAM.");
-        fields_.value(key)->setToolTip(source.toHtmlEscaped());
+        fields_.value(key)->setToolTip("<qt>" + source.toHtmlEscaped().replace('\n', "<br>") + "</qt>");
     }
+    rebuildMok();
     setBusy(false);
     copy_->setEnabled(true);
 }
