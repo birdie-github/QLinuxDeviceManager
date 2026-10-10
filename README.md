@@ -226,13 +226,22 @@ including its attribute prefix. Longer values receive a truncation notice.
 Contents are not decoded or modified, and actual access can still be denied by
 security policy despite the file's permission bits.
 
+System Information also shows firmware Secure Boot status and exposed runtime MOK
+certificates (owner, issuer and expiration in UTC). This is certificate metadata,
+not a check of the running kernel's signer or certificate trust. Reading MOK data
+may require permissions; unavailable data is shown explicitly. The kernel's MOK
+table is preferred, with efivarfs as a fallback. Oversized or split fallback lists
+are reported as errors rather than displaying a partial list. Qt's TLS backend
+must be installed to decode X.509 certificates.
+
 ## Build and installation
 
 Requirements:
 
 - Linux and a C++17 compiler.
 - CMake **3.19 or newer** and pkg-config.
-- Qt **6.8 or newer**, including Widgets, and libudev development headers.
+- Qt **6.8 or newer**, including Widgets and Network, and libudev development headers.
+  Qt Network is used locally to decode MOK certificates; this feature makes no network requests.
 - Optional QtDBus **6.8 or newer** for cached UDisks2 storage metadata.
 - Optional libkmod **30 or newer** for installed-module metadata and fallback names.
 - Optional Qt Linguist tools **6.8 or newer** to build translation catalogs.

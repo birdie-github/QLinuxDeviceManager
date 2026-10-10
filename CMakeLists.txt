@@ -13,7 +13,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
-find_package(Qt6 6.8 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Widgets Network)
 # Optional read-only UDisks2 cache access. Native storage viewing still works without it.
 option(UDISKS2 "Use optional QtDBus for cached UDisks2 storage metadata" ON)
 if(UDISKS2)
@@ -48,6 +48,7 @@ add_executable(qlinuxdevicemanager
     src/ui/devicemodel.h src/ui/devicemodel.cpp
     src/ui/mainwindow.h src/ui/mainwindow.cpp
     src/ui/propertiesdialog.h src/ui/propertiesdialog.cpp
+    src/devices/secureboot.h src/devices/secureboot.cpp
     src/devices/systemproperties.h src/devices/systemproperties.cpp
     src/ui/systemdialog.h src/ui/systemdialog.cpp)
 # Embed existing PNG assets so a build-tree executable has its own icon without
@@ -65,7 +66,7 @@ qt_add_resources(qlinuxdevicemanager app_icons
 
 target_include_directories(qlinuxdevicemanager PRIVATE
     src/devices src/ui "${CMAKE_CURRENT_BINARY_DIR}/generated")
-target_link_libraries(qlinuxdevicemanager PRIVATE Qt6::Widgets PkgConfig::UDEV)
+target_link_libraries(qlinuxdevicemanager PRIVATE Qt6::Widgets Qt6::Network PkgConfig::UDEV)
 if(KMOD AND TARGET PkgConfig::KMOD)
     target_link_libraries(qlinuxdevicemanager PRIVATE PkgConfig::KMOD)
     target_compile_definitions(qlinuxdevicemanager PRIVATE QLDM_HAVE_KMOD)
@@ -166,9 +167,10 @@ if(BUILD_TESTING)
     add_test(NAME device-search COMMAND device-search-test)
     add_executable(system-properties-test tests/system-properties.cpp
         src/devices/systemproperties.cpp src/devices/systemproperties.h
+        src/devices/secureboot.cpp src/devices/secureboot.h
         src/devices/cpumetadata.cpp src/devices/cpumetadata.h)
     target_include_directories(system-properties-test PRIVATE src/devices)
-    target_link_libraries(system-properties-test PRIVATE Qt6::Core PkgConfig::UDEV)
+    target_link_libraries(system-properties-test PRIVATE Qt6::Core Qt6::Network PkgConfig::UDEV)
     add_test(NAME system-properties COMMAND system-properties-test)
 endif()
 

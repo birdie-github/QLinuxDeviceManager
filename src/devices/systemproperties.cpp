@@ -1,4 +1,5 @@
 #include "systemproperties.h"
+#include "secureboot.h"
 #include "cpumetadata.h"
 #include "directoryscan.h"
 #include <libudev.h>
@@ -341,6 +342,10 @@ SystemProperties collectSystemProperties()
     struct stat efi {};
     const int status = stat("/sys/firmware/efi", &efi);
     put("boot", status == 0 ? S_ISDIR(efi.st_mode) ? available("uefi") : failed(ENOTDIR) : errno == ENOENT ? available("not-exposed") : failed(errno), "/sys/firmware/efi directory presence");
+    const SecureBootInformation secureBoot = collectSecureBootInformation();
+    put("secure_boot", secureBoot.state, secureBoot.stateSource);
+    result.mok = secureBoot.mok;
+    result.sources["mok"] = secureBoot.mokSource;
     Attribute hypervisor = readText("/sys/hypervisor/type");
     QString hypervisorSource = "/sys/hypervisor/type";
 #if defined(__i386__) || defined(__x86_64__)

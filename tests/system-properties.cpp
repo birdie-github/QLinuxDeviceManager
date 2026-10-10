@@ -2,6 +2,7 @@
 #include <QCoreApplication>
 #include <cstdio>
 #include <cerrno>
+#include <QtEndian>
 
 int main(int argc, char **argv)
 {
@@ -52,5 +53,43 @@ int main(int argc, char **argv)
     memory["MEMORY_ARRAY_NUM_DEVICES"] = "4097";
     check(parseInstalledMemory(memory).error == EOVERFLOW, "Memory slot count is bounded");
     check(parseInstalledMemory({}).state == ReadState::Unavailable, "Missing firmware data is not zero RAM");
+    check(parseSecureBoot(QByteArray(1, char(1))).value == "enabled", "SecureBoot byte enables firmware state");
+    check(parseSecureBoot(QByteArray(1, char(0))).value == "disabled", "SecureBoot zero disables firmware state");
+    check(parseSecureBoot({}).state == ReadState::Error
+          && parseSecureBoot(QByteArray(1, char(2))).state == ReadState::Error
+          && parseSecureBoot(QByteArray(5, char(0))).state == ReadState::Error,
+          "Malformed SecureBoot payload is not treated as disabled");
+    const auto signatureList = [](const QByteArray &guid, const QByteArray &signature) {
+        QByteArray list = guid;
+        const auto append = [&list](quint32 value) {
+            char bytes[4];
+            qToLittleEndian<quint32>(value, reinterpret_cast<uchar *>(bytes));
+            list.append(bytes, 4);
+        };
+        append(28 + 16 + signature.size()); append(0); append(16 + signature.size());
+        list.append(QByteArray(16, char(0))); // Signature-owner GUID.
+        list.append(signature);
+        return list;
+    };
+    const QByteArray x509Guid = QByteArray::fromHex("a159c0a5e494a74a87b5ab155c2bf072");
+    const QByteArray der = QByteArray::fromBase64(
+        "MIIBGzCBwaADAgECAgEBMAoGCCqGSM49BAMCMBcxFTATBgNVBAMMDFFMRE0gZml4dHVyZTAeFw0yMDAxMDEwMDAwMDBaFw0zMDAxMDEwMDAwMDBaMBcxFTATBgNVBAMMDFFMRE0gZml4dHVyZTBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABK9KZsQWrAixDhWcxerBMOstANWdiM9RdfPf+25bsZX6Hgz+pMLR2hpgxDWrLCpmGDVZNYAAya1/3hrgz6/Tm9gwCgYIKoZIzj0EAwIDSQAwRgIhAPjy8A6F++gXv0CNHw3xd5VwAHI0/Tpt5Bifyhf1KK5AAiEA839IXhcKhZWx329x4fNC1e8wt25T7EBf5Hjzq6wDviw=");
+    const QByteArray list = signatureList(x509Guid, der);
+    const MokCertificates mok = parseMokCertificates(list);
+    check(mok.status.state == ReadState::Available && mok.certificates.size() == 1
+          && mok.certificates.first().subject.contains("QLDM fixture")
+          && mok.certificates.first().issuer.contains("QLDM fixture")
+          && mok.certificates.first().expires == "2030-01-01T00:00:00Z",
+          "MOK X.509 owner, issuer and expiration remain paired");
+    check(parseMokCertificates(list + list).certificates.size() == 2, "Multiple MOK certificate lists are retained");
+    check(parseMokCertificates(list.left(list.size() - 1)).status.state == ReadState::Error,
+          "Truncated MOK lists cannot expose apparently complete certificates");
+    check(parseMokCertificates(signatureList(x509Guid, "invalid DER")).status.state == ReadState::Error,
+          "Invalid X.509 data does not become an empty successful list");
+    const MokCertificates hashes = parseMokCertificates(signatureList(QByteArray(16, char(0)), QByteArray(32, char(1))));
+    check(hashes.status.state == ReadState::Available && hashes.certificates.isEmpty() && hashes.otherSignatures == 1,
+          "Non-certificate signatures are counted without inventing certificate dates");
+    check(parseMokCertificates(QByteArray(1024 * 1024 + 1, char(0))).status.error == EOVERFLOW,
+          "MOK input is bounded");
     return failures ? 1 : 0;
 }

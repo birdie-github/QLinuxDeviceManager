@@ -62,6 +62,8 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
     field(os, "kernel", tr("Kernel version"));
     field(os, "build", tr("Kernel build"));
     field(os, "boot", tr("Boot mode"));
+    field(os, "secure_boot", tr("Secure Boot"));
+    field(os, "mok", tr("MOK certificates"));
     field(os, "virtualization", tr("Virtualization environment"));
     field(os, "uptime", tr("Uptime"));
     auto *hardware = group(tr("Hardware and firmware"));
@@ -105,7 +107,20 @@ QString SystemDialog::displayValue(const QString &key, const Attribute &value) c
 {
     if (key == "virtualization" && value.state == ReadState::Unavailable)
         return tr("Unknown (no hypervisor identity reported)");
+    if (key == "mok") {
+        const MokCertificates &mok = snapshot_.mok;
+        if (mok.status.state != ReadState::Available) return propertyReadValue(mok.status);
+        QStringList certificates;
+        const auto known = [this](const QString &text) { return text.isEmpty() ? tr("Unavailable") : text; };
+        for (const MokCertificate &certificate : mok.certificates)
+            certificates.append(tr("Owner: %1\nIssuer: %2\nExpires: %3")
+                .arg(known(certificate.subject), known(certificate.issuer), known(certificate.expires)));
+        if (certificates.isEmpty()) certificates.append(tr("No X.509 certificates in the exposed MOK list"));
+        if (mok.otherSignatures) certificates.append(tr("%1 non-certificate signatures omitted").arg(mok.otherSignatures));
+        return certificates.join("\n\n");
+    }
     if (value.state != ReadState::Available) return propertyReadValue(value);
+    if (key == "secure_boot") return value.value == "enabled" ? tr("Enabled") : tr("Disabled");
     if (key == "boot")
         return value.value == "uefi" ? tr("UEFI")
             : tr("UEFI not exposed (legacy boot or restricted environment)");
@@ -153,6 +168,12 @@ void SystemDialog::acceptResult(SystemProperties result)
     for (const QString &key : order_) {
         fields_.value(key)->setText(displayValue(key, snapshot_.values.value(key)));
         QString source = snapshot_.sources.value(key);
+        if (key == "secure_boot")
+            source += '\n' + tr("Firmware SecureBoot state; does not establish shim validation or kernel lockdown policy.");
+        if (key == "mok")
+            source += '\n' + tr("Exposed runtime MOK certificates. Issuer and expiration are certificate metadata, "
+                "not verification of the signer or proof that this key signed the running kernel. Dates are UTC. "
+                "Firmware db certificates and pending enrollments are not included.");
         if (key == "memory")
             source += '\n' + tr("System reserved is reported physical RAM minus Linux MemTotal. "
                                  "It includes all memory unavailable to Linux, not just firmware reservations. "

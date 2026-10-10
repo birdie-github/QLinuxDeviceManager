@@ -1,9 +1,11 @@
 #pragma once
 #include "device.h"
+#include "secureboot.h"
 #include <QThread>
 #include <QSet>
 
 struct SystemProperties {
+    MokCertificates mok;
     QHash<QString, Attribute> values;
     QHash<QString, QString> sources;
 };
