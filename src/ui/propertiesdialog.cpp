@@ -75,6 +75,38 @@ QLabel *plainLabel(const QString &text, QWidget *parent)
     label->setFocusPolicy(Qt::StrongFocus);
     return label;
 }
+QFormLayout *storageDetailsForm(QVBoxLayout *layout, QWidget *parent)
+{
+    auto *scroll = new QScrollArea(parent);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::StyledPanel);
+    auto *page = new QWidget(scroll);
+    auto *form = new QFormLayout(page);
+    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    form->setRowWrapPolicy(QFormLayout::WrapLongRows);
+    form->setFormAlignment(Qt::AlignTop);
+    scroll->setWidget(page);
+    layout->addWidget(scroll, 1);
+    return form;
+}
+void showStorageFields(QFormLayout *form, const QVector<StorageDisplayField> &fields)
+{
+    clearForm(form);
+    for (const StorageDisplayField &field : fields) {
+        auto *caption = plainLabel(field.label + ':', form->parentWidget());
+        auto *value = plainLabel(field.value, form->parentWidget());
+        const QString hint = "<qt>" + field.source.toHtmlEscaped().replace('\n', "<br>") + "</qt>";
+        caption->setToolTip(hint);
+        value->setToolTip(hint);
+        form->addRow(caption, value);
+    }
+}
+QString selectedStorageText(const QVector<StorageDisplayRow> &rows, int index)
+{
+    if (index < 0 || index >= rows.size()) return {};
+    const StorageDisplayRow &row = rows[index];
+    return row.name + '\n' + storageFieldsText(row.fields);
+}
 }
 
 PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDialog(parent)
@@ -141,9 +173,7 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     volumesTable_->setColumnWidth(1, 110);
     volumesTable_->setColumnWidth(2, 180);
     volumesLayout->addWidget(volumesTable_, 2);
-    volumeDetails_ = new QPlainTextEdit(volumesPage_);
-    volumeDetails_->setReadOnly(true);
-    volumesLayout->addWidget(volumeDetails_, 1);
+    volumeDetails_ = storageDetailsForm(volumesLayout, volumesPage_);
     auto *volumeButtons = new QHBoxLayout;
     auto *copyVolume = new QPushButton(tr("Copy selected volume"), volumesPage_);
     auto *copyVolumes = new QPushButton(tr("Copy all volumes"), volumesPage_);
@@ -153,7 +183,7 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     volumesLayout->addLayout(volumeButtons);
     connect(volumesTable_, &QTableWidget::currentCellChanged, this, [this] { showVolume(); });
     connect(copyVolume, &QPushButton::clicked, this, [this] {
-        QApplication::clipboard()->setText(volumeDetails_->toPlainText());
+        QApplication::clipboard()->setText(selectedStorageText(storagePresentation_.volumes, volumesTable_->currentRow()));
     });
     connect(copyVolumes, &QPushButton::clicked, this, [this] {
         QApplication::clipboard()->setText(storageRowsText(storagePresentation_.volumes));
@@ -171,9 +201,7 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     healthLabel->setBuddy(healthDrive_);
     healthLayout->addWidget(healthLabel);
     healthLayout->addWidget(healthDrive_);
-    healthDetails_ = new QPlainTextEdit(healthPage_);
-    healthDetails_->setReadOnly(true);
-    healthLayout->addWidget(healthDetails_, 1);
+    healthDetails_ = storageDetailsForm(healthLayout, healthPage_);
     auto *healthButtons = new QHBoxLayout;
     auto *copyHealth = new QPushButton(tr("Copy selected drive health"), healthPage_);
     auto *copyAllHealth = new QPushButton(tr("Copy all drive health"), healthPage_);
@@ -183,7 +211,7 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     healthLayout->addLayout(healthButtons);
     connect(healthDrive_, &QComboBox::currentIndexChanged, this, &PropertiesDialog::showHealth);
     connect(copyHealth, &QPushButton::clicked, this, [this] {
-        QApplication::clipboard()->setText(healthDetails_->toPlainText());
+        QApplication::clipboard()->setText(selectedStorageText(storagePresentation_.health, healthDrive_->currentIndex()));
     });
     connect(copyAllHealth, &QPushButton::clicked, this, [this] {
         QApplication::clipboard()->setText(storageRowsText(storagePresentation_.health));
@@ -463,12 +491,7 @@ void PropertiesDialog::rebuildStorage()
         "Reload does not request SMART updates or self-tests. Missing evidence is unavailable; "
         "no reported warning does not guarantee health. Related drives are shown separately.")
         + "\n\n" + storagePresentation_.notes);
-    clearForm(storage_);
-    for (const StorageDisplayField &field : storagePresentation_.overview) {
-        auto *label = plainLabel(field.value, storagePage_);
-        label->setToolTip(field.source.toHtmlEscaped());
-        storage_->addRow(field.label + ':', label);
-    }
+    showStorageFields(storage_, storagePresentation_.overview);
     {
         const QSignalBlocker blocker(volumesTable_);
         volumesTable_->setRowCount(0);
@@ -505,21 +528,23 @@ void PropertiesDialog::showVolume()
 {
     const int row = volumesTable_->currentRow();
     if (row < 0 || row >= storagePresentation_.volumes.size()) {
-        volumeDetails_->setPlainText(tr("No related volume metadata available."));
+        clearForm(volumeDetails_);
+        volumeDetails_->addRow(plainLabel(tr("No related volume metadata available."), volumeDetails_->parentWidget()));
         return;
     }
     const StorageDisplayRow &entry = storagePresentation_.volumes[row];
-    volumeDetails_->setPlainText(entry.name + '\n' + storageFieldsText(entry.fields));
+    showStorageFields(volumeDetails_, entry.fields);
 }
 void PropertiesDialog::showHealth()
 {
     const int row = healthDrive_->currentIndex();
     if (row < 0 || row >= storagePresentation_.health.size()) {
-        healthDetails_->setPlainText(tr("Cached health unavailable."));
+        clearForm(healthDetails_);
+        healthDetails_->addRow(plainLabel(tr("Cached health unavailable."), healthDetails_->parentWidget()));
         return;
     }
     const StorageDisplayRow &entry = storagePresentation_.health[row];
-    healthDetails_->setPlainText(entry.name + '\n' + storageFieldsText(entry.fields));
+    showStorageFields(healthDetails_, entry.fields);
 }
 
 void PropertiesDialog::updateEvents(const DeviceEventsSnapshot &history, const QString &monitorNote)

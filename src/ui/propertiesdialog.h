@@ -54,9 +54,9 @@ private:
     QWidget *volumesPage_ = nullptr;
     QWidget *healthPage_ = nullptr;
     QTableWidget *volumesTable_ = nullptr;
-    QPlainTextEdit *volumeDetails_ = nullptr;
+    QFormLayout *volumeDetails_ = nullptr;
     QComboBox *healthDrive_ = nullptr;
-    QPlainTextEdit *healthDetails_ = nullptr;
+    QFormLayout *healthDetails_ = nullptr;
     QLabel *storageNotice_ = nullptr;
     QLabel *volumesNotice_ = nullptr;
     QLabel *healthNotice_ = nullptr;
