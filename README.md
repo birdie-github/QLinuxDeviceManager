@@ -44,6 +44,10 @@ alone does not establish that its hardware is healthy.
 
 <img src="./screenshots/main-window.webp" alt="Main Window">
 
+**Main Window Search/Filter:**
+
+<img src="./screenshots/main-window-search.webp" alt="Main Window Search/Filter">
+
 **System Information**
 
 <img src="./screenshots/system-information.webp" alt="System Information">
