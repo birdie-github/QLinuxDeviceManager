@@ -80,7 +80,7 @@ QString hexDump(const QByteArray &bytes)
 
 }
 
-QVector<PropertyEntry> propertyEntries(const DeviceProperties &snapshot, bool removed, const QString &resourcesText)
+QVector<PropertyEntry> propertyEntries(const DeviceProperties &snapshot, bool removed)
 {
     QVector<PropertyEntry> entries;
     const Device &d = snapshot.device;
@@ -238,8 +238,6 @@ QVector<PropertyEntry> propertyEntries(const DeviceProperties &snapshot, bool re
         add("efi/hex", QCoreApplication::translate("PropertiesDialog", "UEFI variable — hex dump"), dump,
             QCoreApplication::translate("PropertiesDialog", "Complete efivarfs file bytes, including the attribute prefix; contents are not decoded."));
     }
-    if (snapshot.resources.hasInformation())
-        add("resources", QCoreApplication::translate("PropertiesDialog", "Resources"), resourcesText, QCoreApplication::translate("PropertiesDialog", "Direct device resource metadata"));
     return entries;
 }
 

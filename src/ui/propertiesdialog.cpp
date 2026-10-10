@@ -362,7 +362,7 @@ void PropertiesDialog::markRemoved()
 void PropertiesDialog::rebuild()
 {
     rebuildResources();
-    entries_ = propertyEntries(snapshot_, removed_, resourcesText_);
+    entries_ = propertyEntries(snapshot_, removed_);
     clearForm(general_);
     clearForm(driver_);
     rebuildStorage();
