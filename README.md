@@ -24,7 +24,8 @@ desktop environment is required.
 - **Cached drive health:** available ATA SMART failure predictions, temperatures
   and counts, plus NVMe critical warnings, through UDisks2.
 - **System information:** CPU models and topology, cache totals, physical and usable
-  RAM, motherboard and firmware details, operating system, kernel and uptime.
+  RAM, motherboard and firmware details, operating system, kernel and uptime, secure
+  boot status and MOK certificates.
 - **Live hardware monitoring:** automatically update the inventory as devices are
   connected, removed or changed, with an Events tab for observed udev activity.
 - **Search and copy:** filter device names or search advanced metadata and resources;
