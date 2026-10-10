@@ -239,6 +239,25 @@ table is preferred, with efivarfs as a fallback. Oversized or split fallback lis
 are reported as errors rather than displaying a partial list. Qt's TLS backend
 must be installed to decode X.509 certificates.
 
+## Linux AppImage
+
+The [Linux AppImage workflow](https://github.com/birdie-github/QLinuxDeviceManager/actions/workflows/ci.yml)
+packages an x86_64 AppImage on pushes, pull requests and manual runs. Download the
+artifact from a successful run and extract the ZIP, then launch it:
+
+```sh
+chmod +x QLinuxDeviceManager-*.AppImage
+./QLinuxDeviceManager-*.AppImage
+```
+
+The package includes Qt 6.8, X11/Wayland platform plugins, application icons and
+translations, and enables libkmod and QtDBus support. It is built on Ubuntu 24.04;
+older distributions are not guaranteed to be compatible. The host still provides
+the Linux kernel, device metadata and optional UDisks2 service.
+
+If FUSE is unavailable, launch with `--appimage-extract-and-run`. Workflow artifacts
+are retained for 14 days; they are not automatically published as release assets.
+
 ## Build and installation
 
 Requirements:

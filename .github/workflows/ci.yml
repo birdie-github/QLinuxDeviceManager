@@ -1,0 +1,89 @@
+name: Linux AppImage
+
+on: [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  appimage:
+    name: Linux AppImage (Qt 6.8, x86_64)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build pkg-config python3 wget file \
+            libudev-dev libkmod-dev libssl-dev libgl-dev libegl-dev \
+            libxkbcommon-dev libxcb-cursor0
+          pkg-config --atleast-version=30 libkmod
+
+      # Ubuntu 24.04's packaged Qt is older than our required Qt 6.8.
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          cache: true
+
+      - name: Build and stage AppDir
+        run: |
+          set -euo pipefail
+          cmake -S . -B _build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -DCMAKE_INSTALL_LIBDIR=lib \
+            -DBUILD_TESTING=OFF -DKMOD=ON -DUDISKS2=ON
+          cmake --build _build --parallel "$(nproc)"
+          DESTDIR="$PWD/_build/AppDir" cmake --install _build
+          install -Dm644 LICENSE _build/AppDir/usr/share/licenses/QLinuxDeviceManager/LICENSE
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import json
+          from pathlib import Path
+          metadata = json.loads(Path("project.json").read_text())
+          print("PROJECT_NAME=" + metadata["identity"]["name"])
+          print("PROJECT_VERSION=" + metadata["release"]["version"])
+          PY
+
+      - name: Package AppImage
+        run: |
+          set -euo pipefail
+          tools="$RUNNER_TEMP/linuxdeploy"
+          mkdir -p "$tools" _build/artifacts
+          wget -q -O "$tools/linuxdeploy-x86_64.AppImage" \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -q -O "$tools/linuxdeploy-plugin-qt-x86_64.AppImage" \
+            https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x "$tools"/*.AppImage
+          export PATH="$tools:$PATH"
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          export QMAKE="$QT_ROOT_DIR/bin/qmake"
+          export LD_LIBRARY_PATH="$QT_ROOT_DIR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          export EXTRA_PLATFORM_PLUGINS="libqwayland-egl.so;libqwayland-generic.so"
+          export EXTRA_QT_MODULES="waylandclient;waylandcompositor"
+          export LDAI_OUTPUT="$PWD/_build/artifacts/$PROJECT_NAME-$PROJECT_VERSION-Linux-x86_64.AppImage"
+          export MKSQUASHFS_ARGUMENTS="-comp zstd -Xcompression-level 22 -b 1M"
+          # Qt's OpenSSL backend loads these at runtime; ELF scanning alone can miss them.
+          "$tools/linuxdeploy-x86_64.AppImage" \
+            --appdir _build/AppDir \
+            --desktop-file _build/AppDir/usr/share/applications/io.github.birdie-github.QLinuxDeviceManager.desktop \
+            --icon-file _build/AppDir/usr/share/icons/hicolor/512x512/apps/io.github.birdie-github.QLinuxDeviceManager.png \
+            --library /usr/lib/x86_64-linux-gnu/libssl.so.3 \
+            --library /usr/lib/x86_64-linux-gnu/libcrypto.so.3 \
+            --plugin qt \
+            --output appimage
+          test -f "$LDAI_OUTPUT"
+          test -f _build/AppDir/usr/plugins/tls/libqopensslbackend.so
+
+      - name: Upload Linux AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PROJECT_NAME }}-Linux-AppImage-x86_64-${{ github.sha }}
+          path: _build/artifacts/*.AppImage
+          if-no-files-found: error
+          retention-days: 14
