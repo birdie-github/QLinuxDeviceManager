@@ -162,6 +162,7 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     volumesNotice_ = plainLabel(tr("ℹ️ Related volumes and mounts"), volumesPage_);
     volumesLayout->addWidget(volumesNotice_);
     volumesTable_ = new QTableWidget(0, 5, volumesPage_);
+    volumesTable_->setAlternatingRowColors(true);
     volumesTable_->setHorizontalHeaderLabels({tr("Device / label"), tr("Layer"), tr("Capacity"), tr("Content"), tr("Mount points")});
     volumesTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     volumesTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
