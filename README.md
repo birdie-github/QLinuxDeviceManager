@@ -88,6 +88,10 @@ If it fails to start because FUSE is unavailable, try:
 To compile and install the application yourself, see the
 [build instructions](doc/implementation.md#build-and-installation).
 
+### Distro support
+
+* [Alt Linux package](https://packages.altlinux.org/en/sisyphus/srpms/qlinuxdevicemanager/), maintainer [Nikolay Strelkov](https://github.com/k0ly4n)
+
 ## Getting started
 
 Launch the AppImage, or open **QLinuxDeviceManager** from your application menu
