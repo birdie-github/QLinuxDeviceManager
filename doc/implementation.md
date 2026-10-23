@@ -646,8 +646,14 @@ per-frame events. Minimized/covered windows do not pause the workload. The popup
 also reports completed offscreen frames per second, independently of the preview
 refresh rate; this is diagnostic information rather than a GPU benchmark score.
 
-The main process retains the highest observed speed/width pair and its
-timestamp in that Properties dialog, including **Copy PCIe properties**. Speed
+The **Current link** table places **Maximum observed link** between Link speed
+and Link width for PCI display adapters. A compact **Test/Retest** button sits
+beside that row's caption. Its value contains only the observed speed/width pair;
+the timestamp and interpretation are in its tooltip and timestamp is included by
+**Copy PCIe properties**. There is no separate test button or result footer.
+The advertised maximum in **Device capability** remains a separate property.
+The child returns numeric speed/width and an ISO timestamp, so the UI never parses
+a translated summary to extract the observation. Speed
 ranks first; width breaks a speed tie. It never combines separately observed speed
 and width maxima. The normal snapshot and device capability fields remain
 separate; an observed result is neither a bandwidth benchmark nor proof that the

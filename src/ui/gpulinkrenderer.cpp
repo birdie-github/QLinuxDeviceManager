@@ -453,6 +453,8 @@ int runGpuLinkTest(const QString &path, const QString &incarnation)
     QString error;
     QString summary;
     bool observed = false;
+    GpuLinkSample peak;
+    QString peakTime;
     // The child has no privileged mode and never loads a user-supplied shader.
     if (geteuid() == 0) error = text("Run the application as an ordinary user to test the GPU link.");
     const QString bdf = QFileInfo(path).fileName();
@@ -533,8 +535,6 @@ int runGpuLinkTest(const QString &path, const QString &incarnation)
                 QElapsedTimer clock;
                 clock.start();
                 QThread *sampler = nullptr;
-                GpuLinkSample peak;
-                QString peakTime;
                 bool ended = false;
                 const auto failed = [&](const QString &why) {
                     if (ended) return;
@@ -704,8 +704,13 @@ int runGpuLinkTest(const QString &path, const QString &incarnation)
             error = text("The selected GPU was removed or replaced.");
     }
     if (directory >= 0) close(directory);
-    const QJsonObject result {{QStringLiteral("ok"), error.isEmpty() && observed},
+    QJsonObject result {{QStringLiteral("ok"), error.isEmpty() && observed},
         {QStringLiteral("summary"), error.isEmpty() ? summary : error}};
+    if (error.isEmpty() && observed) {
+        result.insert(QStringLiteral("speed_gt_s"), peak.speed);
+        result.insert(QStringLiteral("width"), peak.width);
+        result.insert(QStringLiteral("observed_at"), peakTime);
+    }
     const QByteArray report = QJsonDocument(result).toJson(QJsonDocument::Compact) + '\n';
     std::fwrite(report.constData(), 1, static_cast<size_t>(report.size()), stdout);
     std::fflush(stdout);

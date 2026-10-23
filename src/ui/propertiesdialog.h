@@ -87,9 +87,9 @@ private:
     QVBoxLayout *pcieGroups_ = nullptr;
     QString pcieText_;
     QPushButton *gpuTestButton_ = nullptr;
-    QLabel *gpuTestResult_ = nullptr;
     QPointer<QProcess> gpuTest_;
     QString gpuTestText_;
+    QString gpuTestTime_;
     QWidget *batteryPage_ = nullptr;
     QVBoxLayout *batteryGroups_ = nullptr;
     QString batteryText_;
