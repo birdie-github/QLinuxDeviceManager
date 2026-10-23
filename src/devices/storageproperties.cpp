@@ -503,7 +503,26 @@ StorageProperties collectStorageProperties(const Device &device, bool cachedServ
             const QDir links(path + '/' + QLatin1String(pair.first));
             const DirectoryNames related = boundedDirectoryNames(links.path(), recordLimit);
             if (related.error) {
-                field(result.notes, "limit", QT_TRANSLATE_NOOP("Storage", "Storage relationships"), failure(related.error), links.path());
+                // Relationship directories are optional (e.g. partitions have
+                // no slaves directory). Do not hide access/I/O failures, or
+                // mistake a removed block device for an absent optional directory.
+                int error = related.error;
+                if (error == ENOENT) {
+                    struct stat relationship {};
+                    if (lstat(links.path().toUtf8().constData(), &relationship) != 0) {
+                        error = errno;
+                        if (error == ENOENT) {
+                            struct stat owner {};
+                            if (stat(path.toUtf8().constData(), &owner) == 0) {
+                                if (S_ISDIR(owner.st_mode)) continue;
+                                error = ENOTDIR;
+                            } else error = errno;
+                        }
+                    }
+                    // If the directory exists, ENOENT came from inside the
+                    // enumeration. Preserve it rather than accepting a partial graph.
+                }
+                field(result.notes, "limit", QT_TRANSLATE_NOOP("Storage", "Storage relationships"), failure(error), links.path());
                 return result;
             }
             for (const QString &name : related.names) {

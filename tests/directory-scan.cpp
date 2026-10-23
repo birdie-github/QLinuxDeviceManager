@@ -5,6 +5,7 @@
 #include <QTemporaryDir>
 #include <cstdio>
 #include <unistd.h>
+#include <sys/stat.h>
 
 int main(int argc, char **argv)
 {
@@ -38,6 +39,29 @@ int main(int argc, char **argv)
     check(root.mkdir("empty"), "Empty fixture directory created");
     const DirectoryNames empty = boundedDirectoryNames(root.filePath("empty"), 0);
     check(!empty.error && empty.names.isEmpty(), "Empty listing fits a zero bound");
+    const DirectoryNames missing = boundedDirectoryNames(root.filePath("missing"), 3);
+    check(missing.error == ENOENT && missing.names.isEmpty(), "A missing directory is not a successful empty listing");
+    const DirectoryNames notDirectory = boundedDirectoryNames(root.filePath("regular"), 3);
+    check(notDirectory.error == ENOTDIR && notDirectory.names.isEmpty(), "A regular file cannot be enumerated as a directory");
+    const DirectoryNames inaccessibleChild = boundedDirectoryNames(root.filePath("regular/child"), 3);
+    check(inaccessibleChild.error == ENOTDIR && inaccessibleChild.names.isEmpty(), "Invalid ancestor errors are preserved");
+    const DirectoryNames caseFiltered = boundedDirectoryNames(root.path(), 1, {"A*"});
+    check(!caseFiltered.error && caseFiltered.names == QStringList({"alpha"}), "Qt's case-insensitive wildcard filtering is preserved");
+    errno = EIO;
+    const DirectoryNames afterError = boundedDirectoryNames(root.filePath("empty"), 0);
+    check(!afterError.error && afterError.names.isEmpty(), "Successful EOF does not inherit an earlier errno");
+    check(root.mkdir("denied"), "Permission fixture directory created");
+    const QByteArray deniedPath = root.filePath("denied").toUtf8();
+    check(chmod(deniedPath.constData(), 0) == 0, "Permission fixture made unreadable");
+    if (geteuid() != 0) {
+        const DirectoryNames denied = boundedDirectoryNames(root.filePath("denied"), 3);
+        check(denied.error == EACCES && denied.names.isEmpty(), "Access denied is not a successful empty listing");
+        check(link("denied/child", "denied-link"), "Inaccessible symlink target fixture created");
+        const DirectoryNames deniedTarget = boundedDirectoryNames(root.path(), 3, {"denied-link"});
+        check(deniedTarget.error == EACCES && deniedTarget.names.isEmpty(),
+              "An inaccessible symlink target is not silently treated as a dangling link");
+    }
+    check(chmod(deniedPath.constData(), 0700) == 0, "Permission fixture restored for cleanup");
     class CancelledScan final : public QThread {
     public:
         QString path;

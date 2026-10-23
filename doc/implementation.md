@@ -55,6 +55,13 @@ or queries, and cancellation; errno remains available in the displayed and copie
 text. Other errors retain the generic read-error message and errno. Temporary
 unavailability alone is not treated as proof that a device changed.
 
+Bounded directory readers distinguish a successful empty directory from open,
+enumeration and entry-metadata failures, and discard partial lists on failure.
+Directory symlinks, case-insensitive wildcard filters and deterministic sorting
+are preserved; dangling links and hidden entries remain omitted. Storage callers
+explicitly accept absent optional `slaves`/`holders` directories only while the
+owning block-device directory still exists; other read failures remain visible.
+
 Virtual and internal devices are hidden by default to keep the hardware browser
 readable. This includes UEFI variables, partitions, USB interfaces, input and sound endpoints,
 DRM card/render nodes, disconnected and disabled display outputs, and many
