@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include "gpulinktest.h"
 #include "cameraproperties.h"
+#include "displaybackend.h"
 #include <cstring>
 #include <cstdlib>
 #include <climits>
@@ -24,6 +25,15 @@ int main(int argc, char **argv)
         const long directory = std::strtol(argv[4], &end, 10);
         if (errno || end == argv[4] || !end || *end || directory < 0 || directory > INT_MAX) return 1;
         return runCameraQueryHelper(static_cast<int>(directory), QString::fromLocal8Bit(argv[2]), QString::fromLocal8Bit(argv[3]));
+    }
+    // Private desktop query: QCoreApplication only, without GUI or settings.
+    if (argc == 5 && std::strcmp(argv[1], "--x11-query") == 0) {
+        char *end = nullptr;
+        errno = 0;
+        const long parentPid = std::strtol(argv[4], &end, 10);
+        if (errno || end == argv[4] || !end || *end || parentPid <= 1 || parentPid > INT_MAX) return 1;
+        QCoreApplication app(argc, argv);
+        return DisplayBackend::runX11QueryHelper(QString::fromUtf8(argv[2]), QString::fromLocal8Bit(argv[3]), parentPid);
     }
     // Never write root settings into the sudo caller's XDG directories.
     // This does not modify display/session authorization.

@@ -275,13 +275,21 @@ are deduplicated and may reflect driver additions/restrictions: they are not a
 complete EDID timing catalog, do not distinguish refresh rates, and do not imply
 that a mode is guaranteed to work. The existing display copy button includes
 hardware headings and labels, and **Reload properties** refreshes both snapshots.
- Native X11/RandR and Wayland queries run in the
-properties worker; `libxcb.so.1`, `libxcb-randr.so.0` and `libwayland-client.so.0`
-are loaded on demand, without linking the application to either session API.
+Native X11/RandR queries run in a private headless child of the same executable,
+requested by the properties worker; Wayland queries run directly in that worker.
+`libxcb.so.1`, `libxcb-randr.so.0` and `libwayland-client.so.0` are loaded on demand,
+without linking the application to either session API.
 The selected Wayland session is queried directly even when the application runs
 through XWayland; a failed Wayland query never falls back to emulated X11 outputs.
 Queries do not change configuration, force detection or create a display surface.
-Reply waits are cancellable and share a two-second budget per collection.
+Protocol reply waits share a two-second budget per collection. The parent also
+enforces a three-second deadline for the entire X11 child, including connection
+setup, blocking XCB calls and cleanup. It checks cancellation at most every 25 ms,
+kills the child on cancellation or timeout, and uses only nonblocking child reaping.
+The JSON reply is limited to 64 KiB and validated before publication. At most one
+unreaped X11 child is retained; subsequent requests refuse with temporary
+unavailability until it exits. Parent death also kills the child. This avoids
+waiting for an X11 server or a stalled XCB call during application shutdown.
 
 Resolution is the current physical mode before rotation/scaling. Refresh rate is
 the nominal mode rate, not a measured or instantaneous variable-refresh rate.
@@ -295,8 +303,9 @@ excluded; arbitrary X11 transforms are shown as custom instead of inventing a
 single scale factor.
 
 Session output names normally match a unique kernel connector. The conventional
-X11 `HDMI-N` / kernel `HDMI-A-N` naming difference is normalized. If no X11 name
-matches (for example NVIDIA `HDMI-0` versus kernel `HDMI-A-1`), a fallback compares
+X11 `HDMI-N` / kernel `HDMI-A-N` naming difference is normalized. A name match
+is checked against complete EDID evidence when available. If no X11 name matches,
+its EDID conflicts, or the namesake is disconnected, a fallback compares
 complete EDIDs from cached sysfs files and RandR output properties. Descriptors
 must have valid framing and checksums, and the selected EDID must occur exactly
 once among connected connectors on each side. Missing, corrupt, truncated or
@@ -306,14 +315,16 @@ retained. Kernel descriptors and the selected RandR descriptor are checked again
 before publication, along with RandR timestamps, to detect observed changes.
 Connector and EDID reads are bounded (256 connected outputs, 32 KiB per EDID);
 RandR requests share the existing two-second budget and cancellation checks.
-Sysfs reads access cached metadata; a blocking kernel read cannot be forcibly
-cancelled. The Output tooltip identifies name versus EDID matching.
+Sysfs reads access cached metadata. A killed X11 child can remain stuck in an
+uninterruptible kernel operation, but the properties worker does not wait for it.
+The separate monitor-hardware sysfs reads still run in the properties worker.
+The Output tooltip identifies name versus EDID matching and unavailable verification.
 Ambiguous or unmatched outputs remain unavailable rather than borrowing another
 display's settings. Older Wayland compositors need xdg-output
 v2 for names; otherwise wl_output v4 names are used. X11 queries cover the default
 X screen. Missing libraries or protocol support leave the hardware view usable.
-Disconnected session outputs show **Configuration: Disconnected**, based on a
-fresh DRM status read or an explicit X11 output connection status. Connected
+Disconnected connectors show **Configuration: Disconnected**, based on a fresh
+DRM status read. Connected
 outputs without a mode retain **No active mode**. Zero rotation is shown as
 **0°**; nonzero angles retain their counterclockwise direction.
 Use **Reload properties** to refresh the monitor and desktop configuration snapshot.

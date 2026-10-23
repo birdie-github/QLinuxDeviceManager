@@ -13,6 +13,17 @@
 #include <xcb/xcb.h>
 #include <xcb/xcbext.h>
 #include <xcb/randr.h>
+#include <QCoreApplication>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <fcntl.h>
+#include <signal.h>
+#include <spawn.h>
+#include <sys/prctl.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+extern char **environ;
 
 namespace DisplayBackend {
 namespace {
@@ -151,7 +162,7 @@ struct X11 {
 #undef RANDR_FUNCTIONS
 }
 
-DisplayProperties x11(const QString &connector, const QString &kernelPath)
+static DisplayProperties x11Direct(const QString &connector, const QString &kernelPath)
 {
     DisplayProperties result;
     result.backend = "X11 / RandR";
@@ -339,6 +350,158 @@ DisplayProperties x11(const QString &connector, const QString &kernelPath)
         else put("scale", "custom", "RandR uses a non-axis-aligned transform; no single scale factor describes it");
     }
     validate();
+    return result;
+}
+
+namespace {
+constexpr int reportLimit = 65536;
+constexpr int processBudgetMs = 3000; // Includes connection setup and XCB cleanup.
+struct Descriptor {
+    int fd;
+    ~Descriptor() { if (fd >= 0) close(fd); }
+    Descriptor(const Descriptor &) = delete;
+    Descriptor &operator=(const Descriptor &) = delete;
+    explicit Descriptor(int value) : fd(value) {}
+};
+QJsonObject encodeAttribute(const Attribute &attribute)
+{
+    return {{"state", static_cast<int>(attribute.state)}, {"value", attribute.value}, {"error", attribute.error}};
+}
+bool decodeAttribute(const QJsonValue &json, Attribute &attribute)
+{
+    if (!json.isObject()) return false;
+    const auto object = json.toObject();
+    const int state = object.value("state").toInt(-1);
+    const int errorNumber = object.value("error").toInt(-1);
+    const auto value = object.value("value");
+    if (state < static_cast<int>(ReadState::Available) || state > static_cast<int>(ReadState::NotApplicable)
+        || errorNumber < 0 || errorNumber > 4095 || !value.isString() || value.toString().size() > textLimit) return false;
+    attribute = {static_cast<ReadState>(state), value.toString(), errorNumber};
+    return true;
+}
+bool decodeReport(const QByteArray &bytes, DisplayProperties &result)
+{
+    QJsonParseError parse;
+    const auto document = QJsonDocument::fromJson(bytes, &parse);
+    if (parse.error != QJsonParseError::NoError || !document.isObject()) return false;
+    const auto object = document.object();
+    const auto output = object.value("output");
+    if (!output.isString() || output.toString().size() > textLimit
+        || !decodeAttribute(object.value("status"), result.status)
+        || !object.value("values").isObject() || !object.value("sources").isObject()) return false;
+    const auto values = object.value("values").toObject(), sources = object.value("sources").toObject();
+    if (values.size() > 32 || sources.size() > 64) return false;
+    result.output = output.toString();
+    for (auto it = values.begin(); it != values.end(); ++it) {
+        Attribute attribute;
+        if (it.key().size() > 128 || !decodeAttribute(it.value(), attribute)) return false;
+        result.values.insert(it.key(), attribute);
+    }
+    for (auto it = sources.begin(); it != sources.end(); ++it) {
+        if (it.key().size() > 128 || !it.value().isString() || it.value().toString().size() > textLimit) return false;
+        result.sources.insert(it.key(), it.value().toString());
+    }
+    return true;
+}
+}
+
+int runX11QueryHelper(const QString &connector, const QString &kernelPath, qint64 parentPid)
+{
+    // Install the death signal before touching XCB; reject a parent-exit race.
+    if (prctl(PR_SET_PDEATHSIG, SIGKILL) != 0 || getppid() != parentPid) return 1;
+    if (connector.isEmpty() || connector.size() > 256 || kernelPath.size() > textLimit
+        || !kernelPath.startsWith("/sys/devices/") || QFileInfo(kernelPath).canonicalFilePath() != kernelPath) return 1;
+    const DisplayProperties result = x11Direct(connector, kernelPath);
+    QJsonObject values, sources;
+    for (auto it = result.values.cbegin(); it != result.values.cend(); ++it) values.insert(it.key(), encodeAttribute(it.value()));
+    for (auto it = result.sources.cbegin(); it != result.sources.cend(); ++it) sources.insert(it.key(), it.value());
+    const QByteArray bytes = QJsonDocument(QJsonObject {{"output", result.output}, {"status", encodeAttribute(result.status)},
+        {"values", values}, {"sources", sources}}).toJson(QJsonDocument::Compact);
+    if (bytes.size() > reportLimit) return 1;
+    qsizetype offset = 0;
+    while (offset < bytes.size()) {
+        const ssize_t count = write(STDOUT_FILENO, bytes.constData() + offset, static_cast<size_t>(bytes.size() - offset));
+        if (count < 0 && errno == EINTR) continue;
+        if (count <= 0) return 1;
+        offset += count;
+    }
+    return 0;
+}
+
+DisplayProperties x11(const QString &connector, const QString &kernelPath)
+{
+    DisplayProperties result;
+    result.backend = "X11 / RandR";
+    const auto failed = [&](int code) {
+        DisplayProperties failure;
+        failure.backend = result.backend;
+        failure.status = error(code);
+        return failure;
+    };
+    if (QThread::currentThread()->isInterruptionRequested()) return failed(ECANCELED);
+    // Only the serialized properties worker invokes this wrapper. If a killed
+    // helper remains in the kernel, retain its PID and refuse to accumulate more.
+    static pid_t pending = -1;
+    if (pending > 0) {
+        const pid_t reaped = waitpid(pending, nullptr, WNOHANG);
+        if (reaped == 0 || (reaped < 0 && errno == EINTR)) return failed(EAGAIN);
+        if (reaped < 0 && errno != ECHILD) return failed(errno);
+        pending = -1;
+    }
+    int pipes[2];
+    if (pipe2(pipes, O_CLOEXEC | O_NONBLOCK) != 0) return failed(errno);
+    Descriptor input(pipes[0]), output(pipes[1]);
+    if (fcntl(output.fd, F_SETFL, 0) < 0) return failed(errno);
+    const QByteArray executable = QFile::encodeName(QCoreApplication::applicationFilePath());
+    const QByteArray name = connector.toUtf8(), path = QFile::encodeName(kernelPath), parent = QByteArray::number(getpid());
+    char *arguments[] = {const_cast<char *>(executable.constData()), const_cast<char *>("--x11-query"),
+        const_cast<char *>(name.constData()), const_cast<char *>(path.constData()), const_cast<char *>(parent.constData()), nullptr};
+    posix_spawn_file_actions_t actions;
+    int code = posix_spawn_file_actions_init(&actions);
+    if (code) return failed(code);
+    code = posix_spawn_file_actions_adddup2(&actions, output.fd, STDOUT_FILENO);
+    if (!code && input.fd != STDOUT_FILENO) code = posix_spawn_file_actions_addclose(&actions, input.fd);
+    if (!code && output.fd != STDOUT_FILENO) code = posix_spawn_file_actions_addclose(&actions, output.fd);
+    pid_t child = -1;
+    QElapsedTimer timer;
+    timer.start();
+    if (!code) code = posix_spawn(&child, executable.constData(), &actions, nullptr, arguments, environ);
+    posix_spawn_file_actions_destroy(&actions);
+    if (code) return failed(code);
+    close(output.fd); output.fd = -1;
+    QByteArray bytes;
+    bool eof = false, exited = false;
+    int exitStatus = 0;
+    while (!eof || !exited) {
+        if (QThread::currentThread()->isInterruptionRequested()) { code = ECANCELED; break; }
+        if (timer.elapsed() >= processBudgetMs) { code = ETIMEDOUT; break; }
+        char buffer[4096];
+        const ssize_t count = read(input.fd, buffer, sizeof(buffer));
+        if (count > 0) {
+            bytes.append(buffer, static_cast<int>(count));
+            if (bytes.size() > reportLimit) { code = EOVERFLOW; break; }
+        } else if (count == 0) eof = true;
+        else if (errno != EAGAIN && errno != EINTR) { code = errno; break; }
+        if (!exited) {
+            const pid_t reaped = waitpid(child, &exitStatus, WNOHANG);
+            if (reaped == child) exited = true;
+            else if (reaped < 0 && errno != EINTR) {
+                code = errno;
+                if (code == ECHILD) exited = true; // Do not signal a PID no longer owned by us.
+                break;
+            }
+        }
+        if (!eof && count <= 0) { pollfd ready {input.fd, POLLIN, 0}; poll(&ready, 1, 25); }
+        else if (eof && !exited) poll(nullptr, 0, 10);
+    }
+    if (code) {
+        if (!exited) {
+            kill(child, SIGKILL);
+            if (waitpid(child, nullptr, WNOHANG) != child) pending = child;
+        }
+        return failed(code);
+    }
+    if (!WIFEXITED(exitStatus) || WEXITSTATUS(exitStatus) != 0 || !decodeReport(bytes, result)) return failed(EPROTO);
     return result;
 }
 }

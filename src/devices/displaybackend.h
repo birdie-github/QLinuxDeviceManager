@@ -21,5 +21,6 @@ template<class Function> bool resolve(QLibrary &library, const char *name, Funct
     return function != nullptr;
 }
 DisplayProperties x11(const QString &connector, const QString &kernelPath);
+int runX11QueryHelper(const QString &connector, const QString &kernelPath, qint64 parentPid);
 DisplayProperties wayland(const QString &connector);
 }
