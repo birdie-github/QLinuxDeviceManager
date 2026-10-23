@@ -294,10 +294,22 @@ Wayland reports its integer buffer scale explicitly. Qt application scaling is
 excluded; arbitrary X11 transforms are shown as custom instead of inventing a
 single scale factor.
 
-Session output names must match a unique kernel connector. The conventional
-X11 `HDMI-N` / kernel `HDMI-A-N` naming difference is normalized. Ambiguous
-multi-GPU names and unnamed/unmatched outputs remain unavailable rather than
-borrowing another display's settings. Older Wayland compositors need xdg-output
+Session output names normally match a unique kernel connector. The conventional
+X11 `HDMI-N` / kernel `HDMI-A-N` naming difference is normalized. If no X11 name
+matches (for example NVIDIA `HDMI-0` versus kernel `HDMI-A-1`), a fallback compares
+complete EDIDs from cached sysfs files and RandR output properties. Descriptors
+must have valid framing and checksums, and the selected EDID must occur exactly
+once among connected connectors on each side. Missing, corrupt, truncated or
+duplicate descriptors leave the fallback unavailable; no numbering offset or
+manufacturer/model guess is used. The existing ambiguous kernel-name guard is
+retained. Kernel descriptors and the selected RandR descriptor are checked again
+before publication, along with RandR timestamps, to detect observed changes.
+Connector and EDID reads are bounded (256 connected outputs, 32 KiB per EDID);
+RandR requests share the existing two-second budget and cancellation checks.
+Sysfs reads access cached metadata; a blocking kernel read cannot be forcibly
+cancelled. The Output tooltip identifies name versus EDID matching.
+Ambiguous or unmatched outputs remain unavailable rather than borrowing another
+display's settings. Older Wayland compositors need xdg-output
 v2 for names; otherwise wl_output v4 names are used. X11 queries cover the default
 X screen. Missing libraries or protocol support leave the hardware view usable.
 Disconnected session outputs show **Configuration: Disconnected**, based on a

@@ -31,7 +31,7 @@ DisplayProperties collectDisplayProperties(const Device &device, const Attribute
     const QByteArray session = qgetenv("XDG_SESSION_TYPE");
     const bool wayland = session == "wayland" || (session != "x11" && !qgetenv("WAYLAND_DISPLAY").isEmpty());
     if (wayland) result = DisplayBackend::wayland(connector);
-    else if (!qgetenv("DISPLAY").isEmpty()) result = DisplayBackend::x11(connector);
+    else if (!qgetenv("DISPLAY").isEmpty()) result = DisplayBackend::x11(connector, device.path);
     // Never fall back to XWayland's emulated outputs after a Wayland failure.
     return result;
 }

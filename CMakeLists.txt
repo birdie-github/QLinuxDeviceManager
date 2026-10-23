@@ -57,6 +57,7 @@ add_executable(qlinuxdevicemanager
     src/devices/monitorproperties.h src/devices/monitorproperties.cpp
     src/devices/cameraproperties.h src/devices/cameraproperties.cpp
     src/devices/displaybackend.h src/devices/displayx11.cpp src/devices/displaywayland.cpp
+    src/devices/displayidentity.h src/devices/displayidentity.cpp
     src/devices/storageproperties.h src/devices/storageproperties.cpp
     src/devices/directoryscan.h
     src/devices/storagepresentation.h src/devices/storagepresentation.cpp
@@ -145,6 +146,11 @@ if(TARGET Qt6::lrelease)
 endif()
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(display-identity-test tests/display-identity.cpp
+        src/devices/displayidentity.cpp src/devices/displayidentity.h)
+    target_include_directories(display-identity-test PRIVATE src/devices)
+    target_link_libraries(display-identity-test PRIVATE Qt6::Core)
+    add_test(NAME display-identity COMMAND display-identity-test)
     add_executable(directory-scan-test tests/directory-scan.cpp src/devices/directoryscan.h)
     target_include_directories(directory-scan-test PRIVATE src/devices)
     target_link_libraries(directory-scan-test PRIVATE Qt6::Core)
@@ -183,6 +189,7 @@ if(BUILD_TESTING)
         src/devices/monitorproperties.cpp src/devices/monitorproperties.h
         src/devices/cameraproperties.cpp src/devices/cameraproperties.h
         src/devices/displaybackend.h src/devices/displayx11.cpp src/devices/displaywayland.cpp
+        src/devices/displayidentity.h src/devices/displayidentity.cpp
         src/devices/storageproperties.cpp src/devices/storageproperties.h
         src/devices/storagepresentation.cpp src/devices/storagepresentation.h
         src/devices/deviceresources.cpp src/devices/deviceresources.h
@@ -222,7 +229,7 @@ endif()
 # Apply the declared Qt baseline's API checks to project executables and fixture targets.
 foreach(qldm_target IN ITEMS qlinuxdevicemanager monitor-state-test device-events-test
         device-rules-test device-resources-test device-search-test system-properties-test
-        directory-scan-test)
+        directory-scan-test display-identity-test)
     if(TARGET ${qldm_target})
         target_compile_definitions(${qldm_target} PRIVATE QT_ENABLE_STRICT_MODE_UP_TO=${APP_QT_STRICT_VERSION})
     endif()

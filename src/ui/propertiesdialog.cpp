@@ -1134,11 +1134,12 @@ void PropertiesDialog::rebuildDisplay()
     };
     auto *session = group(tr("Desktop session"));
     field(session, tr("Backend"), data.backend.isEmpty() ? tr("Unavailable") : data.backend);
-    field(session, tr("Output"), data.output.isEmpty() ? tr("Unavailable") : data.output, device().path);
+    field(session, tr("Output"), data.output.isEmpty() ? tr("Unavailable") : data.output,
+        data.sources.value("output", device().path));
     field(session, tr("Configuration"), data.status.state == ReadState::Available
         ? (data.status.value == "inactive" ? tr("No active mode") : tr("Reported by desktop server"))
-        : propertyReadValue(data.status), tr("Read-only session query. Unavailable can mean missing runtime libraries, "
-            "an output not exposed by this session, or a protocol without usable output names."));
+        : propertyReadValue(data.status), data.sources.value("configuration", tr("Read-only session query. Unavailable can mean missing runtime libraries, "
+            "an output not exposed by this session, or a protocol without usable output names.")));
     auto *mode = group(tr("Active display mode"));
     field(mode, tr("Resolution"), formatted("resolution"), data.sources.value("resolution"));
     field(mode, tr("Desktop color depth"), formatted("depth"), data.sources.value("depth"));

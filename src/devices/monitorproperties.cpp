@@ -1,4 +1,5 @@
 #include "monitorproperties.h"
+#include "displayidentity.h"
 #include <QByteArray>
 #include <QStringList>
 #include <QThread>
@@ -72,15 +73,9 @@ void decodeDescriptor(MonitorProperties &result, const QByteArray &bytes, const 
 {
     if (bytes.isEmpty()) { result.descriptor = {}; return; }
     // Reject truncated/corrupt framing before passing a bounded report to the parser.
-    const QByteArray header = QByteArray::fromHex("00ffffffffffff00");
-    if (bytes.size() < 128 || bytes.left(8) != header || bytes.size() != 128 * (1 + byte(bytes, 126))) {
+    if (!DisplayIdentity::validEdid(bytes)) {
         result.descriptor = failure(EPROTO);
         return;
-    }
-    for (int block = 0; block < bytes.size(); block += 128) {
-        unsigned sum = 0;
-        for (int i = block; i < block + 128; ++i) sum += byte(bytes, i);
-        if (sum & 255) { result.descriptor = failure(EPROTO); return; }
     }
     const QString version = QString::number(byte(bytes, 18)) + '.' + QString::number(byte(bytes, 19));
     result.values.insert("version", available(version));
@@ -184,10 +179,10 @@ MonitorProperties collectMonitorProperties(int directory, const QString &path)
         result.values.insert("modes", result.descriptor);
         return result;
     }
-    const Report edid = readReport(directory, "edid", 32768);
+    const Report edid = readReport(directory, "edid", DisplayIdentity::edidLimit);
     const Report modes = readReport(directory, "modes", 65536);
     // A monitor may be replaced without the connector directory changing identity.
-    const Report afterEdid = readReport(directory, "edid", 32768);
+    const Report afterEdid = readReport(directory, "edid", DisplayIdentity::edidLimit);
     const Report afterStatus = readReport(directory, "status", 64);
     if (afterStatus.state.state != ReadState::Available
         || (afterEdid.state.state != ReadState::Available && !sameReport(edid, afterEdid))) {

@@ -20,6 +20,6 @@ template<class Function> bool resolve(QLibrary &library, const char *name, Funct
     function = reinterpret_cast<Function>(library.resolve(name));
     return function != nullptr;
 }
-DisplayProperties x11(const QString &connector);
+DisplayProperties x11(const QString &connector, const QString &kernelPath);
 DisplayProperties wayland(const QString &connector);
 }
