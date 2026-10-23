@@ -5,6 +5,8 @@
 #include "storagepresentation.h"
 #include <QDialog>
 #include <QVector>
+#include <QPointer>
+#include <QProcess>
 
 class QCheckBox;
 class QComboBox;
@@ -39,6 +41,7 @@ private:
     void rebuildCamera();
     void rebuildUsb();
     void rebuildPcie();
+    void testGpuLink();
     void rebuildBattery();
     void showVolume();
     void showHealth();
@@ -83,6 +86,10 @@ private:
     QWidget *pciePage_ = nullptr;
     QVBoxLayout *pcieGroups_ = nullptr;
     QString pcieText_;
+    QPushButton *gpuTestButton_ = nullptr;
+    QLabel *gpuTestResult_ = nullptr;
+    QPointer<QProcess> gpuTest_;
+    QString gpuTestText_;
     QWidget *batteryPage_ = nullptr;
     QVBoxLayout *batteryGroups_ = nullptr;
     QString batteryText_;

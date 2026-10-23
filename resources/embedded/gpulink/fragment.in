@@ -1,0 +1,10 @@
+#version 450
+layout(push_constant) uniform Parameters { vec4 values; } parameters;
+layout(location = 0) out vec4 outputColor;
+#define iResolution vec3(parameters.values.xy, 1.0)
+#define iTime parameters.values.z
+#define iMouse vec4(0.0)
+@GPU_LINK_SHADER_SOURCE@
+void main() {
+    mainImage(outputColor, vec2(gl_FragCoord.x, iResolution.y - gl_FragCoord.y));
+}

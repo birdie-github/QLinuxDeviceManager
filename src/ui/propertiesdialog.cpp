@@ -1,5 +1,8 @@
 #include "resourceformat.h"
 #include "propertiesdialog.h"
+#include "gpulinktest.h"
+#include <QJsonDocument>
+#include <unistd.h>
 #include "devicelabel.h"
 #include <QApplication>
 #include <QJsonArray>
@@ -345,10 +348,18 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     pcieGroups_->setSizeConstraint(QLayout::SetMinAndMaxSize);
     pcieScroll->setWidget(pcieContent);
     pcieLayout->addWidget(pcieScroll, 1);
+    gpuTestButton_ = new QPushButton(tr("Test link under load…"), pciePage_);
+    gpuTestButton_->setToolTip(tr("Apply a short graphics workload to this GPU and observe its PCIe link. Power use and fan noise may increase."));
+    pcieLayout->addWidget(gpuTestButton_);
+    gpuTestResult_ = plainLabel(QString(), pciePage_);
+    gpuTestResult_->setWordWrap(true);
+    gpuTestResult_->hide();
+    pcieLayout->addWidget(gpuTestResult_);
+    connect(gpuTestButton_, &QPushButton::clicked, this, &PropertiesDialog::testGpuLink);
     auto *copyPcie = new QPushButton(tr("Copy PCIe properties"), pciePage_);
     pcieLayout->addWidget(copyPcie);
     connect(copyPcie, &QPushButton::clicked, this, [this] {
-        QApplication::clipboard()->setText(pcieText_);
+        QApplication::clipboard()->setText(pcieText_ + (gpuTestText_.isEmpty() ? QString() : QLatin1Char('\n') + gpuTestText_));
     });
     storagePage_ = new QWidget(tabs);
     storagePage_->hide();
@@ -573,6 +584,7 @@ void PropertiesDialog::reconcileInstance(const Device *current)
 void PropertiesDialog::markRemoved()
 {
     removed_ = true;
+    if (gpuTest_) gpuTest_->kill();
     eventScope_ += '\n' + tr("Removed/replaced device: retained events are a read-only instance snapshot.");
     eventsNotice_->setToolTip("<qt>" + eventScope_.toHtmlEscaped().replace('\n', "<br>") + "</qt>");
     reload_->setEnabled(false);
@@ -1441,8 +1453,80 @@ void PropertiesDialog::rebuildPcie()
     int captionWidth = 0;
     for (const QLabel *caption : captions) captionWidth = qMax(captionWidth, caption->sizeHint().width());
     for (QGridLayout *form : forms) form->setColumnMinimumWidth(0, captionWidth);
+    const bool gpu = device().subsystem == "pci" && device().category == "display" && !internal;
+    gpuTestButton_->setVisible(gpu);
+    gpuTestButton_->setEnabled(gpu && !removed_ && !gpuTest_ && gpuLinkTestBuilt() && geteuid() != 0);
+    if (gpu && !gpuLinkTestBuilt())
+        gpuTestButton_->setToolTip(tr("This build has no GPU link test. Build with Vulkan headers, glslangValidator and Qt Vulkan support."));
+    else if (gpu && geteuid() == 0)
+        gpuTestButton_->setToolTip(tr("Run the application as an ordinary user to test the GPU link."));
+    gpuTestResult_->setVisible(gpu && !gpuTestText_.isEmpty());
     pcieGroups_->addStretch();
     pcieText_ = copy.join('\n');
+}
+
+void PropertiesDialog::testGpuLink()
+{
+    if (removed_ || gpuTest_ || !gpuLinkTestBuilt() || geteuid() == 0) return;
+    auto *process = startGpuLinkTest(device(), this);
+    if (!process) {
+        gpuTestText_ = tr("Another GPU link test is already running.");
+        gpuTestResult_->setText(gpuTestText_);
+        gpuTestResult_->show();
+        return;
+    }
+    gpuTest_ = process;
+    gpuTestButton_->setEnabled(false);
+    gpuTestText_ = tr("GPU link test running…");
+    gpuTestResult_->setText(gpuTestText_);
+    gpuTestResult_->show();
+    auto output = std::make_shared<QByteArray>();
+    auto failed = std::make_shared<bool>(false);
+    connect(process, &QProcess::readyReadStandardOutput, this, [this, process, output, failed] {
+        output->append(process->readAllStandardOutput());
+        if (output->size() > 8192) {
+            *failed = true;
+            output->clear();
+            gpuTestText_ = tr("The GPU test returned an invalid report.");
+            process->kill();
+        }
+    });
+    connect(process, &QProcess::readyReadStandardError, this, [process] {
+        process->readAllStandardError(); // Do not accumulate unbounded driver diagnostics.
+    });
+    connect(process, &QProcess::errorOccurred, this, [this, failed](QProcess::ProcessError error) {
+        if (error != QProcess::FailedToStart) return;
+        *failed = true;
+        gpuTestText_ = tr("Could not start the GPU link test.");
+        gpuTestResult_->setText(gpuTestText_);
+        gpuTest_.clear();
+        gpuTestButton_->setEnabled(!removed_);
+    });
+    connect(process, &QProcess::finished, this, [this, process, output, failed](int exitCode, QProcess::ExitStatus status) {
+        output->append(process->readAllStandardOutput());
+        if (removed_) {
+            gpuTestText_ = tr("GPU link test cancelled: device removed or replaced.");
+        } else if (!*failed) {
+            const auto report = QJsonDocument::fromJson(*output).object();
+            const QString summary = report.value("summary").toString();
+            const bool valid = output->size() <= 8192 && status == QProcess::NormalExit
+                && (exitCode == 0 || exitCode == 1) && !summary.isEmpty() && summary.size() <= 2048
+                && report.value("ok").isBool() && report.value("ok").toBool() == (exitCode == 0);
+            gpuTestText_ = valid ? summary : tr("GPU link test failed or did not return a valid observation.");
+        }
+        gpuTestResult_->setText(gpuTestText_);
+        gpuTest_.clear();
+        gpuTestButton_->setEnabled(!removed_);
+    });
+    // Includes startup and teardown. SIGKILL ends the child without waiting on
+    // Vulkan cleanup; no rendering-library call is made in this process.
+    QTimer::singleShot(25000, this, [this, process = QPointer<QProcess>(process), failed] {
+        if (!process || process->state() == QProcess::NotRunning) return;
+        *failed = true;
+        gpuTestText_ = tr("GPU link test timed out; no result was retained.");
+        gpuTestResult_->setText(gpuTestText_);
+        process->kill();
+    });
 }
 
 void PropertiesDialog::rebuildBattery()

@@ -74,6 +74,7 @@ add_executable(qlinuxdevicemanager
     src/ui/devicefilter.h src/ui/devicefilter.cpp
     src/ui/devicemodel.h src/ui/devicemodel.cpp
     src/ui/mainwindow.h src/ui/mainwindow.cpp
+    src/ui/gpulinktest.h src/ui/gpulinktest.cpp
     src/ui/propertiesdialog.h src/ui/propertiesdialog.cpp
     src/devices/secureboot.h src/devices/secureboot.cpp
     src/devices/systemproperties.h src/devices/systemproperties.cpp
@@ -116,6 +117,7 @@ if(UDISKS2 AND TARGET Qt6::DBus)
 else()
     message(STATUS "Cached UDisks2 storage metadata: disabled; native fallback available")
 endif()
+include(cmake/GpuLinkTest.cmake)
 target_compile_options(qlinuxdevicemanager PRIVATE -Wall -Wextra -Wpedantic)
 include(GNUInstallDirs)
 install(TARGETS qlinuxdevicemanager RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
@@ -146,6 +148,10 @@ if(TARGET Qt6::lrelease)
 endif()
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(gpu-link-sample-test tests/gpu-link-sample.cpp src/devices/gpulinksample.h)
+    target_include_directories(gpu-link-sample-test PRIVATE src/devices)
+    target_link_libraries(gpu-link-sample-test PRIVATE Qt6::Core)
+    add_test(NAME gpu-link-sample COMMAND gpu-link-sample-test)
     add_executable(display-identity-test tests/display-identity.cpp
         src/devices/displayidentity.cpp src/devices/displayidentity.h)
     target_include_directories(display-identity-test PRIVATE src/devices)
@@ -229,7 +235,7 @@ endif()
 # Apply the declared Qt baseline's API checks to project executables and fixture targets.
 foreach(qldm_target IN ITEMS qlinuxdevicemanager monitor-state-test device-events-test
         device-rules-test device-resources-test device-search-test system-properties-test
-        directory-scan-test display-identity-test)
+        directory-scan-test display-identity-test gpu-link-sample-test)
     if(TARGET ${qldm_target})
         target_compile_definitions(${qldm_target} PRIVATE QT_ENABLE_STRICT_MODE_UP_TO=${APP_QT_STRICT_VERSION})
     endif()

@@ -26,7 +26,8 @@ does not upload it.
   link speed, duplex and supported link modes.
 - **Monitors and graphics:** monitor identity and capabilities, display resolution,
   refresh rate, rotation and scale; PCIe link speed and lane width; GPU Resizable
-  BAR capabilities and allocated sizes where available.
+  BAR capabilities and allocated sizes where available. An optional GPU link test
+  applies a short graphics load and records the highest observed PCIe link.
 - **Storage and drive health:** drive model, capacity and firmware, partitions,
   filesystems and mount points, plus detailed cached ATA SMART attributes and
   NVMe health counters where UDisks2 provides them.

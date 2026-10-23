@@ -621,6 +621,61 @@ the Linux kernel, device metadata and optional UDisks2 service.
 If FUSE is unavailable, launch with `--appimage-extract-and-run`. Workflow artifacts
 are retained for 14 days; they are not automatically published as release assets.
 
+## GPU PCIe link activation test
+
+A PCI display adapter with a conventional PCIe link offers **Test link under
+load…** in Properties → PCIe. The optional Vulkan renderer runs only after that
+explicit action, as an ordinary user. The popup identifies the GPU by its Vulkan
+name and complete PCI address, displays an original procedural wave shader, and
+shows live link speed/width. No Seascape code or other supplied shader is used.
+There is no NVML, CUDA, vendor command, network access, sysfs write, link retraining
+request, or change to driver power settings.
+
+The graphics load lasts up to 15 seconds after the first submitted frame, or until
+Stop/close. The main process retains the highest observed speed/width pair and its
+timestamp in that Properties dialog, including **Copy PCIe properties**. Speed
+ranks first; width breaks a speed tie. It never combines separately observed speed
+and width maxima. The normal snapshot and device capability fields remain
+separate; an observed result is neither a bandwidth benchmark nor proof that the
+hardware reached its maximum. A shader workload may leave a link below its
+maximum on some drivers. No pass/fail judgment is made from the observed rate.
+
+The child requires Vulkan 1.1 and a unique `VK_EXT_pci_bus_info` match for the
+selected domain:bus:device.function. It refuses software renderers and never
+selects by vendor/device ID or model name. The actual Qt physical device is
+rechecked before recording the shader workload, guarding against enumeration
+changes or selection fallback. No Vulkan instance or GPU context is created by
+the main device manager. The Qt desktop backend must support Vulkan presentation
+for this device; unavailable drivers, PCI identity or presentation produce an
+explanation rather than a test on another GPU.
+
+A single child worker samples the selected directory's documented
+`current_link_speed` and `current_link_width` attributes at roughly 250 ms
+intervals. Each read is capped at 128 bytes. Repeated reads discard an observed
+speed/width transition; sysfs does not provide an atomic pair. Only samples near a
+submitted graphics frame are retained. The child checks the directory identity
+against the inventory and during collection, and the parent cancels on an
+observed removal/replacement. These checks cannot eliminate every hotplug race.
+Permission failures and malformed/missing readings are reported explicitly.
+
+The main process permits one test at a time and uses asynchronous QProcess
+signals. Startup has a five-second child deadline; the parent kills the entire
+child at 25 seconds, including teardown time. Closing Properties kills its test;
+Linux parent-death notification also prevents an orphan workload. Graphics calls
+or sysfs reads can still stall inside the child; its own timers cannot interrupt
+a blocked driver call. The parent deadline isolates the viewer from that stall,
+but cannot guarantee recovery of a hung kernel driver or GPU. Rendering is capped
+at 640 × 360 shader pixels and approximately 60 requested frames per second;
+there are no unbounded render queues, uploads, textures or application buffers.
+
+Build support is enabled automatically when Vulkan development headers,
+`glslangValidator`, and Qt's Vulkan window support are available. The shader is
+compiled to embedded SPIR-V at build time; no runtime compiler is required. Use
+`-DGPU_LINK_TEST=OFF` to omit it. CMake reports whether support was enabled; normal
+hardware viewing works without it. Run the viewer without sudo for this test.
+Fixture target `gpu-link-sample-test` checks parsing and paired peak selection;
+actual rendering, adapter selection and link activation require hardware tests.
+
 ## Build and installation
 
 `project.json` declares the minimum Qt version and C++ standard in `platform`.
@@ -642,6 +697,9 @@ Requirements:
 - Optional libkmod **30 or newer** for installed-module metadata and fallback names.
 - Optional libdisplay-info **0.1.1 or newer** for monitor EDID decoding.
 - Optional Qt Linguist tools **6.8 or newer** to build translation catalogs.
+- Optional Vulkan development headers and `glslangValidator`, with Vulkan-enabled
+  Qt, for the GPU link test. Runtime needs a Vulkan 1.1 driver exposing PCI identity
+  and presentation in the current desktop session.
 
 Fedora packages:
 
@@ -650,6 +708,8 @@ Fedora packages:
 sudo dnf install gcc-c++ cmake make pkgconf-pkg-config qt6-qtbase-devel systemd-devel libv4l-devel libxcb-devel wayland-devel
 # Optional:
 sudo dnf install qt6-qttools-devel kmod-devel libdisplay-info-devel
+# Optional GPU link test:
+sudo dnf install vulkan-headers glslang
 ```
 
 Debian/Ubuntu packages:
@@ -659,6 +719,8 @@ Debian/Ubuntu packages:
 sudo apt install g++ cmake make pkg-config qt6-base-dev libudev-dev libv4l-dev libxcb-randr0-dev libwayland-dev
 # Optional:
 sudo apt install qt6-tools-dev qt6-tools-dev-tools libkmod-dev libdisplay-info-dev
+# Optional GPU link test:
+sudo apt install libvulkan-dev glslang-tools
 ```
 
 Check that your distribution's Qt packages meet the minimum version; older

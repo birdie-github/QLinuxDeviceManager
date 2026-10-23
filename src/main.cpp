@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "gpulinktest.h"
 #include "cameraproperties.h"
 #include <cstring>
 #include <cstdlib>
@@ -53,6 +54,8 @@ int main(int argc, char **argv)
             break;
         }
     }
+    if (argc == 4 && std::strcmp(argv[1], "--gpu-link-test") == 0)
+        return runGpuLinkTest(QString::fromLocal8Bit(argv[2]), QString::fromLocal8Bit(argv[3]));
     MainWindow window;
     window.show();
     return app.exec();
