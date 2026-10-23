@@ -631,8 +631,22 @@ shows live link speed/width. No Seascape code or other supplied shader is used.
 There is no NVML, CUDA, vendor command, network access, sysfs write, link retraining
 request, or change to driver power settings.
 
-The graphics load lasts up to 15 seconds after the first submitted frame, or until
-Stop/close. The main process retains the highest observed speed/width pair and its
+The offscreen graphics load submits work continuously for up to 15 seconds, or
+until Stop/close; stopping waits for any already submitted work to finish. The shader is unchanged. A dedicated rendering worker owns a fixed
+640 × 360 color target, command buffer and completion fence, with only one
+submission in flight. After completion, it immediately records and submits the
+next frame: there is no frame timer, swapchain, presentation wait or VSync limit.
+The five-millisecond fence timeout only polls cancellation; a completed fence
+returns immediately. A GPU submission that does not complete within five seconds
+ends the test with an error, subject to the parent deadline if cleanup stalls.
+
+The preview reads back at most one rendered image about every 100 ms. Its GUI timer
+consumes one replaceable image slot; it does not schedule rendering or accumulate
+per-frame events. Minimized/covered windows do not pause the workload. The popup
+also reports completed offscreen frames per second, independently of the preview
+refresh rate; this is diagnostic information rather than a GPU benchmark score.
+
+The main process retains the highest observed speed/width pair and its
 timestamp in that Properties dialog, including **Copy PCIe properties**. Speed
 ranks first; width breaks a speed tie. It never combines separately observed speed
 and width maxima. The normal snapshot and device capability fields remain
@@ -642,18 +656,20 @@ maximum on some drivers. No pass/fail judgment is made from the observed rate.
 
 The child requires Vulkan 1.1 and a unique `VK_EXT_pci_bus_info` match for the
 selected domain:bus:device.function. It refuses software renderers and never
-selects by vendor/device ID or model name. The actual Qt physical device is
-rechecked before recording the shader workload, guarding against enumeration
-changes or selection fallback. No Vulkan instance or GPU context is created by
-the main device manager. The Qt desktop backend must support Vulkan presentation
-for this device; unavailable drivers, PCI identity or presentation produce an
-explanation rather than a test on another GPU.
+selects by vendor/device ID or model name. The selected physical device is
+rechecked before creating its logical device and recording the shader workload.
+The child creates its Vulkan instance before starting the rendering worker and
+destroys it after the worker joins; device/queue/resource access stays on that
+worker. No Vulkan instance or GPU context is created by the main device manager.
+Rendering needs no presentation support or Vulkan window; the preview is an
+ordinary Qt image. Unavailable drivers, PCI identity or offscreen resources
+produce an explanation rather than a test on another GPU.
 
 A single child worker samples the selected directory's documented
 `current_link_speed` and `current_link_width` attributes at roughly 250 ms
 intervals. Each read is capped at 128 bytes. Repeated reads discard an observed
 speed/width transition; sysfs does not provide an atomic pair. Only samples near a
-submitted graphics frame are retained. The child checks the directory identity
+completed graphics frame are retained. The child checks the directory identity
 against the inventory and during collection, and the parent cancels on an
 observed removal/replacement. These checks cannot eliminate every hotplug race.
 Permission failures and malformed/missing readings are reported explicitly.
@@ -664,12 +680,16 @@ child at 25 seconds, including teardown time. Closing Properties kills its test;
 Linux parent-death notification also prevents an orphan workload. Graphics calls
 or sysfs reads can still stall inside the child; its own timers cannot interrupt
 a blocked driver call. The parent deadline isolates the viewer from that stall,
-but cannot guarantee recovery of a hung kernel driver or GPU. Rendering is capped
-at 640 × 360 shader pixels and approximately 60 requested frames per second;
-there are no unbounded render queues, uploads, textures or application buffers.
+but cannot guarantee recovery of a hung kernel driver or GPU. The target and
+readback buffer are fixed in size (640 × 360 RGBA pixels); their two Vulkan memory
+allocations are each capped at 64 MiB to allow driver alignment requirements.
+GPU queues, resource allocations and the pending preview remain bounded even
+though frame rate is uncapped. Readback memory is invalidated after its fence and
+transfer-to-host barrier before copying into an owned QImage. CPU preview copies
+never reference memory that the GPU may overwrite.
 
 Build support is enabled automatically when Vulkan development headers,
-`glslangValidator`, and Qt's Vulkan window support are available. The shader is
+`glslangValidator`, and Qt's Vulkan instance support are available. The shader is
 compiled to embedded SPIR-V at build time; no runtime compiler is required. Use
 `-DGPU_LINK_TEST=OFF` to omit it. CMake reports whether support was enabled; normal
 hardware viewing works without it. Run the viewer without sudo for this test.
@@ -699,7 +719,7 @@ Requirements:
 - Optional Qt Linguist tools **6.8 or newer** to build translation catalogs.
 - Optional Vulkan development headers and `glslangValidator`, with Vulkan-enabled
   Qt, for the GPU link test. Runtime needs a Vulkan 1.1 driver exposing PCI identity
-  and presentation in the current desktop session.
+  (offscreen rendering does not require Vulkan presentation).
 
 Fedora packages:
 

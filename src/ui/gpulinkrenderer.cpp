@@ -3,7 +3,9 @@
 #include <QVersionNumber>
 #include <QVulkanInstance>
 #include <QVulkanFunctions>
-#include <QVulkanWindow>
+#include <QImage>
+#include <QPixmap>
+#include <mutex>
 #include <QApplication>
 #include <QDateTime>
 #include <QDialog>
@@ -18,12 +20,10 @@
 #include <QThread>
 #include <QTimer>
 #include <QVBoxLayout>
-#include <algorithm>
 #include <atomic>
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
-#include <functional>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -63,30 +63,147 @@ bool isTarget(QVulkanInstance &instance, VkPhysicalDevice physical, const QStrin
         .arg(pci.pciFunction, 1, 16, QLatin1Char('0')) == bdf;
 }
 
-class LoadWindow;
-class Renderer final : public QVulkanWindowRenderer {
+constexpr uint32_t renderWidth = 640;
+constexpr uint32_t renderHeight = 360;
+constexpr int previewIntervalMs = 16;
+
+// All device, queue and resource access belongs to the rendering worker. The
+// instance is created before the worker starts and destroyed only after it joins.
+class Renderer final {
 public:
-    explicit Renderer(LoadWindow *window) : window_(window) {}
-    void initResources() override;
-    void releaseResources() override;
-    void startNextFrame() override;
-    void logicalDeviceLost() override;
-    void physicalDeviceLost() override;
+    Renderer(QVulkanInstance &instance, VkPhysicalDevice physical, const QString &bdf)
+        : instance_(instance), physical_(physical), bdf_(bdf) {}
+    ~Renderer();
+    bool initialize();
+    VkResult render(float seconds, bool preview, QImage &image);
 private:
+    bool createTarget();
+    bool allocate(const VkMemoryRequirements &requirements, VkMemoryPropertyFlags flags, VkDeviceMemory &memory);
     VkShaderModule shader(const QString &path);
-    LoadWindow *window_;
+    QVulkanInstance &instance_;
+    VkPhysicalDevice physical_;
+    QString bdf_;
+    VkDevice device_ = VK_NULL_HANDLE;
     QVulkanDeviceFunctions *f_ = nullptr;
+    VkQueue queue_ = VK_NULL_HANDLE;
+    VkCommandPool pool_ = VK_NULL_HANDLE;
+    VkCommandBuffer command_ = VK_NULL_HANDLE;
+    VkFence fence_ = VK_NULL_HANDLE;
+    VkImage target_ = VK_NULL_HANDLE;
+    VkDeviceMemory targetMemory_ = VK_NULL_HANDLE;
+    VkImageView view_ = VK_NULL_HANDLE;
+    VkRenderPass pass_ = VK_NULL_HANDLE;
+    VkFramebuffer framebuffer_ = VK_NULL_HANDLE;
+    VkBuffer readback_ = VK_NULL_HANDLE;
+    VkDeviceMemory readbackMemory_ = VK_NULL_HANDLE;
+    void *mapped_ = nullptr;
     VkPipelineLayout layout_ = VK_NULL_HANDLE;
     VkPipeline pipeline_ = VK_NULL_HANDLE;
-    QElapsedTimer elapsed_;
 };
-class LoadWindow final : public QVulkanWindow {
-public:
-    QString bdf;
-    std::function<void(const QString &)> failed;
-    std::function<void()> submitted;
-    QVulkanWindowRenderer *createRenderer() override { return new Renderer(this); }
-};
+
+bool Renderer::allocate(const VkMemoryRequirements &requirements, VkMemoryPropertyFlags flags, VkDeviceMemory &memory)
+{
+    // Bounded application-owned allocations; driver-internal allocation is not
+    // covered by this limit. The image and readback are each under 1 MiB of pixels.
+    if (!requirements.size || requirements.size > 64 * 1024 * 1024) return false;
+    VkPhysicalDeviceMemoryProperties properties {};
+    instance_.functions()->vkGetPhysicalDeviceMemoryProperties(physical_, &properties);
+    for (uint32_t i = 0; i < properties.memoryTypeCount; ++i) {
+        if (!(requirements.memoryTypeBits & (1u << i))
+            || (properties.memoryTypes[i].propertyFlags & flags) != flags) continue;
+        VkMemoryAllocateInfo info {};
+        info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        info.allocationSize = requirements.size;
+        info.memoryTypeIndex = i;
+        return f_->vkAllocateMemory(device_, &info, nullptr, &memory) == VK_SUCCESS;
+    }
+    return false;
+}
+
+bool Renderer::createTarget()
+{
+    VkFormatProperties format {};
+    instance_.functions()->vkGetPhysicalDeviceFormatProperties(physical_, VK_FORMAT_R8G8B8A8_UNORM, &format);
+    const VkFormatFeatureFlags needed = VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT | VK_FORMAT_FEATURE_TRANSFER_SRC_BIT;
+    if ((format.optimalTilingFeatures & needed) != needed) return false;
+    VkImageCreateInfo image {};
+    image.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    image.imageType = VK_IMAGE_TYPE_2D;
+    image.format = VK_FORMAT_R8G8B8A8_UNORM;
+    image.extent = {renderWidth, renderHeight, 1};
+    image.mipLevels = image.arrayLayers = 1;
+    image.samples = VK_SAMPLE_COUNT_1_BIT;
+    image.tiling = VK_IMAGE_TILING_OPTIMAL;
+    image.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    image.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    if (f_->vkCreateImage(device_, &image, nullptr, &target_) != VK_SUCCESS) return false;
+    VkMemoryRequirements requirements {};
+    f_->vkGetImageMemoryRequirements(device_, target_, &requirements);
+    if (!allocate(requirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, targetMemory_)
+        || f_->vkBindImageMemory(device_, target_, targetMemory_, 0) != VK_SUCCESS) return false;
+    VkImageViewCreateInfo view {};
+    view.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    view.image = target_;
+    view.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    view.format = image.format;
+    view.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    if (f_->vkCreateImageView(device_, &view, nullptr, &view_) != VK_SUCCESS) return false;
+    VkAttachmentDescription color {};
+    color.format = image.format;
+    color.samples = VK_SAMPLE_COUNT_1_BIT;
+    color.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    color.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    color.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    color.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    color.finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    VkAttachmentReference reference {0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+    VkSubpassDescription subpass {};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &reference;
+    VkSubpassDependency dependencies[2] {};
+    dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[0].dstSubpass = 0;
+    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[1].srcSubpass = 0;
+    dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[1].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[1].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    VkRenderPassCreateInfo pass {};
+    pass.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    pass.attachmentCount = 1;
+    pass.pAttachments = &color;
+    pass.subpassCount = 1;
+    pass.pSubpasses = &subpass;
+    pass.dependencyCount = 2;
+    pass.pDependencies = dependencies;
+    if (f_->vkCreateRenderPass(device_, &pass, nullptr, &pass_) != VK_SUCCESS) return false;
+    VkFramebufferCreateInfo framebuffer {};
+    framebuffer.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebuffer.renderPass = pass_;
+    framebuffer.attachmentCount = 1;
+    framebuffer.pAttachments = &view_;
+    framebuffer.width = renderWidth;
+    framebuffer.height = renderHeight;
+    framebuffer.layers = 1;
+    if (f_->vkCreateFramebuffer(device_, &framebuffer, nullptr, &framebuffer_) != VK_SUCCESS) return false;
+    VkBufferCreateInfo buffer {};
+    buffer.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer.size = renderWidth * renderHeight * 4;
+    buffer.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    buffer.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    if (f_->vkCreateBuffer(device_, &buffer, nullptr, &readback_) != VK_SUCCESS) return false;
+    f_->vkGetBufferMemoryRequirements(device_, readback_, &requirements);
+    if (!allocate(requirements, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, readbackMemory_)
+        || f_->vkBindBufferMemory(device_, readback_, readbackMemory_, 0) != VK_SUCCESS
+        || f_->vkMapMemory(device_, readbackMemory_, 0, VK_WHOLE_SIZE, 0, &mapped_) != VK_SUCCESS) return false;
+    return true;
+}
 
 VkShaderModule Renderer::shader(const QString &path)
 {
@@ -102,29 +219,58 @@ VkShaderModule Renderer::shader(const QString &path)
     info.codeSize = static_cast<size_t>(bytes.size());
     info.pCode = words.constData();
     VkShaderModule module = VK_NULL_HANDLE;
-    if (f_->vkCreateShaderModule(window_->device(), &info, nullptr, &module) != VK_SUCCESS)
+    if (f_->vkCreateShaderModule(device_, &info, nullptr, &module) != VK_SUCCESS)
         return VK_NULL_HANDLE;
     return module;
 }
 
-void Renderer::initResources()
+bool Renderer::initialize()
 {
-    // Recheck the actual selected Qt device before recording any workload. This
-    // also catches enumeration order changes or a Qt fallback to another device.
-    if (!isTarget(*window_->vulkanInstance(), window_->physicalDevice(), window_->bdf)) {
-        window_->failed(text("The renderer could not verify the selected PCI GPU."));
-        return;
-    }
-    f_ = window_->vulkanInstance()->deviceFunctions(window_->device());
+    if (!isTarget(instance_, physical_, bdf_)) return false;
+    auto *functions = instance_.functions();
+    uint32_t count = 0;
+    functions->vkGetPhysicalDeviceQueueFamilyProperties(physical_, &count, nullptr);
+    if (!count || count > 256) return false;
+    QVector<VkQueueFamilyProperties> queues(static_cast<int>(count));
+    functions->vkGetPhysicalDeviceQueueFamilyProperties(physical_, &count, queues.data());
+    if (count > static_cast<uint32_t>(queues.size())) return false;
+    uint32_t family = count;
+    for (uint32_t i = 0; i < count; ++i)
+        if (queues[static_cast<int>(i)].queueCount && (queues[static_cast<int>(i)].queueFlags & VK_QUEUE_GRAPHICS_BIT)) { family = i; break; }
+    if (family == count) return false;
+    const float priority = 1.0f;
+    VkDeviceQueueCreateInfo queue {};
+    queue.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queue.queueFamilyIndex = family;
+    queue.queueCount = 1;
+    queue.pQueuePriorities = &priority;
+    VkDeviceCreateInfo device {};
+    device.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    device.queueCreateInfoCount = 1;
+    device.pQueueCreateInfos = &queue;
+    if (functions->vkCreateDevice(physical_, &device, nullptr, &device_) != VK_SUCCESS) return false;
+    f_ = instance_.deviceFunctions(device_);
+    f_->vkGetDeviceQueue(device_, family, 0, &queue_);
+    VkCommandPoolCreateInfo pool {};
+    pool.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    pool.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    pool.queueFamilyIndex = family;
+    if (f_->vkCreateCommandPool(device_, &pool, nullptr, &pool_) != VK_SUCCESS) return false;
+    VkCommandBufferAllocateInfo command {};
+    command.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    command.commandPool = pool_;
+    command.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    command.commandBufferCount = 1;
+    if (f_->vkAllocateCommandBuffers(device_, &command, &command_) != VK_SUCCESS) return false;
+    VkFenceCreateInfo fence {};
+    fence.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    if (f_->vkCreateFence(device_, &fence, nullptr, &fence_) != VK_SUCCESS || !createTarget()) return false;
     VkPushConstantRange push {VK_SHADER_STAGE_FRAGMENT_BIT, 0, 16};
     VkPipelineLayoutCreateInfo layout {};
     layout.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     layout.pushConstantRangeCount = 1;
     layout.pPushConstantRanges = &push;
-    if (f_->vkCreatePipelineLayout(window_->device(), &layout, nullptr, &layout_) != VK_SUCCESS) {
-        window_->failed(text("Could not create the GPU workload layout."));
-        return;
-    }
+    if (f_->vkCreatePipelineLayout(device_, &layout, nullptr, &layout_) != VK_SUCCESS) return false;
     const VkShaderModule vertex = shader(QStringLiteral(":/gpulink/workload.vert.spv"));
     const VkShaderModule fragment = shader(QStringLiteral(":/gpulink/workload.frag.spv"));
     VkPipelineShaderStageCreateInfo stages[2] {};
@@ -178,56 +324,107 @@ void Renderer::initResources()
     pipeline.pColorBlendState = &blend;
     pipeline.pDynamicState = &dynamic;
     pipeline.layout = layout_;
-    pipeline.renderPass = window_->defaultRenderPass();
-    const bool ok = vertex && fragment && f_->vkCreateGraphicsPipelines(window_->device(), VK_NULL_HANDLE,
+    pipeline.renderPass = pass_;
+    const bool ok = vertex && fragment && f_->vkCreateGraphicsPipelines(device_, VK_NULL_HANDLE,
         1, &pipeline, nullptr, &pipeline_) == VK_SUCCESS;
-    if (vertex) f_->vkDestroyShaderModule(window_->device(), vertex, nullptr);
-    if (fragment) f_->vkDestroyShaderModule(window_->device(), fragment, nullptr);
-    if (!ok) window_->failed(text("Could not create the GPU workload pipeline."));
-    elapsed_.start();
+    if (vertex) f_->vkDestroyShaderModule(device_, vertex, nullptr);
+    if (fragment) f_->vkDestroyShaderModule(device_, fragment, nullptr);
+    return ok;
 }
-void Renderer::releaseResources()
+Renderer::~Renderer()
 {
-    if (f_) {
-        if (pipeline_) f_->vkDestroyPipeline(window_->device(), pipeline_, nullptr);
-        if (layout_) f_->vkDestroyPipelineLayout(window_->device(), layout_, nullptr);
-    }
-    pipeline_ = VK_NULL_HANDLE;
-    layout_ = VK_NULL_HANDLE;
-    f_ = nullptr;
+    if (!f_) return;
+    // Interruption stops new submissions, not already executing GPU commands.
+    // The parent process deadline also covers a driver stalled during cleanup.
+    f_->vkDeviceWaitIdle(device_);
+    if (pipeline_) f_->vkDestroyPipeline(device_, pipeline_, nullptr);
+    if (layout_) f_->vkDestroyPipelineLayout(device_, layout_, nullptr);
+    if (framebuffer_) f_->vkDestroyFramebuffer(device_, framebuffer_, nullptr);
+    if (pass_) f_->vkDestroyRenderPass(device_, pass_, nullptr);
+    if (view_) f_->vkDestroyImageView(device_, view_, nullptr);
+    if (target_) f_->vkDestroyImage(device_, target_, nullptr);
+    if (targetMemory_) f_->vkFreeMemory(device_, targetMemory_, nullptr);
+    if (mapped_) f_->vkUnmapMemory(device_, readbackMemory_);
+    if (readback_) f_->vkDestroyBuffer(device_, readback_, nullptr);
+    if (readbackMemory_) f_->vkFreeMemory(device_, readbackMemory_, nullptr);
+    if (fence_) f_->vkDestroyFence(device_, fence_, nullptr);
+    if (pool_) f_->vkDestroyCommandPool(device_, pool_, nullptr);
+    f_->vkDestroyDevice(device_, nullptr);
+    instance_.resetDeviceFunctions(device_);
 }
-void Renderer::logicalDeviceLost() { window_->failed(text("The Vulkan device was lost; test stopped.")); }
-void Renderer::physicalDeviceLost() { window_->failed(text("The GPU became unavailable; test stopped.")); }
-void Renderer::startNextFrame()
+VkResult Renderer::render(float seconds, bool preview, QImage &image)
 {
-    if (!pipeline_ || !f_) { window_->frameReady(); return; }
-    const QSize extent = window_->swapChainImageSize();
-    // Cap shader work even on HiDPI desktops; the remaining area is cleared.
-    const uint32_t width = static_cast<uint32_t>(std::min(extent.width(), 640));
-    const uint32_t height = static_cast<uint32_t>(std::min(extent.height(), 360));
-    VkClearValue clear[2] {};
-    clear[0].color.float32[3] = 1.0f;
-    clear[1].depthStencil.depth = 1.0f;
+    VkResult result = f_->vkResetCommandBuffer(command_, 0);
+    if (result != VK_SUCCESS) return result;
+    VkCommandBufferBeginInfo begin {};
+    begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    result = f_->vkBeginCommandBuffer(command_, &begin);
+    if (result != VK_SUCCESS) return result;
+    VkClearValue clear {};
+    clear.color.float32[3] = 1.0f;
     VkRenderPassBeginInfo pass {};
     pass.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    pass.renderPass = window_->defaultRenderPass();
-    pass.framebuffer = window_->currentFramebuffer();
-    pass.renderArea.extent = {static_cast<uint32_t>(extent.width()), static_cast<uint32_t>(extent.height())};
-    pass.clearValueCount = 2;
-    pass.pClearValues = clear;
-    const auto command = window_->currentCommandBuffer();
-    f_->vkCmdBeginRenderPass(command, &pass, VK_SUBPASS_CONTENTS_INLINE);
-    f_->vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
-    VkViewport viewport {0, 0, static_cast<float>(width), static_cast<float>(height), 0, 1};
-    VkRect2D scissor {{0, 0}, {width, height}};
-    f_->vkCmdSetViewport(command, 0, 1, &viewport);
-    f_->vkCmdSetScissor(command, 0, 1, &scissor);
-    const float values[4] {static_cast<float>(width), static_cast<float>(height), elapsed_.elapsed() / 1000.0f, 0};
-    f_->vkCmdPushConstants(command, layout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(values), values);
-    f_->vkCmdDraw(command, 3, 1, 0, 0);
-    f_->vkCmdEndRenderPass(command);
-    window_->frameReady();
-    window_->submitted();
+    pass.renderPass = pass_;
+    pass.framebuffer = framebuffer_;
+    pass.renderArea.extent = {renderWidth, renderHeight};
+    pass.clearValueCount = 1;
+    pass.pClearValues = &clear;
+    f_->vkCmdBeginRenderPass(command_, &pass, VK_SUBPASS_CONTENTS_INLINE);
+    f_->vkCmdBindPipeline(command_, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
+    VkViewport viewport {0, 0, static_cast<float>(renderWidth), static_cast<float>(renderHeight), 0, 1};
+    VkRect2D scissor {{0, 0}, {renderWidth, renderHeight}};
+    f_->vkCmdSetViewport(command_, 0, 1, &viewport);
+    f_->vkCmdSetScissor(command_, 0, 1, &scissor);
+    const float values[4] {static_cast<float>(renderWidth), static_cast<float>(renderHeight), seconds, 0};
+    f_->vkCmdPushConstants(command_, layout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(values), values);
+    f_->vkCmdDraw(command_, 3, 1, 0, 0);
+    f_->vkCmdEndRenderPass(command_);
+    if (preview) {
+        VkBufferImageCopy copy {};
+        copy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        copy.imageExtent = {renderWidth, renderHeight, 1};
+        f_->vkCmdCopyImageToBuffer(command_, target_, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, readback_, 1, &copy);
+        VkBufferMemoryBarrier barrier {};
+        barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+        barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.buffer = readback_;
+        barrier.size = VK_WHOLE_SIZE;
+        f_->vkCmdPipelineBarrier(command_, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT,
+            0, 0, nullptr, 1, &barrier, 0, nullptr);
+    }
+    result = f_->vkEndCommandBuffer(command_);
+    if (result != VK_SUCCESS) return result;
+    result = f_->vkResetFences(device_, 1, &fence_);
+    if (result != VK_SUCCESS) return result;
+    VkSubmitInfo submit {};
+    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit.commandBufferCount = 1;
+    submit.pCommandBuffers = &command_;
+    result = f_->vkQueueSubmit(queue_, 1, &submit, fence_);
+    if (result != VK_SUCCESS) return result;
+    // Wait only for this one submission. A signaled fence returns immediately;
+    // the 5 ms timeout polls cancellation and is not a frame pacing interval.
+    QElapsedTimer waiting;
+    waiting.start();
+    do {
+        result = f_->vkWaitForFences(device_, 1, &fence_, VK_TRUE, 5000000);
+        if (QThread::currentThread()->isInterruptionRequested()) return VK_NOT_READY;
+    } while (result == VK_TIMEOUT && waiting.elapsed() < 5000);
+    if (result != VK_SUCCESS) return result;
+    if (preview) {
+        VkMappedMemoryRange range {};
+        range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+        range.memory = readbackMemory_;
+        range.size = VK_WHOLE_SIZE;
+        result = f_->vkInvalidateMappedMemoryRanges(device_, 1, &range);
+        if (result != VK_SUCCESS) return result;
+        image = QImage(static_cast<const uchar *>(mapped_), static_cast<int>(renderWidth),
+            static_cast<int>(renderHeight), static_cast<int>(renderWidth * 4), QImage::Format_RGBA8888).copy();
+    }
+    return VK_SUCCESS;
 }
 
 QByteArray readAttribute(int directory, const char *name, int *error = nullptr)
@@ -279,7 +476,7 @@ int runGpuLinkTest(const QString &path, const QString &incarnation)
     if (error.isEmpty()) {
         QVulkanInstance instance;
         instance.setApiVersion(QVersionNumber(1, 1));
-        if (!instance.create()) error = text("Vulkan 1.1 could not be initialized in this desktop session.");
+        if (!instance.create()) error = text("Vulkan 1.1 could not be initialized.");
         if (error.isEmpty()) {
             uint32_t count = 0;
             auto *f = instance.functions();
@@ -311,13 +508,14 @@ int runGpuLinkTest(const QString &path, const QString &incarnation)
                     "This observes the link; it does not measure throughput or guarantee maximum speed.").arg(testDurationMs / 1000), &dialog);
                 notice->setWordWrap(true);
                 layout->addWidget(notice);
-                auto *window = new LoadWindow;
-                window->bdf = bdf;
-                window->setVulkanInstance(&instance);
-                window->setPhysicalDeviceIndex(selected);
-                auto *container = QWidget::createWindowContainer(window, &dialog);
-                container->setFixedSize(480, 270);
-                layout->addWidget(container);
+                auto *preview = new QLabel(&dialog);
+                preview->setFixedSize(480, 270);
+                preview->setAlignment(Qt::AlignCenter);
+                preview->setText(text("Starting renderer…"));
+                layout->addWidget(preview);
+                auto *rate = new QLabel(text("Offscreen rendering: starting…"), &dialog);
+                rate->setTextFormat(Qt::PlainText);
+                layout->addWidget(rate);
                 auto *live = new QLabel(text("Starting renderer…"), &dialog);
                 live->setTextFormat(Qt::PlainText);
                 layout->addWidget(live);
@@ -338,14 +536,13 @@ int runGpuLinkTest(const QString &path, const QString &incarnation)
                 GpuLinkSample peak;
                 QString peakTime;
                 bool ended = false;
-                window->failed = [&](const QString &why) {
+                const auto failed = [&](const QString &why) {
                     if (ended) return;
                     ended = true;
                     error = why;
                     QTimer::singleShot(0, &dialog, &QDialog::reject);
                 };
-                window->submitted = [&] {
-                    lastFrame.store(clock.elapsed());
+                const auto startSampling = [&] {
                     if (sampler || ended) return;
                     QTimer::singleShot(testDurationMs, &dialog, &QDialog::accept);
                     sampler = QThread::create([&] {
@@ -354,7 +551,7 @@ int runGpuLinkTest(const QString &path, const QString &incarnation)
                         while (!QThread::currentThread()->isInterruptionRequested()) {
                             struct stat now {};
                             if (stat(path.toUtf8().constData(), &now) != 0 || now.st_dev != identity.st_dev || now.st_ino != identity.st_ino) {
-                                QMetaObject::invokeMethod(&dialog, [&] { window->failed(text("The selected GPU was removed or replaced.")); }, Qt::QueuedConnection);
+                                QMetaObject::invokeMethod(&dialog, [&] { failed(text("The selected GPU was removed or replaced.")); }, Qt::QueuedConnection);
                                 return;
                             }
                             int speedError = 0, widthError = 0;
@@ -367,12 +564,12 @@ int runGpuLinkTest(const QString &path, const QString &incarnation)
                                     : code == ENOENT || code == ENODEV
                                         ? text("The GPU PCIe link attributes are no longer available.")
                                         : text("Error reading the GPU PCIe link (errno %1).").arg(code);
-                                QMetaObject::invokeMethod(&dialog, [&, why] { window->failed(why); }, Qt::QueuedConnection);
+                                QMetaObject::invokeMethod(&dialog, [&, why] { failed(why); }, Qt::QueuedConnection);
                                 return;
                             }
                             GpuLinkSample sample;
                             if (!parseGpuLinkSample(speedText, widthText, sample)) {
-                                QMetaObject::invokeMethod(&dialog, [&] { window->failed(text("The kernel PCIe link reading is unavailable or unreadable.")); }, Qt::QueuedConnection);
+                                QMetaObject::invokeMethod(&dialog, [&] { failed(text("The kernel PCIe link reading is unavailable or unreadable.")); }, Qt::QueuedConnection);
                                 return;
                             }
                             // Bracket both reads to discard an observed retraining
@@ -383,7 +580,7 @@ int runGpuLinkTest(const QString &path, const QString &incarnation)
                                 continue;
                             }
                             if (stat(path.toUtf8().constData(), &now) != 0 || now.st_dev != identity.st_dev || now.st_ino != identity.st_ino) {
-                                QMetaObject::invokeMethod(&dialog, [&] { window->failed(text("The selected GPU was removed or replaced.")); }, Qt::QueuedConnection);
+                                QMetaObject::invokeMethod(&dialog, [&] { failed(text("The selected GPU was removed or replaced.")); }, Qt::QueuedConnection);
                                 return;
                             }
                             const qint64 frame = lastFrame.load();
@@ -405,20 +602,92 @@ int runGpuLinkTest(const QString &path, const QString &incarnation)
                     });
                     sampler->start();
                 };
-                QTimer frames;
-                frames.setInterval(16);
-                QObject::connect(&frames, &QTimer::timeout, &dialog, [window] {
-                    if (window->isExposed()) window->requestUpdate();
+                // At most one owned preview image is waiting for the GUI. There
+                // is no per-frame event queue and no surface or swapchain.
+                std::mutex renderMutex;
+                QImage latestPreview;
+                QString renderError;
+                std::atomic<quint64> completedFrames {0};
+                std::atomic<bool> renderFinished {false};
+                auto *renderWorker = QThread::create([&] {
+                    {
+                        Renderer renderer(instance, devices[selected], bdf);
+                        if (!renderer.initialize()) {
+                            std::lock_guard<std::mutex> lock(renderMutex);
+                            renderError = text("Could not initialize offscreen rendering on the selected PCI GPU.");
+                        } else {
+                            QElapsedTimer rendering;
+                            rendering.start();
+                            qint64 lastPreview = -previewIntervalMs;
+                            while (!QThread::currentThread()->isInterruptionRequested()
+                                   && rendering.elapsed() < testDurationMs) {
+                                const bool updatePreview = rendering.elapsed() - lastPreview >= previewIntervalMs;
+                                QImage image;
+                                const VkResult result = renderer.render(rendering.elapsed() / 1000.0f, updatePreview, image);
+                                if (result == VK_NOT_READY && QThread::currentThread()->isInterruptionRequested()) break;
+                                if (result != VK_SUCCESS) {
+                                    std::lock_guard<std::mutex> lock(renderMutex);
+                                    renderError = result == VK_ERROR_DEVICE_LOST
+                                        ? text("The Vulkan device was lost; test stopped.")
+                                        : text("Offscreen rendering failed (Vulkan result %1).").arg(static_cast<int>(result));
+                                    break;
+                                }
+                                // Only completed work counts as a rendering observation.
+                                lastFrame.store(clock.elapsed());
+                                completedFrames.fetch_add(1);
+                                if (updatePreview) {
+                                    lastPreview = rendering.elapsed();
+                                    std::lock_guard<std::mutex> lock(renderMutex);
+                                    latestPreview = std::move(image);
+                                }
+                            }
+                        }
+                    } // Vulkan cleanup stays on the rendering worker.
+                    renderFinished.store(true);
                 });
-                frames.start();
+                QTimer previewTimer;
+                previewTimer.setInterval(previewIntervalMs);
+                quint64 previousFrames = 0;
+                qint64 rateTime = clock.elapsed();
+                const auto updatePreview = [&] {
+                    QImage image;
+                    QString failure;
+                    {
+                        std::lock_guard<std::mutex> lock(renderMutex);
+                        image.swap(latestPreview);
+                        failure = renderError;
+                    }
+                    if (!failure.isEmpty()) { failed(failure); return; }
+                    if (!image.isNull()) preview->setPixmap(QPixmap::fromImage(image).scaled(preview->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+                    if (lastFrame.load() >= 0) startSampling();
+                    const qint64 now = clock.elapsed();
+                    if (now - rateTime >= 1000) {
+                        const quint64 count = completedFrames.load();
+                        rate->setText(text("Offscreen rendering: %1 frames/s (uncapped)")
+                            .arg(QString::number((count - previousFrames) * 1000.0 / (now - rateTime), 'f', 0)));
+                        previousFrames = count;
+                        rateTime = now;
+                    }
+                    if (renderFinished.load() && !ended) dialog.accept();
+                };
+                QObject::connect(&previewTimer, &QTimer::timeout, &dialog, updatePreview);
+                previewTimer.start();
+                renderWorker->start();
                 QTimer::singleShot(5000, &dialog, [&] {
-                    if (!sampler) window->failed(text("The GPU renderer did not start within five seconds."));
+                    if (!sampler && !ended) failed(text("The GPU renderer did not start within five seconds."));
                 });
                 dialog.exec();
                 ended = true;
-                frames.stop();
+                previewTimer.stop();
+                renderWorker->requestInterruption();
+                if (sampler) sampler->requestInterruption();
+                renderWorker->wait();
+                delete renderWorker;
+                {
+                    std::lock_guard<std::mutex> lock(renderMutex);
+                    if (!renderError.isEmpty()) error = renderError;
+                }
                 if (sampler) {
-                    sampler->requestInterruption();
                     sampler->wait();
                     delete sampler;
                 }
@@ -426,9 +695,6 @@ int runGpuLinkTest(const QString &path, const QString &incarnation)
                     summary = text("Highest observed during graphics load: %1 (%2). Maximum not guaranteed.")
                         .arg(formatLink(peak.speed, peak.width), peakTime);
                 else if (error.isEmpty()) error = text("Test stopped before any link readings were collected.");
-                // Destroy renderer and its Vulkan resources while captured state
-                // and the instance are still alive; do not persist a GPU context.
-                delete container;
             }
         }
     }

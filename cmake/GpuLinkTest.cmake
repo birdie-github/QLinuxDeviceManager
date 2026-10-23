@@ -14,12 +14,12 @@ include(CMakePushCheckState)
 cmake_push_check_state(RESET)
 set(CMAKE_REQUIRED_LIBRARIES Qt6::Gui)
 set(CMAKE_REQUIRED_INCLUDES ${GPU_LINK_VULKAN_INCLUDE_DIR})
-check_cxx_source_compiles("#include <QVulkanWindow>
+check_cxx_source_compiles("#include <QVulkanInstance>
 #include <vulkan/vulkan.h>
-int main() { QVulkanWindow w; VkPhysicalDevicePCIBusInfoPropertiesEXT p{}; (void)p; }"
-    GPU_LINK_QT_VULKAN)
+int main() { QVulkanInstance instance; VkPhysicalDevicePCIBusInfoPropertiesEXT p{}; (void)p; }"
+    GPU_LINK_QT_VULKAN_INSTANCE)
 cmake_pop_check_state()
-if(NOT GPU_LINK_QT_VULKAN)
+if(NOT GPU_LINK_QT_VULKAN_INSTANCE)
     message(STATUS "GPU link test: disabled (Vulkan headers, glslangValidator or Qt Vulkan support unavailable)")
     return()
 endif()
