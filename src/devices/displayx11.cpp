@@ -176,6 +176,7 @@ DisplayProperties x11(const QString &connector, const QString &kernelPath)
     xcb_randr_crtc_t selected = XCB_NONE;
     int matches = 0;
     bool disconnected = false;
+    xcb_randr_output_t namedOutput = XCB_NONE;
     struct Output { xcb_randr_output_t id; xcb_randr_crtc_t crtc; QString name; };
     QVector<Output> connected;
     const auto *outputs = api.outputs(resources.get());
@@ -190,6 +191,7 @@ DisplayProperties x11(const QString &connector, const QString &kernelPath)
         if (canonicalName(name) != canonicalName(connector)) continue;
         ++matches;
         result.output = name;
+        namedOutput = outputs[i];
         selected = info->crtc;
         disconnected = info->connection == XCB_RANDR_CONNECTION_DISCONNECTED;
     }
@@ -198,10 +200,40 @@ DisplayProperties x11(const QString &connector, const QString &kernelPath)
     xcb_randr_output_t matchedOutput = XCB_NONE;
     QByteArray matchedEdid;
     if (matches > 1) { result.status = error(ENOTUNIQ); return result; }
-    if (matches == 0) {
+    bool fallback = matches == 0 || disconnected;
+    QByteArray namedKernelEdid;
+    Attribute namedKernelState;
+    if (matches == 1) {
+        // Connector numbering can overlap accidentally across kernel and X11
+        // drivers. A unique name must not override conflicting monitor identity.
+        namedKernelState = readFile(kernelPath + "/edid", DisplayIdentity::edidLimit, namedKernelEdid);
+        if (namedKernelState.state == ReadState::Error) { result.status = namedKernelState; return result; }
+        if (namedKernelState.state == ReadState::Available && DisplayIdentity::validEdid(namedKernelEdid)) {
+            const auto atom = api.reply<xcb_intern_atom_reply_t>(api.internAtom(api.connection, 1, 4, "EDID").sequence);
+            if (!atom) { result.status = error(api.errorNumber); return result; }
+            edidAtom = atom->atom;
+            if (edidAtom) {
+                const QByteArray namedEdid = api.edid(namedOutput, edidAtom);
+                if (api.errorNumber) { result.status = error(api.errorNumber); return result; }
+                if (!namedEdid.isEmpty()) {
+                    if (namedEdid != namedKernelEdid) fallback = true;
+                    else {
+                        matchedOutput = namedOutput;
+                        matchedEdid = namedEdid;
+                    }
+                }
+            }
+        }
+    }
+    if (fallback) {
+        // Clear the rejected name candidate even if fallback cannot identify an output.
+        result.output.clear();
+        selected = XCB_NONE;
+        matchedOutput = XCB_NONE;
+        matchedEdid.clear();
         // Drivers such as NVIDIA use independent output numbering. EDID fallback
         // is permitted only with a unique, complete descriptor on both sides.
-        result.sources.insert("configuration", "No matching RandR connector name; fallback requires one unique, complete EDID on both kernel and RandR sides");
+        result.sources.insert("configuration", "No consistent RandR connector-name match; fallback requires one unique, complete EDID on both kernel and RandR sides");
         kernel = kernelEdids();
         if (kernel.status.state != ReadState::Available) { result.status = kernel.status; return result; }
         const QByteArray selectedEdid = kernel.connected.value(kernelPath);
@@ -224,17 +256,27 @@ DisplayProperties x11(const QString &connector, const QString &kernelPath)
         matchedEdid = sessionEdids[match.output];
         result.sources.insert("output", kernelPath + "/edid and RandR EDID property: unique complete descriptor match");
         result.sources.insert("configuration", "RandR output associated by a unique complete EDID match; no connector-number offset is assumed");
-    } else result.sources.insert("output", "Unique kernel/RandR connector-name match");
+    } else result.sources.insert("output", matchedOutput != XCB_NONE
+        ? "Unique kernel/RandR connector-name match, verified against complete EDID on both sides"
+        : "Unique kernel/RandR connector-name match; EDID verification unavailable");
     const auto validate = [&] {
         // Reject a result spanning a modeset/hotplug rather than showing mixed data.
         const auto after = api.reply<xcb_randr_get_screen_resources_current_reply_t>(
             api.resources(api.connection, screen.data->root).sequence);
         bool stable = after && after->config_timestamp == resources->config_timestamp && after->timestamp == resources->timestamp;
+        if (stable && matches == 1 && !fallback) {
+            QByteArray finalKernelEdid;
+            const Attribute finalState = readFile(kernelPath + "/edid", DisplayIdentity::edidLimit, finalKernelEdid);
+            stable = finalState.state == namedKernelState.state && finalState.error == namedKernelState.error
+                && finalKernelEdid == namedKernelEdid;
+        }
         if (stable && matchedOutput != XCB_NONE) {
             const QByteArray finalEdid = api.edid(matchedOutput, edidAtom);
-            const KernelEdids finalKernel = kernelEdids();
-            stable = finalEdid == matchedEdid
-                && finalKernel.status.state == ReadState::Available && finalKernel.connected == kernel.connected;
+            stable = !api.errorNumber && finalEdid == matchedEdid;
+            if (stable && fallback) {
+                const KernelEdids finalKernel = kernelEdids();
+                stable = finalKernel.status.state == ReadState::Available && finalKernel.connected == kernel.connected;
+            }
         }
         if (!stable) {
             result.values.clear();
@@ -242,11 +284,6 @@ DisplayProperties x11(const QString &connector, const QString &kernelPath)
             result.status = error(after ? EAGAIN : api.errorNumber);
         }
     };
-    if (disconnected) {
-        result.status = available("disconnected");
-        result.sources.insert("configuration", "RandR output connection status");
-        return result;
-    }
     result.status = available(selected ? "configured" : "inactive");
     const auto put = [&](const QString &key, const QString &value, const QString &source) {
         result.values.insert(key, available(value));
