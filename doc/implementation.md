@@ -611,6 +611,12 @@ are retained for 14 days; they are not automatically published as release assets
 
 ## Build and installation
 
+`project.json` declares the minimum Qt version and C++ standard in `platform`.
+CMake reads both values from the manifest, uses the Qt minimum for required and
+optional Qt components, and derives `QT_ENABLE_STRICT_MODE_UP_TO` from that version
+for the application and fixture targets. A major.minor Qt minimum uses patch zero
+for this encoding. The requirements remain Qt 6.8 and C++17.
+
 Requirements:
 
 - Linux and a C++17 compiler.

@@ -19,7 +19,7 @@
   },
   "platform": {
     "os": "Linux",
-    "minimum_qt": "6.2",
+    "minimum_qt": "6.8",
     "cpp_standard": 17
   }
 }

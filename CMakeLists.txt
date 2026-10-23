@@ -3,21 +3,32 @@ file(READ "${CMAKE_CURRENT_SOURCE_DIR}/project.json" PROJECT_METADATA)
 string(JSON APP_NAME GET "${PROJECT_METADATA}" identity name)
 string(JSON APP_VERSION GET "${PROJECT_METADATA}" release version)
 string(JSON APP_REPOSITORY GET "${PROJECT_METADATA}" project repository)
+string(JSON APP_MINIMUM_QT GET "${PROJECT_METADATA}" platform minimum_qt)
+string(JSON APP_CXX_STANDARD GET "${PROJECT_METADATA}" platform cpp_standard)
+# Qt encodes API versions as 0xMMmmpp. A major.minor minimum implies patch zero.
+string(REPLACE "." ";" APP_QT_VERSION_PARTS "${APP_MINIMUM_QT}")
+list(APPEND APP_QT_VERSION_PARTS 0)
+list(GET APP_QT_VERSION_PARTS 0 APP_QT_MAJOR)
+list(GET APP_QT_VERSION_PARTS 1 APP_QT_MINOR)
+list(GET APP_QT_VERSION_PARTS 2 APP_QT_PATCH)
+math(EXPR APP_QT_STRICT_VERSION
+    "(${APP_QT_MAJOR} << 16) | (${APP_QT_MINOR} << 8) | ${APP_QT_PATCH}"
+    OUTPUT_FORMAT HEXADECIMAL)
 project(${APP_NAME} VERSION ${APP_VERSION} LANGUAGES CXX)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS project.json)
 configure_file(resources/embedded/projectmetadata.h.in generated/projectmetadata.h @ONLY)
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
     message(FATAL_ERROR "QLinuxDeviceManager supports Linux only")
 endif()
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD ${APP_CXX_STANDARD})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
-find_package(Qt6 6.8 REQUIRED COMPONENTS Widgets Network)
+find_package(Qt6 ${APP_MINIMUM_QT} REQUIRED COMPONENTS Widgets Network)
 # Optional read-only UDisks2 cache access. Native storage viewing still works without it.
 option(UDISKS2 "Use optional QtDBus for cached UDisks2 storage metadata" ON)
 if(UDISKS2)
-    find_package(Qt6 6.8 QUIET COMPONENTS DBus)
+    find_package(Qt6 ${APP_MINIMUM_QT} QUIET COMPONENTS DBus)
 endif()
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(UDEV REQUIRED IMPORTED_TARGET libudev)
@@ -121,7 +132,7 @@ install(FILES resources/external/icons/QLinuxDeviceManager.svg
     RENAME ${APP_DESKTOP_ID}.svg)
 install(FILES project.json DESTINATION ${CMAKE_INSTALL_DATADIR}/QLinuxDeviceManager)
 # Optional tools: basic viewing never requires Linguist.
-find_package(Qt6 6.8 QUIET COMPONENTS LinguistTools)
+find_package(Qt6 ${APP_MINIMUM_QT} QUIET COMPONENTS LinguistTools)
 if(TARGET Qt6::lupdate)
     add_custom_target(update-translations
         COMMAND Qt6::lupdate ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -208,11 +219,11 @@ if(BUILD_TESTING)
     add_test(NAME system-properties COMMAND system-properties-test)
 endif()
 
-# Apply Qt's 6.8 API checks only to project executables, including fixture targets.
+# Apply the declared Qt baseline's API checks to project executables and fixture targets.
 foreach(qldm_target IN ITEMS qlinuxdevicemanager monitor-state-test device-events-test
         device-rules-test device-resources-test device-search-test system-properties-test
         directory-scan-test)
     if(TARGET ${qldm_target})
-        target_compile_definitions(${qldm_target} PRIVATE QT_ENABLE_STRICT_MODE_UP_TO=0x060800)
+        target_compile_definitions(${qldm_target} PRIVATE QT_ENABLE_STRICT_MODE_UP_TO=${APP_QT_STRICT_VERSION})
     endif()
 endforeach()
