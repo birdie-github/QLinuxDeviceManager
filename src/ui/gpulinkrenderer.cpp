@@ -1,5 +1,6 @@
 #include "gpulinktest.h"
 #include "gpulinksample.h"
+#include "pcielinktext.h"
 #include <QVersionNumber>
 #include <QVulkanInstance>
 #include <QVulkanFunctions>
@@ -444,7 +445,7 @@ QByteArray readAttribute(int directory, const char *name, int *error = nullptr)
 }
 QString formatLink(double speed, int width)
 {
-    return text("%1 GT/s ×%2").arg(QString::number(speed, 'g', 5)).arg(width);
+    return pcieLinkText(speed, width);
 }
 } // namespace
 
@@ -590,10 +591,13 @@ int runGpuLinkTest(const QString &path, const QString &incarnation)
                                     if (ended) return;
                                     observed = true;
                                     live->setText(text("Current link during rendering: %1").arg(formatLink(sample.speed, sample.width)));
+                                    const QString source = text("Signalling rate: %1 GT/s per lane").arg(QLocale().toString(sample.speed, 'g', 5));
+                                    live->setToolTip(source);
                                     if (sample.exceeds(peak)) {
                                         peak = sample;
                                         peakTime = stamp;
                                         best->setText(text("Highest observed: %1").arg(formatLink(sample.speed, sample.width)));
+                                        best->setToolTip(source);
                                     }
                                 }, Qt::QueuedConnection);
                             }

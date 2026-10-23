@@ -90,6 +90,7 @@ private:
     QPointer<QProcess> gpuTest_;
     QString gpuTestText_;
     QString gpuTestTime_;
+    QString gpuTestRate_;
     QWidget *batteryPage_ = nullptr;
     QVBoxLayout *batteryGroups_ = nullptr;
     QString batteryText_;

@@ -1,6 +1,7 @@
 #include "resourceformat.h"
 #include "propertiesdialog.h"
 #include "gpulinktest.h"
+#include "pcielinktext.h"
 #include <QJsonDocument>
 #include <QDateTime>
 #include <unistd.h>
@@ -45,6 +46,12 @@
 #include <utility>
 
 namespace {
+QString propertyToolTip(const QString &source)
+{
+    if (source.trimmed().isEmpty()) return {};
+    return "<qt>" + source.toHtmlEscaped().replace('\n', "<br>") + "</qt>";
+}
+
 // Long report tables scroll with the Properties page, not inside a short nested view.
 class PropertyReportHeader final : public QHeaderView {
 public:
@@ -196,7 +203,7 @@ void showStorageFields(QFormLayout *form, const QVector<StorageDisplayField> &fi
     for (const StorageDisplayField &field : fields) {
         auto *caption = plainLabel(field.label + ':', form->parentWidget());
         auto *value = plainLabel(field.value, form->parentWidget());
-        const QString hint = "<qt>" + field.source.toHtmlEscaped().replace('\n', "<br>") + "</qt>";
+        const QString hint = propertyToolTip(field.source);
         caption->setToolTip(hint);
         value->setToolTip(hint);
         form->addRow(caption, value);
@@ -579,7 +586,7 @@ void PropertiesDialog::markRemoved()
     removed_ = true;
     if (gpuTest_) gpuTest_->kill();
     eventScope_ += '\n' + tr("Removed/replaced device: retained events are a read-only instance snapshot.");
-    eventsNotice_->setToolTip("<qt>" + eventScope_.toHtmlEscaped().replace('\n', "<br>") + "</qt>");
+    eventsNotice_->setToolTip(propertyToolTip(eventScope_));
     reload_->setEnabled(false);
     banner_->show();
     banner_->setText(tr("Device removed or replaced. This dialog is a read-only snapshot; close it and reopen Properties for the current device."));
@@ -741,7 +748,7 @@ void PropertiesDialog::rebuildNetwork()
         value->setSizePolicy(policy);
         value->setAlignment(Qt::AlignLeading | Qt::AlignTop);
         value->setMinimumWidth(120);
-        const QString hint = "<qt>" + source.toHtmlEscaped() + "</qt>";
+        const QString hint = propertyToolTip(source);
         name->setToolTip(hint);
         value->setToolTip(hint);
         const int row = form->count() / 2;
@@ -880,7 +887,7 @@ void PropertiesDialog::rebuildCamera()
         label->setSizePolicy(policy);
         label->setMinimumWidth(120);
         label->setAlignment(Qt::AlignLeading | Qt::AlignTop);
-        name->setToolTip("<qt>" + source.toHtmlEscaped() + "</qt>"); label->setToolTip(name->toolTip());
+        name->setToolTip(propertyToolTip(source)); label->setToolTip(name->toolTip());
         const int row = form->count() / 2;
         form->addWidget(name, row, 0, Qt::AlignLeading | Qt::AlignTop); form->addWidget(label, row, 1);
         copy.append(caption + ": " + value);
@@ -1042,7 +1049,7 @@ void PropertiesDialog::rebuildDisplay()
         value->setSizePolicy(policy);
         value->setAlignment(Qt::AlignLeading | Qt::AlignTop);
         value->setMinimumWidth(120);
-        const QString hint = "<qt>" + source.toHtmlEscaped() + "</qt>";
+        const QString hint = propertyToolTip(source);
         name->setToolTip(hint);
         value->setToolTip(hint);
         const int row = form->count() / 2;
@@ -1197,7 +1204,7 @@ void PropertiesDialog::rebuildUsb()
         value->setSizePolicy(policy);
         value->setAlignment(Qt::AlignLeading | Qt::AlignTop);
         value->setMinimumWidth(120);
-        const QString hint = "<qt>" + source.toHtmlEscaped() + "</qt>";
+        const QString hint = propertyToolTip(source);
         name->setToolTip(hint);
         value->setToolTip(hint);
         const int row = form->count() / 2;
@@ -1371,7 +1378,7 @@ void PropertiesDialog::rebuildPcie()
         value->setSizePolicy(policy);
         value->setAlignment(Qt::AlignLeading | (test ? Qt::AlignVCenter : Qt::AlignTop));
         value->setMinimumWidth(120);
-        const QString hint = "<qt>" + source.toHtmlEscaped() + "</qt>";
+        const QString hint = propertyToolTip(source);
         name->setToolTip(hint);
         value->setToolTip(hint);
         const int row = form->count() / 2;
@@ -1391,7 +1398,8 @@ void PropertiesDialog::rebuildPcie()
                 || raw.compare("unknown", Qt::CaseInsensitive) == 0)
                 return tr("Unavailable (%1)").arg(raw);
             // Parse the kernel's C-locale rate, including its usual .0 suffix.
-            // Unfamiliar formats and future rates remain visible verbatim.
+            // Unfamiliar formats remain visible; unknown rates are not assigned
+            // a generation by rounding or extrapolation.
             QString rateText = raw;
             if (rateText.endsWith(" PCIe")) rateText.chop(5);
             if (!rateText.endsWith(" GT/s")) return raw;
@@ -1399,11 +1407,15 @@ void PropertiesDialog::rebuildPcie()
             bool valid = false;
             const double rate = rateText.toDouble(&valid);
             if (!valid || !std::isfinite(rate) || rate <= 0) return malformed();
-            const QVector<double> rates {2.5, 5, 8, 16, 32, 64, 128};
-            for (int i = 0; i < rates.size(); ++i) {
-                if (rate == rates[i]) return tr("%1 (PCIe Gen %2)").arg(raw).arg(i + 1);
+            int lanes = 0;
+            if (key == "current_link_speed") {
+                const Attribute width = snapshot_.values.value("sysfs/current_link_width");
+                bool widthValid = false;
+                const uint number = width.value.toUInt(&widthValid);
+                if (width.state == ReadState::Available && widthValid && number > 0 && number <= 63)
+                    lanes = static_cast<int>(number);
             }
-            return raw;
+            return pcieLinkText(rate, lanes);
         }
         bool valid = false;
         const qulonglong lanes = raw.toULongLong(&valid);
@@ -1418,7 +1430,11 @@ void PropertiesDialog::rebuildPcie()
         return tr("x%1 (%2 lanes)").arg(QString::number(lanes), QLocale().toString(lanes));
     };
     const auto entry = [&](QGridLayout *form, const QString &key, const QString &caption, bool speed, const QString &scope) {
-        field(form, caption, linkValue(key, speed), snapshot_.sources.value("sysfs/" + key) + '\n' + scope);
+        QString source = snapshot_.sources.value("sysfs/" + key) + '\n' + scope;
+        const Attribute value = snapshot_.values.value("sysfs/" + key);
+        if (speed && value.state == ReadState::Available)
+            source += '\n' + tr("Reported signalling rate per lane: %1").arg(value.value);
+        field(form, caption, linkValue(key, speed), source);
     };
     const Attribute type = snapshot_.pcieType;
     bool validType = false;
@@ -1459,6 +1475,7 @@ void PropertiesDialog::rebuildPcie()
         entry(current, "current_link_speed", tr("Link speed"), true, currentScope);
         if (device().category == "display") {
             QString source = tr("Highest link speed and width observed together during graphics load; not a guaranteed maximum or the device's advertised capability.");
+            if (!gpuTestRate_.isEmpty()) source += '\n' + gpuTestRate_;
             if (!gpuTestTime_.isEmpty()) source += '\n' + tr("Observed: %1").arg(gpuTestTime_);
             field(current, tr("Maximum observed link"), gpuTestText_.isEmpty() ? tr("Not tested") : gpuTestText_, source, true);
             if (!gpuTestTime_.isEmpty()) copy.append(tr("Observed: %1").arg(gpuTestTime_));
@@ -1483,6 +1500,7 @@ void PropertiesDialog::testGpuLink()
 {
     if (removed_ || gpuTest_ || !gpuLinkTestBuilt() || geteuid() == 0 || !gpuTestButton_) return;
     gpuTestTime_.clear();
+    gpuTestRate_.clear();
     auto *process = startGpuLinkTest(device(), this);
     if (!process) {
         gpuTestText_ = tr("Another GPU link test is already running.");
@@ -1530,7 +1548,8 @@ void PropertiesDialog::testGpuLink()
                 if (std::isfinite(speed) && speed > 0 && speed <= 1024
                     && std::isfinite(width) && width >= 1 && width <= 64 && std::floor(width) == width
                     && stamp.size() <= 64 && QDateTime::fromString(stamp, Qt::ISODate).isValid()) {
-                    gpuTestText_ = tr("%1 GT/s ×%2").arg(QLocale().toString(speed, 'g', 5)).arg(static_cast<int>(width));
+                    gpuTestText_ = pcieLinkText(speed, static_cast<int>(width));
+                    gpuTestRate_ = tr("Signalling rate: %1 GT/s per lane").arg(QLocale().toString(speed, 'g', 5));
                     gpuTestTime_ = stamp;
                 } else gpuTestText_ = tr("The GPU test returned an invalid observation.");
             } else gpuTestText_ = valid ? summary : tr("GPU link test failed or did not return a valid observation.");
@@ -1588,7 +1607,7 @@ void PropertiesDialog::rebuildBattery()
         value->setSizePolicy(policy);
         value->setAlignment(Qt::AlignLeading | Qt::AlignTop);
         value->setMinimumWidth(120);
-        const QString hint = "<qt>" + source.toHtmlEscaped() + "</qt>";
+        const QString hint = propertyToolTip(source);
         name->setToolTip(hint);
         value->setToolTip(hint);
         const int row = form->count() / 2;
@@ -1722,7 +1741,7 @@ void PropertiesDialog::rebuildStorage()
         "Kernel and UDisks2 block records are merged only by their exact device-number mapping. "
         "Source paths remain in tooltips and copied text. Deep search includes native metadata only.");
     const auto hint = [](QLabel *label, const QString &text) {
-        label->setToolTip("<qt>" + text.toHtmlEscaped().replace('\n', "<br>") + "</qt>");
+        label->setToolTip(propertyToolTip(text));
     };
     hint(storageNotice_, scope + "\n\n" + storagePresentation_.notes);
     hint(volumesNotice_, scope + '\n' + tr("Related volumes may span several drives. Mount points cover only the application "
@@ -1809,7 +1828,7 @@ void PropertiesDialog::showHealth()
             value->setSizePolicy(policy);
             value->setAlignment(Qt::AlignLeading | Qt::AlignTop);
             value->setMinimumWidth(120);
-            const QString hint = "<qt>" + field.source.toHtmlEscaped().replace('\n', "<br>") + "</qt>";
+            const QString hint = propertyToolTip(field.source);
             caption->setToolTip(hint);
             value->setToolTip(hint);
             form->addWidget(caption, fieldRow, 0, Qt::AlignLeading | Qt::AlignTop);
@@ -1852,7 +1871,7 @@ void PropertiesDialog::showHealth()
                                       attribute.threshold, attribute.interpreted, attribute.flags};
             for (int column = 0; column < values.size(); ++column) {
                 auto *item = new QTableWidgetItem(values[column]);
-                item->setToolTip("<qt>" + (hints[column] + '\n' + attribute.source).toHtmlEscaped().replace('\n', "<br>") + "</qt>");
+                item->setToolTip(propertyToolTip(hints[column] + '\n' + attribute.source));
                 if (column == 0 || (column >= 2 && column <= 4) || column == 6)
                     item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
                 table->setItem(index, column, item);
@@ -1898,7 +1917,7 @@ void PropertiesDialog::updateEvents(const DeviceEventsSnapshot &history, const Q
         eventScope_ += '\n' + tr("Removed/replaced device: retained events are a read-only instance snapshot.");
     }
     if (next.isEmpty()) eventScope_ += '\n' + tr("No retained live events for this instance. This does not establish that the device has had no errors.");
-    eventsNotice_->setToolTip("<qt>" + eventScope_.toHtmlEscaped().replace('\n', "<br>") + "</qt>");
+    eventsNotice_->setToolTip(propertyToolTip(eventScope_));
     bool unchanged = next.size() == displayedEvents_.size();
     for (int i = 0; unchanged && i < next.size(); ++i) {
         const DeviceEvent &a = next.at(i);

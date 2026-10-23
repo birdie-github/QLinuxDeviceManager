@@ -651,6 +651,14 @@ and Link width for PCI display adapters. A compact **Test/Retest** button sits
 beside that row's caption. Its value contains only the observed speed/width pair;
 the timestamp and interpretation are in its tooltip and timestamp is included by
 **Copy PCIe properties**. There is no separate test button or result footer.
+Current and observed links use generation and lane count in their main values,
+for example **PCIe Gen 3 ×16 (16 lanes)**. Advertised maximum speed uses the
+generation alone, with the independently reported maximum width kept in its own
+row. Raw signalling rates remain in the corresponding tooltips, explicitly per
+lane. Snapshot rows and the load-test popup share the same generation formatter;
+unknown rates remain visible without an invented generation. No throughput in
+GB/s is measured or inferred for these fields. Empty or whitespace-only tooltip
+sources produce an empty QString instead of an empty rich-text tooltip box.
 The advertised maximum in **Device capability** remains a separate property.
 The child returns numeric speed/width and an ISO timestamp, so the UI never parses
 a translated summary to extract the observation. Speed
