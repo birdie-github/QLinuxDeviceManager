@@ -5,9 +5,8 @@
 #include "storagepresentation.h"
 #include <QDialog>
 #include <QVector>
-#include <QPointer>
-#include <QProcess>
 
+class PciePage;
 class BatteryPage;
 class UsbPage;
 class DisplayPage;
@@ -48,7 +47,6 @@ private:
     void rebuildCamera();
     void rebuildUsb();
     void rebuildPcie();
-    void testGpuLink();
     void rebuildBattery();
     void showVolumeDetails();
     void showHealth();
@@ -83,14 +81,7 @@ private:
     CameraPage *cameraPage_ = nullptr;
     DisplayPage *displayPage_ = nullptr;
     UsbPage *usbPage_ = nullptr;
-    QWidget *pciePage_ = nullptr;
-    QVBoxLayout *pcieGroups_ = nullptr;
-    QString pcieText_;
-    QPushButton *gpuTestButton_ = nullptr;
-    QPointer<QProcess> gpuTest_;
-    QString gpuTestText_;
-    QString gpuTestTime_;
-    QString gpuTestRate_;
+    PciePage *pciePage_ = nullptr;
     BatteryPage *batteryPage_ = nullptr;
     QComboBox *property_ = nullptr;
     QPlainTextEdit *value_ = nullptr;
