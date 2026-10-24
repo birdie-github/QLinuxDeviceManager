@@ -100,6 +100,9 @@ void classify(Device &d)
     else if (s == "nvme" || s == "scsi_host" || s == "ata_port") {
         d.category = "storage";
         d.hidden = d.hidden || s != "nvme";
+    } else if (s == "serial-base" && (d.driver == "ctrl" || d.driver == "port")) {
+        // These are kernel serial interfaces, not unidentified peripheral hardware.
+        d.category = "system";
     } else if (s == "platform" || s == "acpi" || s == "pnp") {
         d.category = "system";
         d.hidden = d.hidden || (s == "acpi" && d.driver.isEmpty());

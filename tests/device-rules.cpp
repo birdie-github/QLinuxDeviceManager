@@ -157,6 +157,42 @@ int main()
     for (auto &d : behindBridge) classify(d);
     refinePresentation(behindBridge);
     check(!behindBridge[1].hidden, "A PCI bridge is not an NVMe controller duplicate");
+    {
+        struct NamingCase { const char *subsystem; const char *alias; const char *driver; const char *name; };
+        const NamingCase cases[] = {
+            {"platform", "acpi:AMDI0030:", "", "AMD GPIO / pin controller"},
+            {"platform", "acpi:HPIC0003:", "", "HP application interface"},
+            {"platform", "acpi:INTC1025:INT_PTL_SINIT:", "", "Intel TXT authenticated code module interface"},
+            {"pnp", "pnp:dPNP0501", "serial", "16550A-compatible serial port"},
+            {"platform", "platform:PCCT", "PCCT", "ACPI platform communications channel"},
+            {"i2c", "i2c:dummy", "dummy", "I²C address placeholder"}
+        };
+        for (const auto &entry : cases) {
+            Device function;
+            function.subsystem = entry.subsystem;
+            function.sysname = "fixture";
+            function.driver = entry.driver;
+            function.properties.insert("MODALIAS", entry.alias);
+            nameDevice(function);
+            check(function.name == entry.name && function.nameTranslated,
+                  "Documented aliases provide function names without machine-specific paths");
+            function.properties.insert("MODALIAS", QString(entry.alias) + "unmatched");
+            // Preserve the ACPI separators so this tests an ID suffix, not a new compatible ID.
+            if (QString(entry.alias).startsWith("acpi:"))
+                function.properties.insert("MODALIAS", "acpi:UNKNOWN" + QString(entry.alias).mid(5));
+            check(knownFunctionName(function).label.isEmpty(),
+                  "Naming rules require complete alias or identifier matches");
+        }
+        for (const QString &driver : {QStringLiteral("ctrl"), QStringLiteral("port")}) {
+            Device serial;
+            serial.subsystem = "serial-base";
+            serial.driver = driver;
+            serial.sysname = "serial8250:0";
+            classify(serial);
+            check(serial.category == "system" && !serial.hidden,
+                  "Bound serial interfaces stay visible under System devices");
+        }
+    }
     Device speaker;
     speaker.subsystem = "platform";
     speaker.sysname = "PNP0800:00";

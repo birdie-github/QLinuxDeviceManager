@@ -23,8 +23,11 @@ FunctionName knownFunctionName(const Device &d)
             }
         }
     }
-    // Standard ACPI/PNP identities, not vendor guesses or device-name prefixes.
-    // Semantic reference: open-acpica/acpica source/common/ahids.c.
+    // Exact documented ACPI/PNP identities, not device-name prefixes.
+    // Standard IDs: open-acpica/acpica source/common/ahids.c.
+    // AMDI0030: Linux drivers/pinctrl/pinctrl-amd.c.
+    // HPIC0003: HP Application Driver package sp95222.
+    // INTC1025: Intel TXT ACM firmware interface (SINIT compatible IDs).
     static const Entry ids[] = {
         {"ACPI0003", QT_TRANSLATE_NOOP("DeviceFunctions", "ACPI power source")},
         {"ACPI0007", QT_TRANSLATE_NOOP("DeviceFunctions", "ACPI processor device")},
@@ -32,6 +35,10 @@ FunctionName knownFunctionName(const Device &d)
         {"ACPI000C", QT_TRANSLATE_NOOP("DeviceFunctions", "ACPI processor aggregator")},
         {"ACPI000E", QT_TRANSLATE_NOOP("DeviceFunctions", "ACPI time and alarm device")},
         {"ACPI000F", QT_TRANSLATE_NOOP("DeviceFunctions", "User presence detector")},
+        {"AMDI0030", QT_TRANSLATE_NOOP("DeviceFunctions", "AMD GPIO / pin controller")},
+        {"HPIC0003", QT_TRANSLATE_NOOP("DeviceFunctions", "HP application interface")},
+        {"INTC1025", QT_TRANSLATE_NOOP("DeviceFunctions", "Intel TXT authenticated code module interface")},
+        {"PNP0501", QT_TRANSLATE_NOOP("DeviceFunctions", "16550A-compatible serial port")},
         {"PNP0103", QT_TRANSLATE_NOOP("DeviceFunctions", "High precision event timer")},
         {"PNP0303", QT_TRANSLATE_NOOP("DeviceFunctions", "PS/2 keyboard interface")},
         {"PNP0800", QT_TRANSLATE_NOOP("DeviceFunctions", "PC speaker (firmware)")},
@@ -62,8 +69,10 @@ FunctionName knownFunctionName(const Device &d)
     for (const auto &id : identifiers)
         for (const auto &entry : ids)
             if (id.compare(QLatin1String(entry.id), Qt::CaseInsensitive) == 0)
-                return {QString::fromLatin1(entry.label), QStringLiteral("standard ACPI/PNP ID: %1").arg(id)};
+                return {QString::fromLatin1(entry.label), QStringLiteral("documented ACPI/PNP ID: %1").arg(id)};
     static const Entry platformAliases[] = {
+        // Linux drivers/mailbox/pcc.c registers the PCCT mailbox controller.
+        {"platform:PCCT", QT_TRANSLATE_NOOP("DeviceFunctions", "ACPI platform communications channel")},
         {"platform:pcspkr", QT_TRANSLATE_NOOP("DeviceFunctions", "PC speaker (beeper interface)")},
         {"platform:coretemp", QT_TRANSLATE_NOOP("DeviceFunctions", "Intel CPU temperature monitor")},
         {"platform:rtc-efi", QT_TRANSLATE_NOOP("DeviceFunctions", "EFI real-time clock interface")},
@@ -93,6 +102,11 @@ FunctionName knownFunctionName(const Device &d)
         for (const auto &entry : fauxFunctions)
             if (d.sysname == QLatin1String(entry.id))
                 return {QString::fromLatin1(entry.label), QStringLiteral("documented kernel faux function: %1").arg(d.sysname)};
+    // A dummy client claims an address for a driver; it does not identify a chip.
+    // Linux i2c_new_dummy_device() uses the dummy type for secondary addresses.
+    if (d.subsystem == "i2c" && d.driver == "dummy" && alias == "i2c:dummy")
+        return {QStringLiteral(QT_TRANSLATE_NOOP("DeviceFunctions", "I²C address placeholder")),
+            "I2C dummy client alias and direct dummy binding"};
     if (d.subsystem == "serial-base" && d.driver == "port")
         return {QStringLiteral(QT_TRANSLATE_NOOP("DeviceFunctions", "Serial port function")), "serial-base subsystem; direct port binding"};
     if (d.subsystem == "serial-base" && d.driver == "ctrl")
