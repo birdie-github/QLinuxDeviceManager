@@ -1,0 +1,31 @@
+# Local captions and IDs missing from ACPICA. ID<TAB>description.
+# Retains existing translated captions; PNP0800 corrects ACPICA's speaker description.
+# HPIC0003: HP sp95222; AMDI0030: Linux pinctrl-amd.c; INTC1025: Intel TXT ACM.
+ACPI0003	ACPI power source
+ACPI0007	ACPI processor device
+ACPI0008	Ambient light sensor
+ACPI000C	ACPI processor aggregator
+ACPI000E	ACPI time and alarm device
+ACPI000F	User presence detector
+AMDI0030	AMD GPIO / pin controller
+HPIC0003	HP application interface
+INTC1025	Intel TXT authenticated code module interface
+LNXTHERM	ACPI thermal zone
+LNXVIDEO	ACPI video controller
+PNP0103	High precision event timer
+PNP0303	PS/2 keyboard interface
+PNP0501	16550A-compatible serial port
+PNP0800	PC speaker (firmware)
+PNP0A03	PCI bus
+PNP0A08	PCI Express bus
+PNP0B00	Real-time clock
+PNP0C02	Motherboard resources
+PNP0C09	ACPI embedded controller
+PNP0C0A	ACPI control-method battery
+PNP0C0B	ACPI fan
+PNP0C0C	ACPI power button
+PNP0C0D	ACPI lid switch
+PNP0C0E	ACPI sleep button
+PNP0C14	ACPI WMI interface
+PNP0C50	I2C human interface device
+PNP0C60	Display sensor

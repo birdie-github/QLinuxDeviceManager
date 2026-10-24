@@ -8,6 +8,10 @@ It works on **X11 and Wayland**, requires no particular desktop environment, and
 runs as a normal user. Hardware information stays on your computer; the application
 does not upload it.
 
+ACPI/PNP names use an external, replaceable `acpi-pnp.ids` database. See
+[database locations and updates](resources/external/device-names/README.md),
+including the `--acpi-ids PATH` override.
+
 ![QLinuxDeviceManager showing the Linux hardware device tree](screenshots/main-window.webp)
 
 [More screenshots](SCREENSHOTS.md) ·

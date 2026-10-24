@@ -2,12 +2,15 @@
 #include "gpulinktest.h"
 #include "cameraproperties.h"
 #include "displaybackend.h"
+#include "functionnames.h"
 #include <cstring>
 #include <cstdlib>
 #include <climits>
 #include <cerrno>
 #include "projectmetadata.h"
 #include <QApplication>
+#include <QCommandLineParser>
+#include <QFileInfo>
 #include <QIcon>
 #include <QDir>
 #include <QLibraryInfo>
@@ -66,6 +69,38 @@ int main(int argc, char **argv)
     }
     if (argc == 4 && std::strcmp(argv[1], "--gpu-link-test") == 0)
         return runGpuLinkTest(QString::fromLocal8Bit(argv[2]), QString::fromLocal8Bit(argv[3]));
+    QCommandLineParser parser;
+    parser.addHelpOption();
+    parser.addVersionOption();
+    const QCommandLineOption acpiIds(QStringLiteral("acpi-ids"),
+        QCoreApplication::translate("main", "Use an external ACPI/PNP device-name file (ID, tab, description)."),
+        QStringLiteral("path"));
+    parser.addOption(acpiIds);
+    parser.process(app);
+    QString error;
+    if (parser.isSet(acpiIds)) {
+        if (!loadAcpiFunctionNames(parser.value(acpiIds), error)) {
+            qCritical("%s", qPrintable(error));
+            return 1;
+        }
+    } else {
+        QStringList databases {QDir(QCoreApplication::applicationDirPath()).filePath("acpi-pnp.ids")};
+        for (const QString &location : QStandardPaths::standardLocations(QStandardPaths::GenericDataLocation)) {
+            databases.append(location + "/hwdata/acpi-pnp.ids");
+            databases.append(location + "/misc/acpi-pnp.ids");
+        }
+        for (const QString &location : locations)
+            databases.append(location + "/QLinuxDeviceManager/acpi-pnp.ids");
+        databases.append(QStringLiteral(QLDM_INSTALLED_ACPI_IDS));
+        databases.removeDuplicates();
+        bool loaded = false;
+        for (const QString &path : databases) {
+            if (!QFileInfo::exists(path)) continue;
+            if (loadAcpiFunctionNames(path, error)) { loaded = true; break; }
+            qWarning("%s", qPrintable(error));
+        }
+        if (!loaded) qWarning("No ACPI/PNP name database found; using kernel/udev names. Use --acpi-ids PATH to select one.");
+    }
     MainWindow window;
     window.show();
     return app.exec();

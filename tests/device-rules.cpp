@@ -5,6 +5,8 @@
 #include "functionnames.h"
 #include "devicelabel.h"
 #include "efivariables.h"
+#include <QFile>
+#include <QTemporaryDir>
 #include <cstdio>
 
 static int failures = 0;
@@ -14,6 +16,38 @@ static void check(bool result, const char *message)
 }
 int main()
 {
+    QString databaseError;
+    check(loadAcpiFunctionNames(QStringLiteral(QLDM_TEST_ACPI_IDS), databaseError),
+          "The external ACPI/PNP database loads before device naming");
+    {
+        Device tpm;
+        tpm.subsystem = "platform";
+        tpm.properties.insert("MODALIAS", "acpi:MSFT0101:");
+        check(knownFunctionName(tpm).label == "TPM 2.0 Security Device",
+              "The maintained database supplies IDs beyond the former C++ list");
+        QTemporaryDir directory;
+        check(directory.isValid(), "Create an isolated database fixture directory");
+        if (directory.isValid()) {
+            const QString path = directory.filePath("acpi-pnp.ids");
+            QFile file(path);
+            check(file.open(QIODevice::WriteOnly), "Create a database fixture");
+            file.write("MSFT0101\tFirst\nMSFT0101\tDuplicate\n");
+            file.close();
+            check(!loadAcpiFunctionNames(path, databaseError) && !databaseError.isEmpty()
+                  && knownFunctionName(tpm).label == "TPM 2.0 Security Device",
+                  "Invalid files are rejected atomically without replacing loaded names");
+            check(!loadAcpiFunctionNames(directory.path(), databaseError),
+                  "Database inputs must be regular files");
+            check(file.open(QIODevice::WriteOnly | QIODevice::Truncate), "Rewrite the database fixture");
+            file.write("MSFT0101\tUpdated TPM caption\n");
+            file.close();
+            check(loadAcpiFunctionNames(path, databaseError)
+                  && knownFunctionName(tpm).label == "Updated TPM caption",
+                  "A replacement data file updates captions without changing device IDs");
+            check(loadAcpiFunctionNames(QStringLiteral(QLDM_TEST_ACPI_IDS), databaseError),
+                  "Restore the shipped naming snapshot for remaining fixtures");
+        }
+    }
     Device keyboard;
     keyboard.path = "/sys/devices/pci0000:00/usb1/1-1/input/input7";
     keyboard.subsystem = "input";
@@ -291,10 +325,10 @@ int main()
     check(!faux.nameTranslated, "Faux captions require an exact known function name");
     Device firmware;
     firmware.subsystem = "platform";
-    firmware.sysname = "INTC1025:00";
-    firmware.properties.insert("MODALIAS", "acpi:INTC1025:INT_PTL_SINIT:");
+    firmware.sysname = "UNKN0001:00";
+    firmware.properties.insert("MODALIAS", "acpi:UNKN0001:");
     nameDevice(firmware);
-    check(firmware.name == firmware.sysname, "Vendor ACPI objects must not receive hardcoded model labels");
+    check(firmware.name == firmware.sysname, "Unknown ACPI IDs retain kernel names without guessing");
     firmware.properties.insert("MODALIAS", "platform:coretemp");
     nameDevice(firmware);
     check(firmware.name == "Intel CPU temperature monitor", "Exact platform alias must identify the kernel function");

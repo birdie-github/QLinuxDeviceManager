@@ -6,3 +6,6 @@ struct FunctionName {
     QString source;
 };
 FunctionName knownFunctionName(const Device &device);
+// Call before starting inventory workers. Publishes a complete immutable snapshot;
+// a failed load leaves the previous snapshot intact. No file reads during lookup.
+bool loadAcpiFunctionNames(const QString &path, QString &error);

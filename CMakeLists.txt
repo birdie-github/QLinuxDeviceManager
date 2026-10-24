@@ -137,12 +137,23 @@ install(FILES resources/external/icons/QLinuxDeviceManager.svg
     DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
     RENAME ${APP_DESKTOP_ID}.svg)
 install(FILES project.json DESTINATION ${CMAKE_INSTALL_DATADIR}/QLinuxDeviceManager)
+set(ACPI_NAME_FILE "${CMAKE_CURRENT_SOURCE_DIR}/resources/external/device-names/acpi-pnp.ids")
+# Keep local builds usable without installation; the data stays outside the binary.
+configure_file("${ACPI_NAME_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/acpi-pnp.ids" COPYONLY)
+install(FILES "${ACPI_NAME_FILE}" DESTINATION ${CMAKE_INSTALL_DATADIR}/${APP_NAME})
+target_compile_definitions(qlinuxdevicemanager PRIVATE
+    QLDM_INSTALLED_ACPI_IDS="${CMAKE_INSTALL_FULL_DATADIR}/${APP_NAME}/acpi-pnp.ids")
 # Optional tools: basic viewing never requires Linguist.
 find_package(Qt6 ${APP_MINIMUM_QT} QUIET COMPONENTS LinguistTools)
 if(TARGET Qt6::lupdate)
-    add_custom_target(update-translations
-        COMMAND Qt6::lupdate ${CMAKE_CURRENT_SOURCE_DIR}/src
-        -ts ${CMAKE_CURRENT_SOURCE_DIR}/resources/external/translations/qlinuxdevicemanager_en.ts)
+    find_package(Python3 QUIET COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        add_custom_target(update-translations
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/device-name-data.py"
+                translations --lupdate $<TARGET_FILE:Qt6::lupdate>)
+    else()
+        message(STATUS "Python3 is needed only for the update-translations maintenance target")
+    endif()
 endif()
 if(TARGET Qt6::lrelease)
     qt_add_translation(QM_FILES resources/external/translations/qlinuxdevicemanager_en.ts)
@@ -186,6 +197,7 @@ if(BUILD_TESTING)
         src/devices/efivariables.cpp src/devices/efivariables.h
         src/devices/devicepresentation.cpp src/devices/devicepresentation.h)
     target_include_directories(device-rules-test PRIVATE src/devices)
+    target_compile_definitions(device-rules-test PRIVATE QLDM_TEST_ACPI_IDS="${ACPI_NAME_FILE}")
     target_link_libraries(device-rules-test PRIVATE Qt6::Widgets)
     add_test(NAME device-rules COMMAND device-rules-test)
     add_executable(device-resources-test tests/device-resources.cpp

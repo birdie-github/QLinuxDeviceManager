@@ -1,6 +1,69 @@
 #include "functionnames.h"
 #include <QCoreApplication>
 #include <QStringList>
+#include <QFile>
+#include <QFileInfo>
+#include <QHash>
+#include <QRegularExpression>
+#include <QStringDecoder>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <cerrno>
+#include <cstring>
+#include <utility>
+
+namespace {
+QHash<QString, QString> acpiNames;
+QString acpiNamesPath;
+}
+
+bool loadAcpiFunctionNames(const QString &path, QString &error)
+{
+    constexpr qint64 maximumSize = 2 * 1024 * 1024;
+    const auto fail = [&](const QString &reason) {
+        error = QStringLiteral("%1: %2").arg(path, reason);
+        return false;
+    };
+    const int fd = open(QFile::encodeName(path).constData(), O_RDONLY | O_CLOEXEC | O_NONBLOCK);
+    if (fd < 0) return fail(QString::fromLocal8Bit(std::strerror(errno)));
+    struct stat info {};
+    if (fstat(fd, &info) != 0 || !S_ISREG(info.st_mode) || info.st_size > maximumSize) {
+        close(fd);
+        return fail(QStringLiteral("expected a regular file no larger than 2 MiB"));
+    }
+    QFile file;
+    if (!file.open(fd, QIODevice::ReadOnly, QFileDevice::AutoCloseHandle)) {
+        close(fd);
+        return fail(file.errorString());
+    }
+    const QByteArray bytes = file.read(maximumSize + 1);
+    if (file.error() != QFileDevice::NoError) return fail(file.errorString());
+    if (bytes.size() > maximumSize) return fail(QStringLiteral("file exceeds 2 MiB"));
+    QStringDecoder decoder(QStringDecoder::Utf8);
+    const QString contents = decoder(bytes);
+    if (decoder.hasError()) return fail(QStringLiteral("invalid UTF-8"));
+    const QRegularExpression identifier(QStringLiteral("^[A-Z0-9_]{3,32}$"));
+    const QRegularExpression controlCharacter(QStringLiteral("\\p{Cc}"));
+    QHash<QString, QString> names;
+    int lineNumber = 0;
+    for (const QString &line : contents.split('\n')) {
+        ++lineNumber;
+        if (line.trimmed().isEmpty() || line.trimmed().startsWith('#')) continue;
+        const QStringList fields = line.split('\t');
+        if (fields.size() != 2 || !identifier.match(fields[0]).hasMatch()
+            || fields[1].trimmed().isEmpty() || fields[1].size() > 512
+            || controlCharacter.match(fields[1].trimmed()).hasMatch()
+            || names.contains(fields[0]) || names.size() >= 32768)
+            return fail(QStringLiteral("invalid or duplicate entry on line %1").arg(lineNumber));
+        names.insert(fields[0], fields[1].trimmed());
+    }
+    if (names.isEmpty()) return fail(QStringLiteral("no device names"));
+    acpiNames = std::move(names);
+    acpiNamesPath = QFileInfo(path).absoluteFilePath();
+    error.clear();
+    return true;
+}
 
 FunctionName knownFunctionName(const Device &d)
 {
@@ -23,41 +86,6 @@ FunctionName knownFunctionName(const Device &d)
             }
         }
     }
-    // Exact documented ACPI/PNP identities, not device-name prefixes.
-    // Standard IDs: open-acpica/acpica source/common/ahids.c.
-    // AMDI0030: Linux drivers/pinctrl/pinctrl-amd.c.
-    // HPIC0003: HP Application Driver package sp95222.
-    // INTC1025: Intel TXT ACM firmware interface (SINIT compatible IDs).
-    static const Entry ids[] = {
-        {"ACPI0003", QT_TRANSLATE_NOOP("DeviceFunctions", "ACPI power source")},
-        {"ACPI0007", QT_TRANSLATE_NOOP("DeviceFunctions", "ACPI processor device")},
-        {"ACPI0008", QT_TRANSLATE_NOOP("DeviceFunctions", "Ambient light sensor")},
-        {"ACPI000C", QT_TRANSLATE_NOOP("DeviceFunctions", "ACPI processor aggregator")},
-        {"ACPI000E", QT_TRANSLATE_NOOP("DeviceFunctions", "ACPI time and alarm device")},
-        {"ACPI000F", QT_TRANSLATE_NOOP("DeviceFunctions", "User presence detector")},
-        {"AMDI0030", QT_TRANSLATE_NOOP("DeviceFunctions", "AMD GPIO / pin controller")},
-        {"HPIC0003", QT_TRANSLATE_NOOP("DeviceFunctions", "HP application interface")},
-        {"INTC1025", QT_TRANSLATE_NOOP("DeviceFunctions", "Intel TXT authenticated code module interface")},
-        {"PNP0501", QT_TRANSLATE_NOOP("DeviceFunctions", "16550A-compatible serial port")},
-        {"PNP0103", QT_TRANSLATE_NOOP("DeviceFunctions", "High precision event timer")},
-        {"PNP0303", QT_TRANSLATE_NOOP("DeviceFunctions", "PS/2 keyboard interface")},
-        {"PNP0800", QT_TRANSLATE_NOOP("DeviceFunctions", "PC speaker (firmware)")},
-        {"PNP0A03", QT_TRANSLATE_NOOP("DeviceFunctions", "PCI bus")},
-        {"PNP0A08", QT_TRANSLATE_NOOP("DeviceFunctions", "PCI Express bus")},
-        {"PNP0B00", QT_TRANSLATE_NOOP("DeviceFunctions", "Real-time clock")},
-        {"PNP0C02", QT_TRANSLATE_NOOP("DeviceFunctions", "Motherboard resources")},
-        {"PNP0C09", QT_TRANSLATE_NOOP("DeviceFunctions", "ACPI embedded controller")},
-        {"PNP0C0A", QT_TRANSLATE_NOOP("DeviceFunctions", "ACPI control-method battery")},
-        {"PNP0C0B", QT_TRANSLATE_NOOP("DeviceFunctions", "ACPI fan")},
-        {"PNP0C0C", QT_TRANSLATE_NOOP("DeviceFunctions", "ACPI power button")},
-        {"PNP0C0D", QT_TRANSLATE_NOOP("DeviceFunctions", "ACPI lid switch")},
-        {"PNP0C0E", QT_TRANSLATE_NOOP("DeviceFunctions", "ACPI sleep button")},
-        {"PNP0C14", QT_TRANSLATE_NOOP("DeviceFunctions", "ACPI WMI interface")},
-        {"PNP0C50", QT_TRANSLATE_NOOP("DeviceFunctions", "I2C human interface device")},
-        {"PNP0C60", QT_TRANSLATE_NOOP("DeviceFunctions", "Display sensor")},
-        {"LNXTHERM", QT_TRANSLATE_NOOP("DeviceFunctions", "ACPI thermal zone")},
-        {"LNXVIDEO", QT_TRANSLATE_NOOP("DeviceFunctions", "ACPI video controller")}
-    };
     const QString alias = d.properties.value("MODALIAS");
     QStringList identifiers;
     if ((d.subsystem == "acpi" || d.subsystem == "platform" || d.subsystem == "i2c") && alias.startsWith("acpi:"))
@@ -66,10 +94,11 @@ FunctionName knownFunctionName(const Device &d)
         // PNP modaliases encode each identifier as d<ID>, including compatible IDs.
         for (const auto &id : alias.mid(4).split('d', Qt::SkipEmptyParts)) identifiers.append(id);
     }
-    for (const auto &id : identifiers)
-        for (const auto &entry : ids)
-            if (id.compare(QLatin1String(entry.id), Qt::CaseInsensitive) == 0)
-                return {QString::fromLatin1(entry.label), QStringLiteral("documented ACPI/PNP ID: %1").arg(id)};
+    for (const auto &id : identifiers) {
+        const auto found = acpiNames.constFind(id.toUpper());
+        if (found != acpiNames.cend())
+            return {found.value(), QStringLiteral("%1 : ACPI/PNP ID: %2").arg(acpiNamesPath, id)};
+    }
     static const Entry platformAliases[] = {
         // Linux drivers/mailbox/pcc.c registers the PCCT mailbox controller.
         {"platform:PCCT", QT_TRANSLATE_NOOP("DeviceFunctions", "ACPI platform communications channel")},
