@@ -86,6 +86,7 @@ add_executable(qlinuxdevicemanager
     src/ui/propertypage.h src/ui/propertypage.cpp
     src/ui/propertyreport.h src/ui/propertyreport.cpp
     src/ui/bluetoothpage.h src/ui/bluetoothpage.cpp
+    src/ui/networkpage.h src/ui/networkpage.cpp
     src/devices/secureboot.h src/devices/secureboot.cpp
     src/devices/systemproperties.h src/devices/systemproperties.cpp src/devices/cputopology.h
     src/ui/systemdialog.h src/ui/systemdialog.cpp)

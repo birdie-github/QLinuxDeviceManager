@@ -9,6 +9,7 @@
 #include <QProcess>
 
 class BluetoothPage;
+class NetworkPage;
 class QCheckBox;
 class QComboBox;
 class QFormLayout;
@@ -73,9 +74,7 @@ private:
     QLabel *volumesNotice_ = nullptr;
     QLabel *healthNotice_ = nullptr;
     StoragePresentation storagePresentation_;
-    QWidget *networkPage_ = nullptr;
-    QVBoxLayout *networkGroups_ = nullptr;
-    QString networkText_;
+    NetworkPage *networkPage_ = nullptr;
     BluetoothPage *bluetoothPage_ = nullptr;
     QWidget *cameraPage_ = nullptr;
     QVBoxLayout *cameraGroups_ = nullptr;
