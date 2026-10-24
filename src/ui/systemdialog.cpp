@@ -10,6 +10,9 @@
 #include <QFrame>
 #include <QSizePolicy>
 #include <QTabWidget>
+#include <QTableWidget>
+#include <QHeaderView>
+#include <QScrollBar>
 #include <QGroupBox>
 #include <QLabel>
 #include <QLocale>
@@ -83,7 +86,22 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
         if (table) {
             QFont font = name->font(); font.setBold(true); name->setFont(font);
             form->addWidget(name, row, 0, 1, 2);
-            form->addWidget(value, row + 1, 0, 1, 2);
+            delete value;
+            auto *view = new QTableWidget(form->parentWidget());
+            view->setEditTriggers(QAbstractItemView::NoEditTriggers);
+            view->setSelectionBehavior(QAbstractItemView::SelectItems);
+            view->setAlternatingRowColors(true);
+            view->setShowGrid(true);
+            view->setGridStyle(Qt::SolidLine);
+            view->setFrameStyle(QFrame::Box | QFrame::Plain);
+            view->setLineWidth(1);
+            view->verticalHeader()->hide();
+            view->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+            view->horizontalHeader()->setStretchLastSection(true);
+            view->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+            view->setSizeAdjustPolicy(QAbstractScrollArea::AdjustToContents);
+            tables_.insert(key, view);
+            form->addWidget(view, row + 1, 0, 1, 2);
         } else {
             form->addWidget(name, row, 0, Qt::AlignLeading | Qt::AlignTop);
             form->addWidget(value, row, 1);
@@ -92,7 +110,7 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
             captions_.insert(key, caption);
             order_.append(key);
         }
-        fields_[key].append(value);
+        if (!table) fields_[key].append(value);
     };
 
     auto *os = group(tr("Operating System"));
@@ -178,7 +196,7 @@ void SystemDialog::setBusy(bool busy)
     refresh_->setEnabled(!busy);
     refresh_->setText(busy ? tr("Refreshing…") : tr("Refresh"));
 }
-QString SystemDialog::displayValue(const QString &key, const Attribute &value, bool rich) const
+QString SystemDialog::displayValue(const QString &key, const Attribute &value) const
 {
     if (key == "virtualization" && value.state == ReadState::Unavailable)
         return tr("Unknown (no hypervisor identity reported)");
@@ -251,8 +269,7 @@ QString SystemDialog::displayValue(const QString &key, const Attribute &value, b
             return value.value;
         return tr("%1 present; %2 online").arg(propertyReadValue(value), propertyReadValue(online));
     }
-    if (value.state != ReadState::Available)
-        return rich ? propertyReadValue(value).toHtmlEscaped() : propertyReadValue(value);
+    if (value.state != ReadState::Available) return propertyReadValue(value);
     if (key == "secure_boot") return value.value == "enabled" ? tr("Enabled") : tr("Disabled");
     if (key == "boot")
         return value.value == "uefi" ? tr("UEFI")
@@ -285,23 +302,11 @@ QString SystemDialog::displayValue(const QString &key, const Attribute &value, b
         if (value.value == "notimplemented") return tr("Status reporting not implemented by kernel");
         return tr("Unknown (%1)").arg(value.value);
     }
-    // Use the same cells for the selectable on-screen table and plain-text copy.
-    const auto tableText = [rich](const QVector<QStringList> &rows) {
+    // Tab-separated cells are shared by the native views and Copy All.
+    const auto tableText = [](const QVector<QStringList> &rows) {
         QStringList lines;
-        if (!rich) {
-            for (const auto &row : rows) lines.append(row.join('\t'));
-            return lines.join('\n');
-        }
-        QString html = QStringLiteral("<table cellspacing=8 cellpadding=2>");
-        bool header = true;
-        for (const auto &row : rows) {
-            html += "<tr>";
-            for (const QString &cell : row)
-                html += QStringLiteral("<td>%1%2%3</td>").arg(header ? "<b>" : "", cell.toHtmlEscaped(), header ? "</b>" : "");
-            html += "</tr>";
-            header = false;
-        }
-        return html + "</table>";
+        for (const auto &row : rows) lines.append(row.join('\t'));
+        return lines.join('\n');
     };
     if (key == "core_groups") {
         QVector<QStringList> rows {{tr("Core group"), tr("Cores / threads"), tr("Maximum frequency"), tr("Logical CPUs")}};
@@ -561,10 +566,30 @@ void SystemDialog::acceptResult(SystemProperties result)
                                  "It includes all memory unavailable to Linux, not just firmware reservations. "
                                  "It is omitted if physical capacity is unavailable or smaller than usable RAM.");
         const QString hint = "<qt>" + source.toHtmlEscaped().replace('\n', "<br>") + "</qt>";
+        if (QTableWidget *view = tables_.value(key, nullptr)) {
+            view->clear();
+            const bool available = snapshot_.values.value(key).state == ReadState::Available;
+            const QStringList lines = text.split('\n');
+            const QStringList headers = lines.constFirst().split('\t');
+            const bool hasRows = available && lines.size() > 1;
+            view->setColumnCount(hasRows ? headers.size() : 1);
+            view->setRowCount(hasRows ? lines.size() - 1 : 1);
+            view->horizontalHeader()->setVisible(hasRows);
+            if (hasRows) view->setHorizontalHeaderLabels(headers);
+            for (int row = 0; row < view->rowCount(); ++row) {
+                const QStringList cells = hasRows ? lines[row + 1].split('\t') : QStringList{text};
+                for (int column = 0; column < cells.size(); ++column)
+                    view->setItem(row, column, new QTableWidgetItem(cells[column]));
+            }
+            view->resizeRowsToContents();
+            // Fit all rows, leaving room for a horizontal scrollbar on narrow dialogs.
+            view->setFixedHeight(view->verticalHeader()->length()
+                + (hasRows ? view->horizontalHeader()->sizeHint().height() : 0)
+                + 2 * view->frameWidth() + view->horizontalScrollBar()->sizeHint().height());
+            view->setToolTip(hint);
+        }
         for (QLabel *value : fields_.value(key)) {
-            const bool table = key == "core_groups" || key == "cache_topology";
-            value->setTextFormat(table ? Qt::RichText : Qt::PlainText);
-            value->setText(table ? displayValue(key, snapshot_.values.value(key), true) : text);
+            value->setText(text);
             value->setToolTip(hint);
         }
     }
