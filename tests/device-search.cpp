@@ -385,6 +385,23 @@ int main(int argc, char **argv)
     storage.entities = {nativeBlock, cachedBlock, cachedDrive};
     storage.links = {{nativeBlock.id, cachedBlock.id, "UDisks2 block metadata", "UDisks2 Block.DeviceNumber / sysfs dev"},
                      {cachedBlock.id, cachedDrive.id, "Storage relationship", "org.freedesktop.UDisks2.Block.Drive"}};
+    {
+        StorageProperties numbered;
+        const QStringList expected {"/dev/nvme0n1p1", "/dev/nvme0n1p2", "/dev/nvme0n1p10"};
+        for (const QString &node : expected) {
+            // Deliberately make identity order differ from display-name order.
+            const QString id = "/sys/fixture/" + QString::number(expected.size() - numbered.entities.size() / 2);
+            numbered.entities.append({id, {sf("DEVNAME", node), sf("dev", "fixture")}});
+            numbered.entities.append({id + "/drive", {
+                sf("org.freedesktop.UDisks2.Drive/Model", node)}});
+        }
+        const auto report = storagePresentation(numbered, numbered.entities.front().id);
+        QStringList volumes, drives;
+        for (const StorageDisplayRow &row : report.volumes) volumes.append(row.name);
+        for (const StorageDisplayRow &row : report.health) drives.append(row.name);
+        check(volumes == expected && drives == expected,
+              "Volumes and health-drive choices share natural display-name ordering");
+    }
     auto presented = storagePresentation(storage, nativeBlock.id);
     check(presented.volumes.size() == 1 && presented.volumes.front().name == "/dev/sda — data",
           "An exact native/service block mapping produces one recognizable volume");

@@ -1,5 +1,6 @@
 #include "storagepresentation.h"
 #include "propertytext.h"
+#include "naturalsort.h"
 #include <QCoreApplication>
 #include <QFileInfo>
 #include <QMap>
@@ -361,6 +362,12 @@ StoragePresentation storagePresentation(const StorageProperties &snapshot, const
         row.fields.append({tr("Cached health"), tr("Unavailable"), tr("No supported cached drive health in this snapshot")});
         result.health.append(row);
     }
+    const auto byName = [](const StorageDisplayRow &a, const StorageDisplayRow &b) {
+        const int comparison = naturalCompare(a.name, b.name);
+        return comparison == 0 ? a.id < b.id : comparison < 0;
+    };
+    std::sort(result.volumes.begin(), result.volumes.end(), byName);
+    std::sort(result.health.begin(), result.health.end(), byName);
     QStringList notes;
     for (const StorageField &note : snapshot.notes)
         notes.append(tr(note.label) + ": " + storageFieldValue(note) + '\n' + note.source);

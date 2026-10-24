@@ -61,7 +61,7 @@ add_executable(qlinuxdevicemanager
     src/devices/displaybackend.h src/devices/displayx11.cpp src/devices/displaywayland.cpp
     src/devices/displayidentity.h src/devices/displayidentity.cpp
     src/devices/storageproperties.h src/devices/storageproperties.cpp
-    src/devices/directoryscan.h
+    src/devices/directoryscan.h src/devices/naturalsort.h
     src/devices/storagepresentation.h src/devices/storagepresentation.cpp
     src/devices/deviceresources.h src/devices/deviceresources.cpp
     src/devices/resourceformat.h src/devices/resourceformat.cpp
