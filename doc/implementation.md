@@ -847,3 +847,12 @@ Collection uses the existing system information worker and requires no new comma
 CPUID affinity changes, MSR access, or elevated permissions. All new fields are
 included in refresh and Copy. The system-properties fixture includes 4/8/4 hybrid,
 favored-core, missing-cache, homogeneous SMT, and multiple-package cases.
+
+Processor presentation uses full-width, selectable Qt rich-text tables for core
+groups and cache instances, with escaped cell values and no fixed colors. Copy
+All exports the same cells as tab-separated plain text. Single-logical-CPU cache
+instances use compact CPU ranges; shared instances retain their individual
+sharing sets, including SMT siblings. Package IDs appear unless one socket is
+reported. Equal present/online counts occupy one field; differing counts and
+read failures remain explicit. Frequency ranges and collection behavior are
+unchanged.

@@ -17,7 +17,7 @@ public:
 signals:
     void refreshRequested();
 private:
-    QString displayValue(const QString &key, const Attribute &value) const;
+    QString displayValue(const QString &key, const Attribute &value, bool rich = false) const;
     void rebuildMok();
     void rebuildMemory();
     QString memoryValue(const QString &key, const Attribute &value) const;

@@ -68,7 +68,8 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
     const auto field = [&](QGridLayout *form, const QString &key, const QString &caption) {
         auto *name = new QLabel(caption, form->parentWidget());
         name->setTextFormat(Qt::PlainText);
-        names.append(name);
+        const bool table = key == "core_groups" || key == "cache_topology";
+        if (!table) names.append(name);
         auto *value = new QLabel(tr("Not collected"), form->parentWidget());
         value->setTextFormat(Qt::PlainText);
         value->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
@@ -79,8 +80,14 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
         value->setAlignment(Qt::AlignLeading | Qt::AlignTop);
         value->setMinimumWidth(120);
         const int row = form->count() ? form->rowCount() : 0;
-        form->addWidget(name, row, 0, Qt::AlignLeading | Qt::AlignTop);
-        form->addWidget(value, row, 1);
+        if (table) {
+            QFont font = name->font(); font.setBold(true); name->setFont(font);
+            form->addWidget(name, row, 0, 1, 2);
+            form->addWidget(value, row + 1, 0, 1, 2);
+        } else {
+            form->addWidget(name, row, 0, Qt::AlignLeading | Qt::AlignTop);
+            form->addWidget(value, row, 1);
+        }
         if (!fields_.contains(key)) {
             captions_.insert(key, caption);
             order_.append(key);
@@ -122,11 +129,10 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
 
     auto *processor = group(tr("Processor"));
     field(processor, "cpu", tr("CPU model(s)"));
-    field(processor, "sockets", tr("Sockets (reported topology)"));
-    field(processor, "cores", tr("Physical cores (reported topology)"));
-    field(processor, "logical", tr("Logical CPUs present"));
-    field(processor, "online", tr("Logical CPUs online"));
-    field(processor, "smt", tr("Simultaneous multithreading (SMT/HT)"));
+    field(processor, "sockets", tr("Sockets"));
+    field(processor, "cores", tr("Physical cores"));
+    field(processor, "logical", tr("Logical CPUs"));
+    field(processor, "smt", tr("SMT/HT"));
     field(processor, "core_groups", tr("Core groups (online CPUs)"));
     field(processor, "cache_topology", tr("Cache hierarchy (online CPUs)"));
     field(processor, "instruction_sets", tr("Instruction sets / CPU features"));
@@ -172,7 +178,7 @@ void SystemDialog::setBusy(bool busy)
     refresh_->setEnabled(!busy);
     refresh_->setText(busy ? tr("Refreshing…") : tr("Refresh"));
 }
-QString SystemDialog::displayValue(const QString &key, const Attribute &value) const
+QString SystemDialog::displayValue(const QString &key, const Attribute &value, bool rich) const
 {
     if (key == "virtualization" && value.state == ReadState::Unavailable)
         return tr("Unknown (no hypervisor identity reported)");
@@ -239,7 +245,14 @@ QString SystemDialog::displayValue(const QString &key, const Attribute &value) c
         if (mok.otherSignatures) certificates.append(tr("%1 non-certificate signatures omitted").arg(mok.otherSignatures));
         return certificates.join("\n\n");
     }
-    if (value.state != ReadState::Available) return propertyReadValue(value);
+    if (key == "logical") {
+        const Attribute online = snapshot_.values.value("online");
+        if (value.state == ReadState::Available && online.state == ReadState::Available && value.value == online.value)
+            return value.value;
+        return tr("%1 present; %2 online").arg(propertyReadValue(value), propertyReadValue(online));
+    }
+    if (value.state != ReadState::Available)
+        return rich ? propertyReadValue(value).toHtmlEscaped() : propertyReadValue(value);
     if (key == "secure_boot") return value.value == "enabled" ? tr("Enabled") : tr("Disabled");
     if (key == "boot")
         return value.value == "uefi" ? tr("UEFI")
@@ -268,13 +281,32 @@ QString SystemDialog::displayValue(const QString &key, const Attribute &value) c
         if (value.value == "on") return tr("Enabled (kernel policy)");
         if (value.value == "off") return tr("Disabled");
         if (value.value == "forceoff") return tr("Disabled by system policy");
-        if (value.value == "notsupported") return tr("Not supported (reported by kernel)");
+        if (value.value == "notsupported") return tr("Not supported");
         if (value.value == "notimplemented") return tr("Status reporting not implemented by kernel");
         return tr("Unknown (%1)").arg(value.value);
     }
-    if (key == "core_groups") {
+    // Use the same cells for the selectable on-screen table and plain-text copy.
+    const auto tableText = [rich](const QVector<QStringList> &rows) {
         QStringList lines;
-        int ordinal = 0;
+        if (!rich) {
+            for (const auto &row : rows) lines.append(row.join('\t'));
+            return lines.join('\n');
+        }
+        QString html = QStringLiteral("<table cellspacing=8 cellpadding=2>");
+        bool header = true;
+        for (const auto &row : rows) {
+            html += "<tr>";
+            for (const QString &cell : row)
+                html += QStringLiteral("<td>%1%2%3</td>").arg(header ? "<b>" : "", cell.toHtmlEscaped(), header ? "</b>" : "");
+            html += "</tr>";
+            header = false;
+        }
+        return html + "</table>";
+    };
+    if (key == "core_groups") {
+        QVector<QStringList> rows {{tr("Core group"), tr("Cores / threads"), tr("Maximum frequency"), tr("Logical CPUs")}};
+        const Attribute sockets = snapshot_.values.value("sockets");
+        const bool showPackage = sockets.state != ReadState::Available || sockets.value.toUInt() != 1;
         for (const CpuCoreGroup &group : snapshot_.cpuGroups) {
             if (group.members.isEmpty()) continue;
             const auto &first = group.members.constFirst();
@@ -297,29 +329,21 @@ QString SystemDialog::displayValue(const QString &key, const Attribute &value) c
                     maximum = qMax(maximum, khz);
                 }
             }
-            int leastThreads = std::numeric_limits<int>::max(), mostThreads = 0;
-            for (int count : threads) {
-                leastThreads = qMin(leastThreads, count);
-                mostThreads = qMax(mostThreads, count);
-            }
-            const QString threadCount = leastThreads == mostThreads ? QString::number(mostThreads)
-                : tr("%1–%2").arg(leastThreads).arg(mostThreads);
             const auto ghz = [](qulonglong khz) { return QLocale().toString(khz / 1000000.0, 'g', 6); };
             const QString frequency = !frequencyComplete ? propertyReadValue(frequencyError)
                 : minimum == maximum ? tr("%1 GHz").arg(ghz(maximum))
                 : tr("%1–%2 GHz").arg(ghz(minimum), ghz(maximum));
-            lines.append(tr("Group %1 — %2 (package %3)\n%4 cores, %5 threads; %6 online threads/core\nReported maximum: %7\nLogical CPUs: %8")
-                .arg(++ordinal).arg(kind, first.package).arg(threads.size()).arg(cpus.size())
-                .arg(threadCount, frequency, cpuListText(cpus)));
+            const QString name = showPackage ? tr("%1 (package %2)").arg(kind, first.package) : kind;
+            rows.append({name, tr("%1 / %2").arg(threads.size()).arg(cpus.size()), frequency, cpuListText(cpus)});
         }
-        return lines.isEmpty() ? tr("Unavailable") : lines.join("\n\n");
+        return rows.size() == 1 ? tr("Unavailable") : tableText(rows);
     }
     if (key == "cache_topology") {
         // Keep each sharing domain explicit; aggregate equal-sized cache instances.
         QMap<QString, QVector<CpuCacheRecord>> kinds;
         for (const auto &cache : snapshot_.cpuCaches)
             kinds[QStringLiteral("%1/%2/%3").arg(cache.level).arg(cache.type).arg(cache.bytes)].append(cache);
-        QStringList lines;
+        QVector<QStringList> rows {{tr("Cache"), tr("Configuration"), tr("Sharing (logical CPUs)")}};
         for (auto it = kinds.cbegin(); it != kinds.cend(); ++it) {
             auto instances = it.value();
             std::sort(instances.begin(), instances.end(), [](const auto &a, const auto &b) {
@@ -330,13 +354,21 @@ QString SystemDialog::displayValue(const QString &key, const Attribute &value) c
             const QString type = cache.type == "Data" ? tr("data")
                 : cache.type == "Instruction" ? tr("instruction") : tr("unified");
             QStringList sharing;
-            for (const auto &instance : instances) sharing.append(cpuListText(instance.cpus));
-            lines.append(tr("L%1 %2: %3 × %4\nLogical CPUs per instance: %5")
-                .arg(cache.level).arg(type).arg(instances.size())
-                .arg(QLocale().formattedDataSize(static_cast<qlonglong>(cache.bytes), 0, QLocale::DataSizeIecFormat),
-                     sharing.join("; ")));
+            QSet<int> privateCpus;
+            bool allPrivate = true;
+            for (const auto &instance : instances) {
+                sharing.append(cpuListText(instance.cpus));
+                allPrivate = allPrivate && instance.cpus.size() == 1;
+                privateCpus.unite(instance.cpus);
+            }
+            const QString domains = allPrivate ? tr("Private to CPUs %1").arg(cpuListText(privateCpus))
+                : instances.size() == 1 ? tr("Shared by CPUs %1").arg(sharing.constFirst())
+                : tr("CPU groups %1").arg(sharing.join("; "));
+            const QString size = QLocale().formattedDataSize(static_cast<qlonglong>(cache.bytes), 0, QLocale::DataSizeIecFormat);
+            rows.append({tr("L%1 %2").arg(cache.level).arg(type),
+                         instances.size() == 1 ? size : tr("%1 × %2").arg(instances.size()).arg(size), domains});
         }
-        return lines.join("\n\n");
+        return rows.size() == 1 ? tr("Unavailable") : tableText(rows);
     }
     if (key == "instruction_sets") {
         const QStringList groups = value.value.split('\n');
@@ -512,6 +544,14 @@ void SystemDialog::acceptResult(SystemProperties result)
             source += '\n' + tr("GPU capability and current OS resource allocation are separate from the firmware setting. "
                 "A small BAR is not proof of disabled ReBAR; a large BAR is not proof of driver use. "
                 "No portable BIOS Enabled/Disabled value is inferred. Only sysfs metadata is read; BAR memory is never accessed.");
+        if (key == "smt")
+            source += '\n' + tr("SMT/HT support and policy reported by the kernel; core-group thread counts include online CPUs only.");
+        if (key == "cores" || key == "sockets")
+            source += '\n' + tr("Counts from kernel-reported topology for present CPUs.");
+        if (key == "logical")
+            source += '\n' + tr("Present and online counts are combined when equal; otherwise both are shown.");
+        if (key == "core_groups")
+            source += '\n' + tr("Maximum frequencies are kernel-reported limits, not live clocks. Core and thread counts include online CPUs only.");
         if (key == "instruction_sets")
             source += '\n' + tr("Kernel-exposed instruction-set and CPU-feature flags for processors listed in /proc/cpuinfo. "
                 "These include non-instruction features and may be limited by the kernel, operating system or hypervisor. "
@@ -522,7 +562,9 @@ void SystemDialog::acceptResult(SystemProperties result)
                                  "It is omitted if physical capacity is unavailable or smaller than usable RAM.");
         const QString hint = "<qt>" + source.toHtmlEscaped().replace('\n', "<br>") + "</qt>";
         for (QLabel *value : fields_.value(key)) {
-            value->setText(text);
+            const bool table = key == "core_groups" || key == "cache_topology";
+            value->setTextFormat(table ? Qt::RichText : Qt::PlainText);
+            value->setText(table ? displayValue(key, snapshot_.values.value(key), true) : text);
             value->setToolTip(hint);
         }
     }
@@ -535,6 +577,7 @@ void SystemDialog::copyAll()
 {
     QStringList lines;
     for (const QString &key : order_)
-        lines.append(captions_.value(key) + ": " + displayValue(key, snapshot_.values.value(key)));
+        lines.append(captions_.value(key) + (key == "core_groups" || key == "cache_topology" ? ":\n" : ": ")
+                     + displayValue(key, snapshot_.values.value(key)));
     QApplication::clipboard()->setText(lines.join('\n'));
 }
