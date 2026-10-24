@@ -77,7 +77,8 @@ ReportTable::ReportTable(int rows, int columns, QWidget *parent) : QTableWidget(
                 ? (static_cast<qint64>(width) * others + (available - width) / 2) / (available - width)
                 : width;
             preferredWidths_[column] = static_cast<int>(qBound<qint64>(
-                horizontalHeader()->minimumSectionSize(), preferred, QWIDGETSIZE_MAX));
+                static_cast<qint64>(horizontalHeader()->minimumSectionSize()), preferred,
+                static_cast<qint64>(QWIDGETSIZE_MAX)));
         }
         fitContents();
     });
@@ -112,7 +113,7 @@ void ReportTable::fitContents()
         qint64 preferredTotal = 0;
         if (preferredWidths_.size() == columnCount()) {
             for (int width : preferredWidths_) preferredTotal += width;
-            const qint64 available = qMax<qint64>(preferredTotal, viewport()->width());
+            const qint64 available = qMax<qint64>(preferredTotal, static_cast<qint64>(viewport()->width()));
             qint64 preferredBefore = 0, displayedBefore = 0;
             for (int column = 0; column < columnCount() && preferredTotal > 0; ++column) {
                 preferredBefore += preferredWidths_[column];
@@ -127,7 +128,7 @@ void ReportTable::fitContents()
         resizeRowsToContents();
         const int height = qMin(QWIDGETSIZE_MAX, verticalHeader()->length() + headerHeight + 2 * frameWidth());
         if (minimumHeight() != height || maximumHeight() != height) setFixedHeight(height);
-        const int width = static_cast<int>(qMin<qint64>(QWIDGETSIZE_MAX,
+        const int width = static_cast<int>(qMin<qint64>(static_cast<qint64>(QWIDGETSIZE_MAX),
             preferredTotal + 2 * frameWidth()));
         if (minimumWidth() != width) setMinimumWidth(width);
         fitting_ = false;
