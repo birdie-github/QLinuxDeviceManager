@@ -212,7 +212,7 @@ void SystemDialog::setBusy(bool busy)
     refresh_->setEnabled(!busy);
     refresh_->setText(busy ? tr("Refreshing…") : tr("Refresh"));
 }
-QString SystemDialog::displayValue(const QString &key, const Attribute &value) const
+QString SystemDialog::displayValue(const QString &key, const Attribute &value, bool compact) const
 {
     if (key == "virtualization" && value.state == ReadState::Unavailable)
         return tr("Unknown (no hypervisor identity reported)");
@@ -364,6 +364,16 @@ QString SystemDialog::displayValue(const QString &key, const Attribute &value) c
         QMap<QString, QVector<CpuCacheRecord>> kinds;
         for (const auto &cache : snapshot_.cpuCaches)
             kinds[QStringLiteral("%1/%2/%3").arg(cache.level).arg(cache.type).arg(cache.bytes)].append(cache);
+        QMap<int, QString> cpuCores;
+        QMap<QString, QSet<int>> coreCpus;
+        QSet<int> onlineCpus;
+        for (const auto &group : snapshot_.cpuGroups) {
+            for (const auto &member : group.members) {
+                cpuCores.insert(member.cpu, member.core);
+                coreCpus[member.core].insert(member.cpu);
+                onlineCpus.insert(member.cpu);
+            }
+        }
         QVector<QStringList> rows {{tr("Cache"), tr("Configuration"), tr("Sharing (logical CPUs)")}};
         for (auto it = kinds.cbegin(); it != kinds.cend(); ++it) {
             auto instances = it.value();
@@ -382,9 +392,30 @@ QString SystemDialog::displayValue(const QString &key, const Attribute &value) c
                 allPrivate = allPrivate && instance.cpus.size() == 1;
                 privateCpus.unite(instance.cpus);
             }
-            const QString domains = allPrivate ? tr("Private to CPUs %1").arg(cpuListText(privateCpus))
+            QString domains = allPrivate ? tr("Private to CPUs %1").arg(cpuListText(privateCpus))
                 : instances.size() == 1 ? tr("Shared by CPUs %1").arg(sharing.constFirst())
                 : tr("CPU groups %1").arg(sharing.join("; "));
+            if (compact && !onlineCpus.isEmpty()) {
+                // Require an exact match to a known core's online threads. Unknown
+                // or offline sharing IDs keep the explicit kernel sharing sets.
+                bool perCore = true;
+                QSet<QString> seenCores;
+                for (const auto &instance : instances) {
+                    const int cpu = *instance.cpus.cbegin();
+                    const QString core = cpuCores.value(cpu);
+                    if (!cpuCores.contains(cpu) || instance.cpus != coreCpus.value(core)
+                        || seenCores.contains(core)) {
+                        perCore = false;
+                        break;
+                    }
+                    seenCores.insert(core);
+                }
+                if (perCore)
+                    domains = privateCpus == onlineCpus ? tr("Private per core")
+                        : tr("Private per core · CPUs %1").arg(cpuListText(privateCpus));
+                else if (instances.size() == 1 && cache.cpus == onlineCpus)
+                    domains = tr("Shared by all online cores");
+            }
             const QString size = QLocale().formattedDataSize(static_cast<qlonglong>(cache.bytes), 0, QLocale::DataSizeIecFormat);
             rows.append({tr("L%1 %2").arg(cache.level).arg(type),
                          instances.size() == 1 ? size : tr("%1 × %2").arg(instances.size()).arg(size), domains});
@@ -585,7 +616,8 @@ void SystemDialog::acceptResult(SystemProperties result)
         if (QTableWidget *view = tables_.value(key, nullptr)) {
             view->clear();
             const bool available = snapshot_.values.value(key).state == ReadState::Available;
-            const QStringList lines = text.split('\n');
+            const QStringList lines = displayValue(key, snapshot_.values.value(key), true).split('\n');
+            const QStringList detailedLines = text.split('\n');
             const QStringList headers = lines.constFirst().split('\t');
             const bool hasRows = available && lines.size() > 1;
             view->setColumnCount(hasRows ? headers.size() : 1);
@@ -594,8 +626,12 @@ void SystemDialog::acceptResult(SystemProperties result)
             if (hasRows) view->setHorizontalHeaderLabels(headers);
             for (int row = 0; row < view->rowCount(); ++row) {
                 const QStringList cells = hasRows ? lines[row + 1].split('\t') : QStringList{text};
-                for (int column = 0; column < cells.size(); ++column)
-                    view->setItem(row, column, new QTableWidgetItem(cells[column]));
+                for (int column = 0; column < cells.size(); ++column) {
+                    auto *item = new QTableWidgetItem(cells[column]);
+                    if (key == "cache_topology" && hasRows && column == 2)
+                        item->setToolTip(detailedLines.value(row + 1).split('\t').value(column));
+                    view->setItem(row, column, item);
+                }
             }
             view->resizeRowsToContents();
             // Fit all rows, leaving room for a horizontal scrollbar on narrow dialogs.
