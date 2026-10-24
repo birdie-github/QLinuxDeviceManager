@@ -136,7 +136,7 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
     field(os, "uptime", tr("Uptime"));
     field(os, "gpu_rebar", tr("Resizable BAR (GPU)"));
 
-    auto *hardware = group(tr("Hardware"));
+    auto *hardware = group(tr("Motherboard"));
     field(hardware, "manufacturer", tr("System manufacturer"));
     field(hardware, "model", tr("System model"));
     field(hardware, "board_vendor", tr("Motherboard manufacturer"));
@@ -176,18 +176,18 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
     field(processor, "cache_topology", tr("Cache hierarchy (online CPUs)"));
 
 
-    auto *memory = group(tr("RAM/Memory"));
+    auto *memory = group(tr("RAM"));
     field(memory, "physical_memory", tr("Physical RAM"));
     field(memory, "memory", tr("Usable RAM"));
     // Keep the summary labels outside the variable-length records rebuilt on refresh.
     auto *memoryPage = new QWidget(memory->parentWidget());
     memoryForm_ = new QGridLayout(memoryPage);
     memoryForm_->setContentsMargins(0, 0, 0, 0);
-    memoryForm_->setColumnStretch(1, 1);
+    memoryForm_->setColumnStretch(0, 1);
     memory->addWidget(memoryPage, memory->rowCount(), 0, 1, 2);
-    forms.append(memoryForm_);
+
     registerKey("memory_devices");
-    captions_.insert("memory_devices", tr("RAM/Memory"));
+    captions_.insert("memory_devices", tr("RAM"));
     // Use one font-derived caption width for every section, so values align.
     int captionWidth = 0;
     for (const QLabel *name : names) captionWidth = qMax(captionWidth, name->sizeHint().width());
@@ -480,45 +480,54 @@ void SystemDialog::rebuildMemory()
         delete item->widget();
         delete item;
     }
-    int row = 0;
-    const auto label = [this](const QString &text) {
-        auto *value = new QLabel(text, memoryForm_->parentWidget());
-        value->setTextFormat(Qt::PlainText);
-        value->setWordWrap(true);
-        value->setAlignment(Qt::AlignLeading | Qt::AlignTop);
-        value->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
-        QSizePolicy policy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        policy.setHeightForWidth(true);
-        value->setSizePolicy(policy);
-        value->setMinimumWidth(120);
-        return value;
-    };
-    const auto message = [&](const QString &text, bool heading = false) {
-        auto *value = label(text);
-        if (heading) { QFont font = value->font(); font.setBold(true); value->setFont(font); }
-        memoryForm_->addWidget(value, row++, 0, 1, 2);
-    };
+    auto *heading = new QLabel(tr("Memory Devices"), memoryForm_->parentWidget());
+    QFont font = heading->font(); font.setBold(true); heading->setFont(font);
+    heading->setToolTip(memoryScope());
+    memoryForm_->addWidget(heading, 0, 0);
     const FirmwareMemoryInformation &memory = snapshot_.memoryDevices;
-    if (memory.status.state != ReadState::Available) {
-        auto *value = label(propertyReadValue(memory.status));
-        value->setToolTip("<qt>" + snapshot_.sources.value("memory_devices").toHtmlEscaped() + "</qt>");
-        memoryForm_->addWidget(value, row, 0, 1, 2);
+    if (memory.status.state != ReadState::Available || memory.devices.isEmpty()) {
+        auto *message = new QLabel(memory.status.state != ReadState::Available
+            ? propertyReadValue(memory.status) : tr("No memory-device records reported"), memoryForm_->parentWidget());
+        message->setTextFormat(Qt::PlainText);
+        message->setWordWrap(true);
+        message->setToolTip(snapshot_.sources.value("memory_devices") + '\n' + memoryScope());
+        memoryForm_->addWidget(message, 1, 0);
         return;
     }
-    if (memory.devices.isEmpty()) message(tr("No memory-device records reported"));
+    auto *tabs = new QTabWidget(memoryForm_->parentWidget());
+    tabs->setUsesScrollButtons(true);
+    memoryForm_->addWidget(tabs, 1, 0);
     for (const FirmwareMemoryDevice &device : memory.devices) {
-        message(tr("Memory device %1").arg(device.index + 1), true);
+        auto *table = new QTableWidget(tabs);
+        table->setColumnCount(2);
+        table->setHorizontalHeaderLabels({tr("Property"), tr("Value")});
+        table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+        table->setAlternatingRowColors(true);
+        table->setShowGrid(true);
+        table->setGridStyle(Qt::SolidLine);
+        table->setWordWrap(false);
+        table->verticalHeader()->hide();
+        table->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+        table->horizontalHeader()->setStretchLastSection(true);
+        const auto fields = memoryFields();
+        table->setRowCount(fields.size());
         const QString prefix = QStringLiteral("MEMORY_DEVICE_%1_").arg(device.index);
-        for (const auto &field : memoryFields()) {
-            auto *name = new QLabel(field.second, memoryForm_->parentWidget());
-            name->setTextFormat(Qt::PlainText);
-            auto *value = label(memoryValue(field.first, device.values.value(field.first)));
-            const QString hint = "<qt>" + (QStringLiteral("libudev: dmi/id ") + prefix + field.first
-                + '\n' + memoryScope()).toHtmlEscaped().replace('\n', "<br>") + "</qt>";
+        for (int row = 0; row < fields.size(); ++row) {
+            const auto &field = fields[row];
+            auto *name = new QTableWidgetItem(field.second);
+            auto *value = new QTableWidgetItem(memoryValue(field.first, device.values.value(field.first)));
+            const QString hint = QStringLiteral("libudev: dmi/id ") + prefix + field.first + '\n' + memoryScope();
             name->setToolTip(hint); value->setToolTip(hint);
-            memoryForm_->addWidget(name, row, 0, Qt::AlignLeading | Qt::AlignTop);
-            memoryForm_->addWidget(value, row++, 1);
+            table->setItem(row, 0, name);
+            table->setItem(row, 1, value);
         }
+        table->resizeRowsToContents();
+        // Keep long inventories inside the selected chip's table.
+        table->setMinimumHeight(table->horizontalHeader()->sizeHint().height()
+            + 6 * table->verticalHeader()->defaultSectionSize());
+        const int tab = tabs->addTab(table, tr("Chip %1").arg(device.index + 1));
+        tabs->setTabToolTip(tab, tr("Memory device %1 (firmware record %2)")
+            .arg(device.index + 1).arg(device.index) + '\n' + memoryScope());
     }
 }
 void SystemDialog::rebuildMok()
