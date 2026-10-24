@@ -1,6 +1,8 @@
 #include "monitorproperties.h"
 #include "displayidentity.h"
 #include <QByteArray>
+#include <QRegularExpression>
+#include <cmath>
 #include <QStringList>
 #include <QThread>
 #ifdef QLDM_HAVE_DISPLAY_INFO
@@ -199,4 +201,38 @@ MonitorProperties collectMonitorProperties(int directory, const QString &path)
     else result.descriptor = edid.state;
     result.values.insert("modes", modeNames(modes));
     return result;
+}
+
+QString monitorPixelsPerInch(const MonitorProperties &monitor)
+{
+    const Attribute size = monitor.values.value("size");
+    const Attribute modes = monitor.values.value("modes");
+    if (!monitor.applicable || monitor.descriptor.state != ReadState::Available
+        || size.state != ReadState::Available || modes.state != ReadState::Available) return {};
+    const QStringList dimensions = size.value.split(' ', Qt::SkipEmptyParts);
+    if (dimensions.size() != 2) return {};
+    bool validWidth = false, validHeight = false;
+    const uint widthCm = dimensions[0].toUInt(&validWidth);
+    const uint heightCm = dimensions[1].toUInt(&validHeight);
+    if (!validWidth || !validHeight || !widthCm || !heightCm) return {};
+    static const QRegularExpression resolution(QStringLiteral("^([1-9][0-9]*)x([1-9][0-9]*)(?:i)?$"));
+    quint64 largestArea = 0;
+    uint largestWidth = 0, largestHeight = 0;
+    for (const QString &mode : modes.value.split('\n', Qt::SkipEmptyParts)) {
+        const auto match = resolution.match(mode.trimmed());
+        if (!match.hasMatch()) continue;
+        const uint width = match.captured(1).toUInt(&validWidth);
+        const uint height = match.captured(2).toUInt(&validHeight);
+        if (!validWidth || !validHeight) continue;
+        const quint64 area = static_cast<quint64>(width) * height;
+        if (area > largestArea || (area == largestArea && width > largestWidth)) {
+            largestArea = area;
+            largestWidth = width;
+            largestHeight = height;
+        }
+    }
+    if (!largestArea) return {};
+    // EDID dimensions are centimetres; one inch is exactly 2.54 cm.
+    const double ppi = std::hypot(largestWidth, largestHeight) * 2.54 / std::hypot(widthCm, heightCm);
+    return QString::number(std::llround(ppi));
 }

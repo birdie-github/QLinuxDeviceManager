@@ -1095,6 +1095,8 @@ void PropertiesDialog::rebuildDisplay()
             const QStringList dimensions = size.value.split(' ');
             field(identity, tr("Image dimensions"), size.state == ReadState::Available
                 ? tr("%1 × %2 cm").arg(dimensions.value(0), dimensions.value(1)) : propertyReadValue(size), monitor.sources.value("size"));
+            const QString ppi = monitorPixelsPerInch(monitor);
+            if (!ppi.isEmpty()) field(identity, tr("PPI"), QLocale().toString(ppi.toLongLong()), tr("Pixels per inch"));
             if (monitor.values.contains("warnings")) hardwareField(identity, tr("Conformance warnings"), "warnings");
             auto *capabilities = group(tr("Monitor input (reported)"));
             const Attribute digital = monitor.values.value("digital");
