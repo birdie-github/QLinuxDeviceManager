@@ -1,4 +1,3 @@
-#include "resourceformat.h"
 #include "propertiesdialog.h"
 #include "bluetoothpage.h"
 #include "networkpage.h"
@@ -11,6 +10,7 @@
 #include "volumespage.h"
 #include "storagepage.h"
 #include "eventspage.h"
+#include "resourcespage.h"
 #include "storagepresentation.h"
 #include "propertypage.h"
 #include "reporttable.h"
@@ -123,30 +123,7 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     copyLayout->addStretch();
     detailsLayout->addLayout(copyLayout);
     tabs->addTab(details, tr("Details"));
-    resourcesPage_ = new QWidget(tabs);
-    resourcesPage_->hide(); // Not a tab until metadata confirms applicability.
-    const auto resourcesReport = reportPageLayout(resourcesPage_);
-    auto *resourcesLayout = resourcesReport.contents;
-    resourcesTable_ = new ReportTable(0, 3, resourcesPage_);
-    resourcesTable_->setHorizontalHeaderLabels({tr("Resource type"), tr("Setting"), tr("Details")});
-    resourcesTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
-    resourcesTable_->setSelectionMode(QAbstractItemView::ExtendedSelection);
-    resourcesLayout->addWidget(resourcesTable_);
-    auto *resourceButtons = resourcesReport.actions;
-    auto *copyResourceSelection = new QPushButton(tr("Copy selection"), resourcesPage_);
-    auto *copyResourceAll = new QPushButton(tr("Copy all resources"), resourcesPage_);
-    copyResourceSelection->setEnabled(false);
-    connect(resourcesTable_->selectionModel(), &QItemSelectionModel::selectionChanged, this,
-        [this, copyResourceSelection] {
-            copyResourceSelection->setEnabled(resourcesTable_->selectionModel()->hasSelection());
-        });
-    connect(copyResourceSelection, &QPushButton::clicked, this, [this] { copyResources(true); });
-    connect(copyResourceAll, &QPushButton::clicked, this, [this] { copyResources(false); });
-    resourceButtons->addWidget(copyResourceSelection);
-    resourceButtons->addWidget(copyResourceAll);
-    resourceButtons->addStretch();
-    resourcesLayout->addStretch();
-    // The tab appears only after collection finds resource records or read errors.
+    resourcesPage_ = new ResourcesPage(tabs);
     eventsPage_ = new EventsPage(tabs);
     tabs->addTab(eventsPage_, tr("Events"));
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
@@ -280,46 +257,7 @@ void PropertiesDialog::rebuildResources()
         tabs_->removeTab(existing);
         resourcesPage_->hide();
     }
-    resourcesTable_->setRowCount(0);
-    QStringList copy;
-    const auto row = [this, &copy](const QString &type, const QString &setting,
-                                 const QString &details, const QString &source) {
-        const int index = resourcesTable_->rowCount();
-        resourcesTable_->insertRow(index);
-        const QStringList values {type, setting, details};
-        for (int column = 0; column < values.size(); ++column) {
-            auto *item = new QTableWidgetItem(values[column]);
-            item->setToolTip(source.toHtmlEscaped());
-            resourcesTable_->setItem(index, column, item);
-        }
-        resourcesTable_->item(index, 0)->setData(Qt::UserRole, source);
-        copy.append(values.join('\t') + '\n' + tr("Source: %1").arg(source));
-    };
-    if (!data.pnpState.isEmpty())
-        copy.append(tr("PnP device state: %1").arg(data.pnpState == "active" ? tr("Active") : tr("Disabled")));
-    for (const ResourceRow &entry : resourceRows(data))
-        row(entry.type, entry.setting, entry.details, entry.source);
-    resourcesText_ = copy.join("\n\n");
-}
-void PropertiesDialog::copyResources(bool selectedOnly)
-{
-    QList<int> rows;
-    if (selectedOnly) {
-        for (const QModelIndex &index : resourcesTable_->selectionModel()->selectedRows()) rows.append(index.row());
-        std::sort(rows.begin(), rows.end());
-    } else {
-        QApplication::clipboard()->setText(resourcesText_);
-        return;
-    }
-    QStringList text;
-    for (const int row : rows) {
-        QStringList values;
-        for (int column = 0; column < resourcesTable_->columnCount(); ++column)
-            values.append(resourcesTable_->item(row, column)->text());
-        text.append(values.join('\t') + '\n' + tr("Source: %1").arg(
-            resourcesTable_->item(row, 0)->data(Qt::UserRole).toString()));
-    }
-    QApplication::clipboard()->setText(text.join("\n\n"));
+    resourcesPage_->setSnapshot(data);
 }
 
 void PropertiesDialog::rebuildBluetooth()

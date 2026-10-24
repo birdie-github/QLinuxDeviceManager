@@ -5,6 +5,7 @@
 #include <QDialog>
 #include <QVector>
 
+class ResourcesPage;
 class EventsPage;
 class StoragePage;
 class VolumesPage;
@@ -51,16 +52,13 @@ private:
     void rebuildUsb();
     void rebuildPcie();
     void rebuildBattery();
-    void copyResources(bool selectedOnly);
     void showDetail();
     void copyAll();
     DeviceProperties snapshot_;
     QVector<PropertyEntry> entries_;
     QLabel *banner_ = nullptr;
     QTabWidget *tabs_ = nullptr;
-    QWidget *resourcesPage_ = nullptr;
-    QTableWidget *resourcesTable_ = nullptr;
-    QString resourcesText_;
+    ResourcesPage *resourcesPage_ = nullptr;
     QFormLayout *general_ = nullptr;
     QFormLayout *driver_ = nullptr;
     StoragePage *storagePage_ = nullptr;
