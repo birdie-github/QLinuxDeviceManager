@@ -9,6 +9,8 @@
 #include "pciepage.h"
 #include "healthpage.h"
 #include "volumespage.h"
+#include "storagepage.h"
+#include "storagepresentation.h"
 #include "propertypage.h"
 #include "reporttable.h"
 #include "propertyreport.h"
@@ -121,26 +123,7 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     usbPage_ = new UsbPage(tabs);
     batteryPage_ = new BatteryPage(tabs);
     pciePage_ = new PciePage(tabs);
-    storagePage_ = new QWidget(tabs);
-    storagePage_->hide();
-    auto *storageLayout = new QVBoxLayout(storagePage_);
-    storageNotice_ = plainLabel(tr("ℹ️ Storage snapshot for this device"), storagePage_);
-    storageLayout->addWidget(storageNotice_);
-    auto *storageScroll = new QScrollArea(storagePage_);
-    storageScroll->setWidgetResizable(true);
-    storageScroll->setFrameShape(QFrame::NoFrame);
-    auto *storageFormPage = new QWidget(storageScroll);
-    storage_ = new QFormLayout(storageFormPage);
-    storage_->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
-    storage_->setRowWrapPolicy(QFormLayout::WrapLongRows);
-    storageScroll->setWidget(storageFormPage);
-    storageLayout->addWidget(storageScroll, 1);
-    auto *copyStorage = new QPushButton(tr("Copy storage overview"), storagePage_);
-    storageLayout->addWidget(copyStorage);
-    connect(copyStorage, &QPushButton::clicked, this, [this] {
-        QApplication::clipboard()->setText(storageFieldsText(storagePresentation_.overview)
-            + "\n\n" + storagePresentation_.notes);
-    });
+    storagePage_ = new StoragePage(tabs);
 
     volumesPage_ = new VolumesPage(tabs);
 
@@ -502,7 +485,7 @@ void PropertiesDialog::rebuildBattery()
 
 void PropertiesDialog::rebuildStorage()
 {
-    for (const auto &page : {qMakePair(storagePage_, tr("Storage")),
+    for (const auto &page : {qMakePair(static_cast<QWidget *>(storagePage_), tr("Storage")),
                              qMakePair(static_cast<QWidget *>(volumesPage_), tr("Volumes")), qMakePair(static_cast<QWidget *>(healthPage_), tr("Health"))}) {
         const int existing = tabs_->indexOf(page.first);
         if (snapshot_.storage.applicable && existing < 0) tabs_->addTab(page.first, page.second);
@@ -511,18 +494,14 @@ void PropertiesDialog::rebuildStorage()
             page.first->hide();
         }
     }
-    storagePresentation_ = storagePresentation(snapshot_.storage, device().path);
+    const StoragePresentation presentation = storagePresentation(snapshot_.storage, device().path);
     const QString scope = tr("Read-only metadata snapshot. Each entity is a separate layer; capacities are not added. "
         "Kernel and UDisks2 block records are merged only by their exact device-number mapping. "
         "Source paths remain in tooltips and copied text. Deep search includes native metadata only.");
-    const auto hint = [](QLabel *label, const QString &text) {
-        label->setToolTip(propertyToolTip(text));
-    };
-    hint(storageNotice_, scope + "\n\n" + storagePresentation_.notes);
-    showStorageFields(storage_, storagePresentation_.overview);
-    volumesPage_->setSnapshot(storagePresentation_.volumes, device().path, scope, storagePresentation_.notes);
-    healthPage_->setSnapshot(storagePresentation_.health, storagePresentation_.preferredHealthDrive,
-                             storagePresentation_.notes);
+    storagePage_->setSnapshot(presentation.overview, scope, presentation.notes);
+    volumesPage_->setSnapshot(presentation.volumes, device().path, scope, presentation.notes);
+    healthPage_->setSnapshot(presentation.health, presentation.preferredHealthDrive,
+                             presentation.notes);
 }
 
 void PropertiesDialog::updateEvents(const DeviceEventsSnapshot &history, const QString &monitorNote)

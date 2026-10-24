@@ -2,10 +2,10 @@
 
 #include "deviceproperties.h"
 #include "propertytext.h"
-#include "storagepresentation.h"
 #include <QDialog>
 #include <QVector>
 
+class StoragePage;
 class VolumesPage;
 class HealthPage;
 class PciePage;
@@ -64,12 +64,9 @@ private:
     QString resourcesText_;
     QFormLayout *general_ = nullptr;
     QFormLayout *driver_ = nullptr;
-    QFormLayout *storage_ = nullptr;
-    QWidget *storagePage_ = nullptr;
+    StoragePage *storagePage_ = nullptr;
     VolumesPage *volumesPage_ = nullptr;
     HealthPage *healthPage_ = nullptr;
-    QLabel *storageNotice_ = nullptr;
-    StoragePresentation storagePresentation_;
     NetworkPage *networkPage_ = nullptr;
     BluetoothPage *bluetoothPage_ = nullptr;
     CameraPage *cameraPage_ = nullptr;
