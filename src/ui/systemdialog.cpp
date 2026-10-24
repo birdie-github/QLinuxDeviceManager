@@ -89,6 +89,8 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
             delete value;
             auto *view = new QTableWidget(form->parentWidget());
             view->setEditTriggers(QAbstractItemView::NoEditTriggers);
+            // Size rows independently of column widths during initial layout.
+            view->setWordWrap(false);
             view->setSelectionBehavior(QAbstractItemView::SelectItems);
             view->setAlternatingRowColors(true);
             view->setShowGrid(true);
