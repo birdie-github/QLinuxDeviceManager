@@ -65,7 +65,22 @@ ReportTable::ReportTable(int rows, int columns, QWidget *parent) : QTableWidget(
     setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    connect(horizontalHeader(), &QHeaderView::sectionResized, this, [this] { fitContents(); });
+    connect(horizontalHeader(), &QHeaderView::sectionResized, this, [this](int column, int, int width) {
+        if (!fitting_ && preferredWidths_.size() == columnCount() && column >= 0 && column < columnCount()) {
+            qint64 total = 0;
+            for (int preferred : preferredWidths_) total += preferred;
+            const int available = viewport()->width();
+            const qint64 others = total - preferredWidths_[column];
+            // Convert a dragged, expanded width back to its preferred width.
+            // This keeps the requested section size while spare space is shared.
+            const qint64 preferred = total < available && others > 0 && width <= available - others
+                ? (static_cast<qint64>(width) * others + (available - width) / 2) / (available - width)
+                : width;
+            preferredWidths_[column] = static_cast<int>(qBound<qint64>(
+                horizontalHeader()->minimumSectionSize(), preferred, QWIDGETSIZE_MAX));
+        }
+        fitContents();
+    });
     connect(model(), &QAbstractItemModel::dataChanged, this, [this] { fitContents(); });
     connect(model(), &QAbstractItemModel::headerDataChanged, this, [this] { fitContents(); });
     connect(model(), &QAbstractItemModel::rowsInserted, this, [this] { fitContents(); });
@@ -84,14 +99,27 @@ void ReportTable::fitContents()
     QTimer::singleShot(0, this, [this] {
         fitQueued_ = false;
         fitting_ = true;
-        if (rowCount() && initializedColumns_ != columnCount()) {
-            // Give each schema sensible initial widths once. Refreshes preserve
-            // user adjustments; subsequent resizes change only row/header height.
+        if (initializedColumns_ != columnCount()) {
+            // Keep preferred widths separate from the expanded viewport widths.
+            // Otherwise an enlarged window becomes the table's new minimum size.
             const int limit = qMax(160, 30 * fontMetrics().averageCharWidth());
+            preferredWidths_.resize(columnCount());
             for (int column = 0; column < columnCount(); ++column)
-                setColumnWidth(column, qBound(horizontalHeader()->minimumSectionSize(),
-                    sizeHintForColumn(column) + 2 * frameWidth(), limit));
-            initializedColumns_ = columnCount();
+                preferredWidths_[column] = qBound(horizontalHeader()->minimumSectionSize(),
+                    qMax(sizeHintForColumn(column) + 2 * frameWidth(), horizontalHeader()->sectionSizeHint(column)), limit);
+            initializedColumns_ = rowCount() ? columnCount() : -1;
+        }
+        qint64 preferredTotal = 0;
+        if (preferredWidths_.size() == columnCount()) {
+            for (int width : preferredWidths_) preferredTotal += width;
+            const qint64 available = qMax<qint64>(preferredTotal, viewport()->width());
+            qint64 preferredBefore = 0, displayedBefore = 0;
+            for (int column = 0; column < columnCount() && preferredTotal > 0; ++column) {
+                preferredBefore += preferredWidths_[column];
+                const qint64 displayedEnd = available * preferredBefore / preferredTotal;
+                setColumnWidth(column, static_cast<int>(displayedEnd - displayedBefore));
+                displayedBefore = displayedEnd;
+            }
         }
         auto *header = static_cast<ReportHeader *>(horizontalHeader());
         const int headerHeight = header->isHidden() ? 0 : header->wrappedHeight();
@@ -99,7 +127,8 @@ void ReportTable::fitContents()
         resizeRowsToContents();
         const int height = qMin(QWIDGETSIZE_MAX, verticalHeader()->length() + headerHeight + 2 * frameWidth());
         if (minimumHeight() != height || maximumHeight() != height) setFixedHeight(height);
-        const int width = qMin(QWIDGETSIZE_MAX, horizontalHeader()->length() + 2 * frameWidth());
+        const int width = static_cast<int>(qMin<qint64>(QWIDGETSIZE_MAX,
+            preferredTotal + 2 * frameWidth()));
         if (minimumWidth() != width) setMinimumWidth(width);
         fitting_ = false;
     });

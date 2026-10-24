@@ -1,5 +1,6 @@
 #pragma once
 #include <QTableWidget>
+#include <QVector>
 
 // Read-only report embedded in a scrolling page. The table always exposes all
 // rows/columns; its containing page owns scrolling. Callers retain selection policy.
@@ -16,4 +17,5 @@ private:
     bool fitQueued_ = false;
     bool fitting_ = false;
     int initializedColumns_ = -1;
+    QVector<int> preferredWidths_;
 };
