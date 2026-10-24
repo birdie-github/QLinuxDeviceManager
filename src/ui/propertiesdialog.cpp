@@ -1,6 +1,7 @@
 #include "resourceformat.h"
 #include "propertiesdialog.h"
 #include "reporttable.h"
+#include "propertypage.h"
 #include "gpulinktest.h"
 #include "pcielinktext.h"
 #include "gpulinksample.h"
@@ -176,147 +177,63 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     };
     general_ = addForm(tr("General"));
     driver_ = addForm(tr("Driver"));
-    networkPage_ = new QWidget(tabs);
-    networkPage_->hide();
-    auto *networkLayout = new QVBoxLayout(networkPage_);
-    auto *networkNotice = plainLabel(tr("ℹ️ Network interface snapshot"), networkPage_);
-    networkNotice->setToolTip(tr("Addresses belong to the application's network namespace. Reload properties to refresh. "
+    const auto addSnapshotPage = [this, tabs](QWidget *&page, QVBoxLayout *&groups, QString *text,
+        const QString &heading, const QString &tooltip, const QString &copyCaption,
+        const PropertyPageOptions &options = PropertyPageOptions{}) {
+        const auto widgets = createPropertyPage(tabs, heading, tooltip, copyCaption, options);
+        page = widgets.page;
+        groups = widgets.groups;
+        // Read the member at click time, after any snapshot rebuild.
+        connect(widgets.copyButton, &QPushButton::clicked, this, [text] {
+            QApplication::clipboard()->setText(*text);
+        });
+    };
+    PropertyPageOptions bluetoothOptions;
+    bluetoothOptions.frame = QFrame::NoFrame;
+    bluetoothOptions.contentConstraint = QLayout::SetDefaultConstraint;
+    bluetoothOptions.headingPolicy = QSizePolicy::Maximum;
+    addSnapshotPage(networkPage_, networkGroups_, &networkText_,
+        tr("ℹ️ Network interface snapshot"),
+        tr("Addresses belong to the application's network namespace. Reload properties to refresh. "
         "Hardware MAC is the permanent address reported by the driver. An overridden MAC is the current "
-        "address when it differs from the permanent address, or Linux reports a random, inherited or explicitly set address."));
-    networkLayout->addWidget(networkNotice);
-    auto *networkScroll = new QScrollArea(networkPage_);
-    networkScroll->setWidgetResizable(true);
-    auto *networkContent = new QWidget(networkScroll);
-    networkGroups_ = new QVBoxLayout(networkContent);
-    networkGroups_->setSizeConstraint(QLayout::SetMinAndMaxSize);
-    networkScroll->setWidget(networkContent);
-    networkLayout->addWidget(networkScroll, 1);
-    auto *copyNetwork = new QPushButton(tr("Copy network properties"), networkPage_);
-    networkLayout->addWidget(copyNetwork);
-    connect(copyNetwork, &QPushButton::clicked, this, [this] {
-        QApplication::clipboard()->setText(networkText_);
-    });
-    bluetoothPage_ = new QWidget(tabs);
-    bluetoothPage_->hide();
-    auto *bluetoothLayout = new QVBoxLayout(bluetoothPage_);
-    auto *bluetoothNotice = plainLabel(tr("ℹ️ Bluetooth controller and known-device snapshot"), bluetoothPage_);
-    auto bluetoothNoticePolicy = bluetoothNotice->sizePolicy();
-    bluetoothNoticePolicy.setVerticalPolicy(QSizePolicy::Maximum);
-    bluetoothNotice->setSizePolicy(bluetoothNoticePolicy);
-    bluetoothNotice->setToolTip(tr("Reload properties to refresh. Known devices are current BlueZ objects, not a pairing history. "
+        "address when it differs from the permanent address, or Linux reports a random, inherited or explicitly set address."),
+        tr("Copy network properties"));
+    addSnapshotPage(bluetoothPage_, bluetoothGroups_, &bluetoothText_,
+        tr("ℹ️ Bluetooth controller and known-device snapshot"),
+        tr("Reload properties to refresh. Known devices are current BlueZ objects, not a pairing history. "
         "Signal and advertising data are last reported values. Services are advertised/supported, not necessarily active. "
-        "No scanning, pairing, connection changes or remote characteristic reads are performed."));
-    bluetoothLayout->addWidget(bluetoothNotice);
-    auto *bluetoothScroll = new QScrollArea(bluetoothPage_);
-    bluetoothScroll->setWidgetResizable(true);
-    bluetoothScroll->setFrameShape(QFrame::NoFrame);
-    auto *bluetoothContent = new QWidget(bluetoothScroll);
-    bluetoothGroups_ = new QVBoxLayout(bluetoothContent);
-    bluetoothScroll->setWidget(bluetoothContent);
-    bluetoothLayout->addWidget(bluetoothScroll, 1);
-    auto *copyBluetooth = new QPushButton(tr("Copy Bluetooth properties"), bluetoothPage_);
-    bluetoothLayout->addWidget(copyBluetooth);
-    connect(copyBluetooth, &QPushButton::clicked, this, [this] {
-        QApplication::clipboard()->setText(bluetoothText_);
-    });
-    cameraPage_ = new QWidget(tabs);
-    cameraPage_->hide();
-    auto *cameraLayout = new QVBoxLayout(cameraPage_);
-    auto *cameraNotice = plainLabel(tr("ℹ️ Driver-reported camera capabilities snapshot"), cameraPage_);
-    cameraNotice->setToolTip(tr("Queries only: no capture, format changes or measured frame rates. Reload properties to refresh. "
-        "Rows preserve the format, size and frame interval relationship. Size ranges do not imply a common rate list."));
-    cameraLayout->addWidget(cameraNotice);
-    auto *cameraScroll = new QScrollArea(cameraPage_);
-    cameraScroll->setWidgetResizable(true);
-    auto *cameraContent = new QWidget(cameraScroll);
-    cameraGroups_ = new QVBoxLayout(cameraContent);
-    cameraGroups_->setSizeConstraint(QLayout::SetMinAndMaxSize);
-    cameraScroll->setWidget(cameraContent);
-    cameraLayout->addWidget(cameraScroll, 1);
-    auto *copyCamera = new QPushButton(tr("Copy camera properties"), cameraPage_);
-    cameraLayout->addWidget(copyCamera);
-    connect(copyCamera, &QPushButton::clicked, this, [this] { QApplication::clipboard()->setText(cameraText_); });
-    displayPage_ = new QWidget(tabs);
-    displayPage_->hide();
-    auto *displayLayout = new QVBoxLayout(displayPage_);
-    auto *displayNotice = plainLabel(tr("ℹ️ Monitor hardware and display configuration snapshot"), displayPage_);
-    displayNotice->setToolTip(tr("Monitor information is reported by this connector’s cached EDID and kernel mode list; "
+        "No scanning, pairing, connection changes or remote characteristic reads are performed."),
+        tr("Copy Bluetooth properties"), bluetoothOptions);
+    addSnapshotPage(cameraPage_, cameraGroups_, &cameraText_,
+        tr("ℹ️ Driver-reported camera capabilities snapshot"),
+        tr("Queries only: no capture, format changes or measured frame rates. Reload properties to refresh. "
+        "Rows preserve the format, size and frame interval relationship. Size ranges do not imply a common rate list."),
+        tr("Copy camera properties"));
+    addSnapshotPage(displayPage_, displayGroups_, &displayText_,
+        tr("ℹ️ Monitor hardware and display configuration snapshot"),
+        tr("Monitor information is reported by this connector’s cached EDID and kernel mode list; "
         "it does not guarantee capabilities. Active settings are shown separately below. Resolution and refresh rate describe the configured physical mode. "
         "Desktop color depth is not the panel or link depth. Scale excludes Qt application scaling. "
         "Wayland scale derived from logical size may include rounding; integer scale is a fallback. "
-        "Reload properties to refresh. Unmatched or ambiguous connector names remain unavailable."));
-    displayLayout->addWidget(displayNotice);
-    auto *displayScroll = new QScrollArea(displayPage_);
-    displayScroll->setWidgetResizable(true);
-    auto *displayContent = new QWidget(displayScroll);
-    displayGroups_ = new QVBoxLayout(displayContent);
-    displayGroups_->setSizeConstraint(QLayout::SetMinAndMaxSize);
-    displayScroll->setWidget(displayContent);
-    displayLayout->addWidget(displayScroll, 1);
-    auto *copyDisplay = new QPushButton(tr("Copy display properties"), displayPage_);
-    displayLayout->addWidget(copyDisplay);
-    connect(copyDisplay, &QPushButton::clicked, this, [this] {
-        QApplication::clipboard()->setText(displayText_);
-    });
-    usbPage_ = new QWidget(tabs);
-    usbPage_->hide();
-    auto *usbLayout = new QVBoxLayout(usbPage_);
-    auto *usbNotice = plainLabel(tr("ℹ️ USB configuration snapshot"), usbPage_);
-    usbNotice->setToolTip(tr("Power information is declared by the active USB configuration, not measured consumption. "
-        "USB version and speed are also available as raw values on Details. Reload properties to refresh."));
-    usbLayout->addWidget(usbNotice);
-    auto *usbScroll = new QScrollArea(usbPage_);
-    usbScroll->setWidgetResizable(true);
-    auto *usbContent = new QWidget(usbScroll);
-    usbGroups_ = new QVBoxLayout(usbContent);
-    usbGroups_->setSizeConstraint(QLayout::SetMinAndMaxSize);
-    usbScroll->setWidget(usbContent);
-    usbLayout->addWidget(usbScroll, 1);
-    auto *copyUsb = new QPushButton(tr("Copy USB properties"), usbPage_);
-    usbLayout->addWidget(copyUsb);
-    connect(copyUsb, &QPushButton::clicked, this, [this] {
-        QApplication::clipboard()->setText(usbText_);
-    });
-    batteryPage_ = new QWidget(tabs);
-    batteryPage_->hide();
-    auto *batteryLayout = new QVBoxLayout(batteryPage_);
-    auto *batteryNotice = plainLabel(tr("ℹ️ Battery snapshot for this device"), batteryPage_);
-    batteryNotice->setToolTip(tr("Readings are reported by the kernel and battery firmware. Capacity retention is an estimate from "
+        "Reload properties to refresh. Unmatched or ambiguous connector names remain unavailable."),
+        tr("Copy display properties"));
+    addSnapshotPage(usbPage_, usbGroups_, &usbText_,
+        tr("ℹ️ USB configuration snapshot"),
+        tr("Power information is declared by the active USB configuration, not measured consumption. "
+        "USB version and speed are also available as raw values on Details. Reload properties to refresh."),
+        tr("Copy USB properties"));
+    addSnapshotPage(batteryPage_, batteryGroups_, &batteryText_,
+        tr("ℹ️ Battery snapshot for this device"),
+        tr("Readings are reported by the kernel and battery firmware. Capacity retention is an estimate from "
         "compatible full/design values, not a complete health assessment. Energy and charge units remain separate. "
-        "Reload properties to refresh; no background monitoring or battery settings are changed."));
-    batteryLayout->addWidget(batteryNotice);
-    auto *batteryScroll = new QScrollArea(batteryPage_);
-    batteryScroll->setWidgetResizable(true);
-    auto *batteryContent = new QWidget(batteryScroll);
-    batteryGroups_ = new QVBoxLayout(batteryContent);
-    batteryGroups_->setSizeConstraint(QLayout::SetMinAndMaxSize);
-    batteryScroll->setWidget(batteryContent);
-    batteryLayout->addWidget(batteryScroll, 1);
-    auto *copyBattery = new QPushButton(tr("Copy Battery properties"), batteryPage_);
-    batteryLayout->addWidget(copyBattery);
-    connect(copyBattery, &QPushButton::clicked, this, [this] {
-        QApplication::clipboard()->setText(batteryText_);
-    });
-    pciePage_ = new QWidget(tabs);
-    pciePage_->hide();
-    auto *pcieLayout = new QVBoxLayout(pciePage_);
-    auto *pcieNotice = plainLabel(tr("ℹ️ PCIe link snapshot for this device"), pciePage_);
-    pcieNotice->setToolTip(tr("Current link readings can reflect power management and topology; a lower speed is not a fault verdict. "
+        "Reload properties to refresh; no background monitoring or battery settings are changed."),
+        tr("Copy Battery properties"));
+    addSnapshotPage(pciePage_, pcieGroups_, &pcieText_,
+        tr("ℹ️ PCIe link snapshot for this device"),
+        tr("Current link readings can reflect power management and topology; a lower speed is not a fault verdict. "
         "Device maxima do not establish the capacity of the upstream path. Reading these sysfs attributes may temporarily "
-        "runtime-resume the device. Reload properties to refresh."));
-    pcieLayout->addWidget(pcieNotice);
-    auto *pcieScroll = new QScrollArea(pciePage_);
-    pcieScroll->setWidgetResizable(true);
-    auto *pcieContent = new QWidget(pcieScroll);
-    pcieGroups_ = new QVBoxLayout(pcieContent);
-    pcieGroups_->setSizeConstraint(QLayout::SetMinAndMaxSize);
-    pcieScroll->setWidget(pcieContent);
-    pcieLayout->addWidget(pcieScroll, 1);
-    auto *copyPcie = new QPushButton(tr("Copy PCIe properties"), pciePage_);
-    pcieLayout->addWidget(copyPcie);
-    connect(copyPcie, &QPushButton::clicked, this, [this] {
-        QApplication::clipboard()->setText(pcieText_);
-    });
+        "runtime-resume the device. Reload properties to refresh."),
+        tr("Copy PCIe properties"));
     storagePage_ = new QWidget(tabs);
     storagePage_->hide();
     auto *storageLayout = new QVBoxLayout(storagePage_);
