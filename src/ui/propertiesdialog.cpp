@@ -99,7 +99,12 @@ QLabel *plainLabel(const QString &text, QWidget *parent)
     label->setFocusPolicy(Qt::StrongFocus);
     return label;
 }
-QVBoxLayout *reportPageLayout(QWidget *parent)
+struct ReportPageLayout {
+    QVBoxLayout *contents;
+    QHBoxLayout *actions;
+};
+// Only report content scrolls; tab actions stay above the dialog-wide footer.
+ReportPageLayout reportPageLayout(QWidget *parent)
 {
     auto *layout = new QVBoxLayout(parent);
     auto *scroll = new QScrollArea(parent);
@@ -110,8 +115,10 @@ QVBoxLayout *reportPageLayout(QWidget *parent)
     contents->setContentsMargins(0, 0, 0, 0);
     contents->setAlignment(Qt::AlignTop);
     scroll->setWidget(page);
-    layout->addWidget(scroll);
-    return contents;
+    layout->addWidget(scroll, 1);
+    auto *actions = new QHBoxLayout;
+    layout->addLayout(actions);
+    return {contents, actions};
 }
 QFormLayout *storageDetailsForm(QVBoxLayout *layout, QWidget *parent)
 {
@@ -310,7 +317,8 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
 
     volumesPage_ = new QWidget(tabs);
     volumesPage_->hide();
-    auto *volumesLayout = reportPageLayout(volumesPage_);
+    const auto volumesReport = reportPageLayout(volumesPage_);
+    auto *volumesLayout = volumesReport.contents;
     volumesNotice_ = plainLabel(tr("ℹ️ Related volumes and mounts"), volumesPage_);
     volumesLayout->addWidget(volumesNotice_);
     volumesTable_ = new ReportTable(0, 5, volumesPage_);
@@ -321,7 +329,7 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     volumesTable_->setColumnWidth(1, 110);
     volumesTable_->setColumnWidth(2, 180);
     volumesLayout->addWidget(volumesTable_);
-    auto *volumeButtons = new QHBoxLayout;
+    auto *volumeButtons = volumesReport.actions;
     volumeDetailsButton_ = new QPushButton(tr("Volume details…"), volumesPage_);
     volumeDetailsButton_->setEnabled(false);
     auto *copyVolume = new QPushButton(tr("Copy selected volume"), volumesPage_);
@@ -330,7 +338,6 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     volumeButtons->addWidget(copyVolume);
     volumeButtons->addWidget(copyVolumes);
     volumeButtons->addStretch();
-    volumesLayout->addLayout(volumeButtons);
     volumesLayout->addStretch();
     connect(volumesTable_, &QTableWidget::currentCellChanged, this, [this] {
         volumeDetailsButton_->setEnabled(volumesTable_->currentRow() >= 0);
@@ -408,13 +415,14 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     tabs->addTab(details, tr("Details"));
     resourcesPage_ = new QWidget(tabs);
     resourcesPage_->hide(); // Not a tab until metadata confirms applicability.
-    auto *resourcesLayout = reportPageLayout(resourcesPage_);
+    const auto resourcesReport = reportPageLayout(resourcesPage_);
+    auto *resourcesLayout = resourcesReport.contents;
     resourcesTable_ = new ReportTable(0, 3, resourcesPage_);
     resourcesTable_->setHorizontalHeaderLabels({tr("Resource type"), tr("Setting"), tr("Details")});
     resourcesTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
     resourcesTable_->setSelectionMode(QAbstractItemView::ExtendedSelection);
     resourcesLayout->addWidget(resourcesTable_);
-    auto *resourceButtons = new QHBoxLayout;
+    auto *resourceButtons = resourcesReport.actions;
     auto *copyResourceSelection = new QPushButton(tr("Copy selection"), resourcesPage_);
     auto *copyResourceAll = new QPushButton(tr("Copy all resources"), resourcesPage_);
     copyResourceSelection->setEnabled(false);
@@ -427,11 +435,11 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     resourceButtons->addWidget(copyResourceSelection);
     resourceButtons->addWidget(copyResourceAll);
     resourceButtons->addStretch();
-    resourcesLayout->addLayout(resourceButtons);
     resourcesLayout->addStretch();
     // The tab appears only after collection finds resource records or read errors.
     auto *eventsPage = new QWidget(tabs);
-    auto *eventsLayout = reportPageLayout(eventsPage);
+    const auto eventsReport = reportPageLayout(eventsPage);
+    auto *eventsLayout = eventsReport.contents;
     eventsNotice_ = plainLabel(tr("ℹ️ Live udev events since the application started"), eventsPage);
     eventsLayout->addWidget(eventsNotice_);
     eventsTable_ = new ReportTable(0, 3, eventsPage);
@@ -442,7 +450,7 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     eventDetails_ = new QPlainTextEdit(eventsPage);
     eventDetails_->setReadOnly(true);
     eventsLayout->addWidget(eventDetails_, 1);
-    auto *eventButtons = new QHBoxLayout;
+    auto *eventButtons = eventsReport.actions;
     auto *copyEventSelection = new QPushButton(tr("Copy selection"), eventsPage);
     auto *copyEventAll = new QPushButton(tr("Copy all events"), eventsPage);
     copyEventSelection->setEnabled(false);
@@ -456,7 +464,6 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     eventButtons->addWidget(copyEventSelection);
     eventButtons->addWidget(copyEventAll);
     eventButtons->addStretch();
-    eventsLayout->addLayout(eventButtons);
     tabs->addTab(eventsPage, tr("Events"));
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
     reload_ = buttons->addButton(tr("Reload properties"), QDialogButtonBox::ActionRole);
