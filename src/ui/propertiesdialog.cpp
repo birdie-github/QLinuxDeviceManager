@@ -321,15 +321,21 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     volumesTable_->setColumnWidth(1, 110);
     volumesTable_->setColumnWidth(2, 180);
     volumesLayout->addWidget(volumesTable_, 2);
-    volumeDetails_ = storageDetailsForm(volumesLayout, volumesPage_);
     auto *volumeButtons = new QHBoxLayout;
+    volumeDetailsButton_ = new QPushButton(tr("Volume details…"), volumesPage_);
+    volumeDetailsButton_->setEnabled(false);
     auto *copyVolume = new QPushButton(tr("Copy selected volume"), volumesPage_);
     auto *copyVolumes = new QPushButton(tr("Copy all volumes"), volumesPage_);
+    volumeButtons->addWidget(volumeDetailsButton_);
     volumeButtons->addWidget(copyVolume);
     volumeButtons->addWidget(copyVolumes);
     volumeButtons->addStretch();
     volumesLayout->addLayout(volumeButtons);
-    connect(volumesTable_, &QTableWidget::currentCellChanged, this, [this] { showVolume(); });
+    connect(volumesTable_, &QTableWidget::currentCellChanged, this, [this] {
+        volumeDetailsButton_->setEnabled(volumesTable_->currentRow() >= 0);
+    });
+    connect(volumeDetailsButton_, &QPushButton::clicked, this, &PropertiesDialog::showVolumeDetails);
+    connect(volumesTable_, &QTableWidget::cellDoubleClicked, this, [this] { showVolumeDetails(); });
     connect(copyVolume, &QPushButton::clicked, this, [this] {
         QApplication::clipboard()->setText(selectedStorageText(storagePresentation_.volumes, volumesTable_->currentRow()));
     });
@@ -1732,7 +1738,7 @@ void PropertiesDialog::rebuildStorage()
         if (selected < 0 && volumesTable_->rowCount()) selected = 0;
         volumesTable_->setCurrentCell(selected, 0);
     }
-    showVolume();
+    volumeDetailsButton_->setEnabled(volumesTable_->currentRow() >= 0);
     {
         const QSignalBlocker blocker(healthDrive_);
         healthDrive_->clear();
@@ -1747,16 +1753,34 @@ void PropertiesDialog::rebuildStorage()
     }
     showHealth();
 }
-void PropertiesDialog::showVolume()
+void PropertiesDialog::showVolumeDetails()
 {
     const int row = volumesTable_->currentRow();
-    if (row < 0 || row >= storagePresentation_.volumes.size()) {
-        clearForm(volumeDetails_);
-        volumeDetails_->addRow(plainLabel(tr("No related volume metadata available."), volumeDetails_->parentWidget()));
-        return;
-    }
-    const StorageDisplayRow &entry = storagePresentation_.volumes[row];
-    showStorageFields(volumeDetails_, entry.fields);
+    if (row < 0 || row >= storagePresentation_.volumes.size()) return;
+    // Own the selected snapshot while the modal dialog runs its event loop.
+    const StorageDisplayRow entry = storagePresentation_.volumes[row];
+    QDialog details(this);
+    details.setWindowTitle(tr("Volume details"));
+    details.resize(720, 520);
+    auto *layout = new QVBoxLayout(&details);
+    layout->addWidget(plainLabel(entry.name, &details));
+    auto *scroll = new QScrollArea(&details);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    auto *page = new QWidget(scroll);
+    auto *contents = new QVBoxLayout(page);
+    showStorageFields(storageDetailsForm(contents, page), entry.fields);
+    contents->addStretch();
+    scroll->setWidget(page);
+    layout->addWidget(scroll, 1);
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, &details);
+    auto *copy = buttons->addButton(tr("Copy volume details"), QDialogButtonBox::ActionRole);
+    connect(copy, &QPushButton::clicked, &details, [entry] {
+        QApplication::clipboard()->setText(storageRowsText({entry}));
+    });
+    connect(buttons, &QDialogButtonBox::rejected, &details, &QDialog::reject);
+    layout->addWidget(buttons);
+    details.exec();
 }
 void PropertiesDialog::showHealth()
 {

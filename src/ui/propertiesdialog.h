@@ -43,7 +43,7 @@ private:
     void rebuildPcie();
     void testGpuLink();
     void rebuildBattery();
-    void showVolume();
+    void showVolumeDetails();
     void showHealth();
     void copyResources(bool selectedOnly);
     void showDetail();
@@ -64,7 +64,7 @@ private:
     QWidget *volumesPage_ = nullptr;
     QWidget *healthPage_ = nullptr;
     QTableWidget *volumesTable_ = nullptr;
-    QFormLayout *volumeDetails_ = nullptr;
+    QPushButton *volumeDetailsButton_ = nullptr;
     QComboBox *healthDrive_ = nullptr;
     QVBoxLayout *healthGroups_ = nullptr;
     QLabel *storageNotice_ = nullptr;
