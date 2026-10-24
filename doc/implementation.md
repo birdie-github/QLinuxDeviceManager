@@ -819,3 +819,31 @@ If launched as root, the window identifies administrative mode and settings use
 `/root/.config`, `/root/.local/share` and `/root/.cache`. Root launch requires an
 already-authorized display/session environment; the application does not change
 display access permissions or invoke sudo itself.
+
+## Processor core groups and cache sharing
+
+The Processor section retains present/online CPU and physical core counts and adds
+SMT policy, online core groups, and cache sharing domains. Core groups use package,
+validated disjoint `cpu_core/cpus` and `cpu_atom/cpus` PMU lists when available,
+and cache level/type/size/sharing geometry. No CPU-number, clock-speed, model-name,
+or missing-L3 heuristic assigns an LP-E label. Without PMU lists the type is
+unspecified; without complete cache data grouping uses package and type only.
+
+Each group reports physical core identities, logical CPU IDs, online threads per
+core, and the range of `cpuinfo_max_freq` values. A favored core's higher maximum
+does not split an otherwise identical group. Missing or malformed frequency data
+makes that group's maximum unavailable rather than displaying a partial maximum.
+These are kernel-reported limits, not sustained or measured frequencies.
+
+Cache records are deduplicated by level/type and full sharing set, retaining size
+and logical CPU associations. Equal-sized instances are summarized together with
+each sharing set shown separately; offline siblings may appear in those sets.
+The existing limits on CPU lists and cache enumeration are retained, with at most
+65536 unique cache/CPU associations. Failed cache collection publishes no partial
+hierarchy. Present/online lists are rechecked before publication and observed
+changes invalidate both new detail sections along with the existing totals.
+
+Collection uses the existing system information worker and requires no new command,
+CPUID affinity changes, MSR access, or elevated permissions. All new fields are
+included in refresh and Copy. The system-properties fixture includes 4/8/4 hybrid,
+favored-core, missing-cache, homogeneous SMT, and multiple-package cases.

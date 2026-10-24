@@ -19,6 +19,44 @@ int main(int argc, char **argv)
     check(parseOsName("PRETTY_NAME=\"unterminated\n").state == ReadState::Error, "Malformed OS quote is explicit error");
     check(parseOsName("NAME=Example\n").value == "Linux", "Missing PRETTY_NAME uses documented Linux default");
     check(parseOsName("PRETTY_NAME=First\nPRETTY_NAME=Second\n").value == "Second", "Last OS definition wins");
+    // Panther Lake-style fixture: four private-L2 P cores, two E clusters
+    // sharing L3, and a third efficiency cluster with no reported L3.
+    QVector<CpuTopologyRecord> topology;
+    QVector<CpuCacheRecord> cacheTopology;
+    QSet<int> llc;
+    for (int cpu = 0; cpu < 16; ++cpu) {
+        topology.append({cpu, "0", QStringLiteral("0:0:%1").arg(cpu), cpu < 4 ? 1 : 2,
+                         {ReadState::Available, cpu < 4 ? (cpu == 2 ? "4800000" : "4700000")
+                                                      : cpu < 12 ? "3700000" : "3300000", 0}});
+        cacheTopology.append({1, "Data", cpu < 4 ? 48ULL * 1024 : 32ULL * 1024, {cpu}});
+        cacheTopology.append({1, "Instruction", 64ULL * 1024, {cpu}});
+        if (cpu < 4) cacheTopology.append({2, "Unified", 3ULL * 1024 * 1024, {cpu}});
+        if (cpu < 12) llc.insert(cpu);
+    }
+    for (int first : {4, 8, 12})
+        cacheTopology.append({2, "Unified", 4ULL * 1024 * 1024, {first, first + 1, first + 2, first + 3}});
+    cacheTopology.append({3, "Unified", 18ULL * 1024 * 1024, llc});
+    const auto groups = groupCpuTopology(topology, cacheTopology);
+    check(groups.size() == 3, "Cache topology separates two efficiency groups");
+    if (groups.size() == 3) {
+        check(groups[0].members.size() == 4 && groups[1].members.size() == 8 && groups[2].members.size() == 4,
+              "Expected 4/8/4 topology; favored P core does not become a separate group");
+        check(groups[2].members.constFirst().kind == 2, "No invented LP-E type");
+    }
+    check(groupCpuTopology(topology, {}).size() == 2, "Missing cache metadata does not infer an LP-E group");
+    QVector<CpuTopologyRecord> smtTopology {
+        {0, "0", "0:0:0", 0, {}}, {2, "0", "0:0:0", 0, {}},
+        {1, "0", "0:0:1", 0, {}}, {3, "0", "0:0:1", 0, {}}};
+    const auto smtGroups = groupCpuTopology(smtTopology, {});
+    check(smtGroups.size() == 1 && smtGroups[0].members.size() == 4,
+          "Homogeneous SMT CPUs remain one group");
+    QSet<QString> physical;
+    for (const auto &member : smtGroups[0].members) physical.insert(member.core);
+    check(physical.size() == 2, "SMT logical CPUs retain their shared physical core identities");
+    smtTopology[3].package = "1";
+    check(groupCpuTopology(smtTopology, {}).size() == 2, "Packages stay separate");
+    check(cpuListText({0, 1, 2, 4, 8, 9}) == "0-2,4,8-9", "CPU ranges are compact and sorted");
+    check(cpuListText({}).isEmpty(), "Empty CPU set stays empty");
     QSet<int> cpus;
     check(parseCpuList("0-3,8,10-11", cpus) && cpus.size() == 7 && cpus.contains(11) && !cpus.contains(9),
           "Sparse CPU ranges retain actual IDs");

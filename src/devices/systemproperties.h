@@ -1,6 +1,7 @@
 #pragma once
 #include "device.h"
 #include "secureboot.h"
+#include "cputopology.h"
 #include <QThread>
 #include <QSet>
 
@@ -21,6 +22,8 @@ struct GpuResizableBar {
 };
 
 struct SystemProperties {
+    QVector<CpuCoreGroup> cpuGroups;
+    QVector<CpuCacheRecord> cpuCaches;
     Attribute gpuRebarStatus;
     QVector<GpuResizableBar> gpuRebar;
     FirmwareMemoryInformation memoryDevices;

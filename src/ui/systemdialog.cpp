@@ -126,7 +126,9 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
     field(processor, "cores", tr("Physical cores (reported topology)"));
     field(processor, "logical", tr("Logical CPUs present"));
     field(processor, "online", tr("Logical CPUs online"));
-    field(processor, "caches", tr("CPU caches (online CPUs)"));
+    field(processor, "smt", tr("Simultaneous multithreading (SMT/HT)"));
+    field(processor, "core_groups", tr("Core groups (online CPUs)"));
+    field(processor, "cache_topology", tr("Cache hierarchy (online CPUs)"));
     field(processor, "instruction_sets", tr("Instruction sets / CPU features"));
 
     auto *memory = group(tr("RAM/Memory"));
@@ -261,6 +263,80 @@ QString SystemDialog::displayValue(const QString &key, const Attribute &value) c
     if (key == "uptime") {
         const qulonglong seconds = value.value.toULongLong();
         return tr("%1 days, %2 hours, %3 minutes").arg(seconds / 86400).arg(seconds / 3600 % 24).arg(seconds / 60 % 60);
+    }
+    if (key == "smt") {
+        if (value.value == "on") return tr("Enabled (kernel policy)");
+        if (value.value == "off") return tr("Disabled");
+        if (value.value == "forceoff") return tr("Disabled by system policy");
+        if (value.value == "notsupported") return tr("Not supported (reported by kernel)");
+        if (value.value == "notimplemented") return tr("Status reporting not implemented by kernel");
+        return tr("Unknown (%1)").arg(value.value);
+    }
+    if (key == "core_groups") {
+        QStringList lines;
+        int ordinal = 0;
+        for (const CpuCoreGroup &group : snapshot_.cpuGroups) {
+            if (group.members.isEmpty()) continue;
+            const auto &first = group.members.constFirst();
+            const QString kind = first.kind == 1 ? tr("Performance cores")
+                : first.kind == 2 ? tr("Efficiency cores") : tr("Cores (type unspecified)");
+            QSet<int> cpus;
+            QMap<QString, int> threads;
+            qulonglong minimum = std::numeric_limits<qulonglong>::max(), maximum = 0;
+            Attribute frequencyError;
+            bool frequencyComplete = true;
+            for (const auto &member : group.members) {
+                cpus.insert(member.cpu);
+                ++threads[member.core];
+                if (member.maximumKhz.state != ReadState::Available) {
+                    if (frequencyComplete) frequencyError = member.maximumKhz;
+                    frequencyComplete = false;
+                } else {
+                    const qulonglong khz = member.maximumKhz.value.toULongLong();
+                    minimum = qMin(minimum, khz);
+                    maximum = qMax(maximum, khz);
+                }
+            }
+            int leastThreads = std::numeric_limits<int>::max(), mostThreads = 0;
+            for (int count : threads) {
+                leastThreads = qMin(leastThreads, count);
+                mostThreads = qMax(mostThreads, count);
+            }
+            const QString threadCount = leastThreads == mostThreads ? QString::number(mostThreads)
+                : tr("%1–%2").arg(leastThreads).arg(mostThreads);
+            const auto ghz = [](qulonglong khz) { return QLocale().toString(khz / 1000000.0, 'g', 6); };
+            const QString frequency = !frequencyComplete ? propertyReadValue(frequencyError)
+                : minimum == maximum ? tr("%1 GHz").arg(ghz(maximum))
+                : tr("%1–%2 GHz").arg(ghz(minimum), ghz(maximum));
+            lines.append(tr("Group %1 — %2 (package %3)\n%4 cores, %5 threads; %6 online threads/core\nReported maximum: %7\nLogical CPUs: %8")
+                .arg(++ordinal).arg(kind, first.package).arg(threads.size()).arg(cpus.size())
+                .arg(threadCount, frequency, cpuListText(cpus)));
+        }
+        return lines.isEmpty() ? tr("Unavailable") : lines.join("\n\n");
+    }
+    if (key == "cache_topology") {
+        // Keep each sharing domain explicit; aggregate equal-sized cache instances.
+        QMap<QString, QVector<CpuCacheRecord>> kinds;
+        for (const auto &cache : snapshot_.cpuCaches)
+            kinds[QStringLiteral("%1/%2/%3").arg(cache.level).arg(cache.type).arg(cache.bytes)].append(cache);
+        QStringList lines;
+        for (auto it = kinds.cbegin(); it != kinds.cend(); ++it) {
+            auto instances = it.value();
+            std::sort(instances.begin(), instances.end(), [](const auto &a, const auto &b) {
+                return *std::min_element(a.cpus.cbegin(), a.cpus.cend())
+                    < *std::min_element(b.cpus.cbegin(), b.cpus.cend());
+            });
+            const auto &cache = instances.constFirst();
+            const QString type = cache.type == "Data" ? tr("data")
+                : cache.type == "Instruction" ? tr("instruction") : tr("unified");
+            QStringList sharing;
+            for (const auto &instance : instances) sharing.append(cpuListText(instance.cpus));
+            lines.append(tr("L%1 %2: %3 × %4\nLogical CPUs per instance: %5")
+                .arg(cache.level).arg(type).arg(instances.size())
+                .arg(QLocale().formattedDataSize(static_cast<qlonglong>(cache.bytes), 0, QLocale::DataSizeIecFormat),
+                     sharing.join("; ")));
+        }
+        return lines.join("\n\n");
     }
     if (key == "instruction_sets") {
         const QStringList groups = value.value.split('\n');

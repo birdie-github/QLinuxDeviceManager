@@ -213,6 +213,18 @@ void cpuTopology(SystemProperties &result)
         : present.state == ReadState::Available ? failed(EINVAL) : present;
     result.values["online"] = haveOnline ? available(QString::number(active.size()))
         : online.state == ReadState::Available ? failed(EINVAL) : online;
+    result.values["smt"] = readText(base + "/smt/control");
+    result.sources["smt"] = base + "/smt/control";
+    const QString pmuBase = "/sys/bus/event_source/devices/";
+    const Attribute corePmu = readText(pmuBase + "cpu_core/cpus");
+    const Attribute atomPmu = readText(pmuBase + "cpu_atom/cpus");
+    QSet<int> performance, efficiency;
+    const bool haveKinds = corePmu.state == ReadState::Available && atomPmu.state == ReadState::Available
+        && parseCpuList(corePmu.value, performance) && parseCpuList(atomPmu.value, efficiency)
+        && !performance.intersects(efficiency);
+    QVector<CpuTopologyRecord> records;
+    result.sources["core_groups"] = base + "/cpu*/topology, cpu*/cpufreq/cpuinfo_max_freq; "
+        + pmuBase + "{cpu_core,cpu_atom}/cpus; online CPUs only; groups use core type and cache geometry/sharing, not clock speed";
     QSet<QString> packages, cores;
     Attribute topologyError;
     bool topologyComplete = havePresent;
@@ -235,9 +247,19 @@ void cpuTopology(SystemProperties &result)
                 break;
             }
             packages.insert(QString::number(packageId));
-            cores.insert(QStringLiteral("%1:%2:%3").arg(packageId)
+            const QString coreIdentity = QStringLiteral("%1:%2:%3").arg(packageId)
                 .arg(number(die, dieId) ? QString::number(dieId) : QStringLiteral("unknown"))
-                .arg(coreId));
+                .arg(coreId);
+            cores.insert(coreIdentity);
+            if (active.contains(cpu)) {
+                Attribute maximum = readText(base + QStringLiteral("/cpu%1/cpufreq/cpuinfo_max_freq").arg(cpu));
+                qulonglong khz = 0;
+                if (maximum.state == ReadState::Available
+                    && (!unsignedDecimal(maximum.value, khz) || khz == 0 || khz > 1000000000))
+                    maximum = failed(EINVAL);
+                const int kind = !haveKinds ? 0 : performance.contains(cpu) ? 1 : efficiency.contains(cpu) ? 2 : 0;
+                records.append({cpu, QString::number(packageId), coreIdentity, kind, maximum});
+            }
         }
     } else topologyError = result.values.value("logical");
     result.values["sockets"] = topologyComplete ? available(QString::number(packages.size())) : topologyError;
@@ -245,11 +267,17 @@ void cpuTopology(SystemProperties &result)
     for (const char *key : {"logical", "online", "sockets", "cores"})
         result.sources[QLatin1String(key)] = base + "/present, online and cpu*/topology";
 
-    if (!haveOnline) { result.values["caches"] = result.values.value("online"); return; }
+    if (!haveOnline || !havePresent || !(active - cpus).isEmpty()) {
+        result.values["caches"] = result.values["core_groups"] = result.values["cache_topology"] =
+            !haveOnline ? result.values.value("online") : !havePresent ? result.values.value("logical") : failed(EAGAIN);
+        return;
+    }
+
     // Deduplicate by level/type and canonical sharing set, never by CPU number.
     QHash<QString, qulonglong> seen;
     QMap<QString, QPair<qulonglong, int>> totals;
     int entries = 0;
+    int sharingEntries = 0;
     Attribute cacheError;
     bool complete = true;
     for (int cpu : active) {
@@ -278,7 +306,7 @@ void cpuTopology(SystemProperties &result)
             else if (sizeText.endsWith('M')) { scale = 1024 * 1024; sizeText.chop(1); }
             bool ok = false;
             const qulonglong amount = sizeText.toULongLong(&ok);
-            if (!number(level, levelNumber) || !levelNumber || !ok || !amount
+            if (!number(level, levelNumber) || !levelNumber || levelNumber > 255 || !ok || !amount
                 || amount > std::numeric_limits<qulonglong>::max() / scale
                 || !parseCpuList(sharing.value, siblings) || !siblings.contains(cpu)
                 || (type.value != "Data" && type.value != "Instruction" && type.value != "Unified")) {
@@ -294,7 +322,10 @@ void cpuTopology(SystemProperties &result)
             if (seen.contains(key)) {
                 if (seen.value(key) != bytes) { cacheError = failed(EAGAIN); complete = false; break; }
             } else {
+                sharingEntries += siblings.size();
+                if (sharingEntries > 65536) { cacheError = failed(EOVERFLOW); complete = false; break; }
                 seen.insert(key, bytes);
+                result.cpuCaches.append({static_cast<int>(levelNumber), type.value, bytes, siblings});
                 auto &total = totals[kind];
                 if (bytes > static_cast<qulonglong>(std::numeric_limits<qlonglong>::max())
                     || total.first > static_cast<qulonglong>(std::numeric_limits<qlonglong>::max()) - bytes) {
@@ -311,10 +342,18 @@ void cpuTopology(SystemProperties &result)
         lines.append(QStringLiteral("%1\t%2\t%3").arg(it.key()).arg(it.value().first).arg(it.value().second));
     result.values["caches"] = complete && !lines.isEmpty() ? available(lines.join('\n')) : cacheError;
     result.sources["caches"] = base + "/cpu*/cache/index*/{level,type,size,shared_cpu_list}; online CPUs only";
+    if (!complete) result.cpuCaches.clear();
+    result.values["cache_topology"] = result.values.value("caches");
+    result.sources["cache_topology"] = result.sources.value("caches");
+    result.values["core_groups"] = topologyComplete ? available(QString()) : topologyError;
+    if (topologyComplete) result.cpuGroups = groupCpuTopology(records, result.cpuCaches);
     // Detect observed hotplug during collection rather than publish mixed counts.
-    if (readText(base + "/present").value != present.value || readText(base + "/online").value != online.value)
-        for (const char *key : {"logical", "online", "sockets", "cores", "caches"})
+    if (readText(base + "/present").value != present.value || readText(base + "/online").value != online.value) {
+        for (const char *key : {"logical", "online", "sockets", "cores", "caches", "core_groups", "cache_topology"})
             result.values[QLatin1String(key)] = failed(EAGAIN);
+        result.cpuGroups.clear();
+        result.cpuCaches.clear();
+    }
 }
 }
 

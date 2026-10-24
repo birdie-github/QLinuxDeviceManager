@@ -78,7 +78,7 @@ add_executable(qlinuxdevicemanager
     src/ui/gpulinktest.h src/ui/gpulinktest.cpp
     src/ui/propertiesdialog.h src/ui/propertiesdialog.cpp
     src/devices/secureboot.h src/devices/secureboot.cpp
-    src/devices/systemproperties.h src/devices/systemproperties.cpp
+    src/devices/systemproperties.h src/devices/systemproperties.cpp src/devices/cputopology.h
     src/ui/systemdialog.h src/ui/systemdialog.cpp)
 # Embed existing PNG assets so a build-tree executable has its own icon without
 # an installed icon theme or Qt SVG image plugin. Keep every supplied raster size.
@@ -229,7 +229,7 @@ if(BUILD_TESTING)
     endif()
     add_test(NAME device-search COMMAND device-search-test)
     add_executable(system-properties-test tests/system-properties.cpp
-        src/devices/systemproperties.cpp src/devices/systemproperties.h
+        src/devices/systemproperties.cpp src/devices/systemproperties.h src/devices/cputopology.h
         src/devices/secureboot.cpp src/devices/secureboot.h
         src/devices/cpumetadata.cpp src/devices/cpumetadata.h)
     target_include_directories(system-properties-test PRIVATE src/devices)
