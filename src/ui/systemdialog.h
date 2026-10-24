@@ -32,4 +32,5 @@ private:
     SystemProperties snapshot_;
     QPushButton *refresh_ = nullptr;
     QPushButton *copy_ = nullptr;
+    QPushButton *featuresCopy_ = nullptr;
 };

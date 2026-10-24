@@ -153,9 +153,23 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
     field(processor, "cores", tr("Physical cores"));
     field(processor, "logical", tr("Logical CPUs"));
     field(processor, "smt", tr("SMT/HT"));
+    const QString featuresCaption = tr("Instruction sets / CPU features");
+    auto *featuresLabel = new QLabel(featuresCaption, processor->parentWidget());
+    names.append(featuresLabel);
+    featuresCopy_ = new QPushButton(tr("Copy"), processor->parentWidget());
+    featuresCopy_->setAccessibleName(tr("Copy instruction sets and CPU features"));
+    featuresCopy_->setEnabled(false);
+    const int featuresRow = processor->rowCount();
+    processor->addWidget(featuresLabel, featuresRow, 0);
+    processor->addWidget(featuresCopy_, featuresRow, 1, Qt::AlignLeading);
+    captions_.insert("instruction_sets", featuresCaption);
+    order_.append("instruction_sets");
+    connect(featuresCopy_, &QPushButton::clicked, this, [this] {
+        QApplication::clipboard()->setText(displayValue("instruction_sets", snapshot_.values.value("instruction_sets")));
+    });
     field(processor, "core_groups", tr("Core groups (online CPUs)"));
     field(processor, "cache_topology", tr("Cache hierarchy (online CPUs)"));
-    field(processor, "instruction_sets", tr("Instruction sets / CPU features"));
+
 
     auto *memory = group(tr("RAM/Memory"));
     field(memory, "physical_memory", tr("Physical RAM"));
@@ -598,6 +612,11 @@ void SystemDialog::acceptResult(SystemProperties result)
     rebuildMok();
     rebuildMemory();
     setBusy(false);
+    const Attribute features = snapshot_.values.value("instruction_sets");
+    featuresCopy_->setEnabled(features.state == ReadState::Available && !features.value.isEmpty());
+    featuresCopy_->setToolTip(features.state == ReadState::Available
+        ? tr("Copy kernel-reported instruction sets and CPU features to the clipboard.")
+        : propertyReadValue(features));
     copy_->setEnabled(true);
 }
 void SystemDialog::copyAll()
