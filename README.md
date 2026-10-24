@@ -130,8 +130,16 @@ settings, mount filesystems or modify firmware variables. Most information is
 available without administrator privileges. Restricted or unsupported fields are
 shown explicitly; some PCIe connection details require root access.
 
-- **Drive health is cached information.** Viewing it does not run SMART tests or
-  request fresh health measurements. Missing warnings do not guarantee a healthy drive.
+- **Drive health primarily uses cached UDisks2 information.** For ATA read/write
+  counters, optional `smartctl` (smartmontools) is queried in a worker with
+  `-j -a -n standby`. This reads SMART data without starting a self-test and requests
+  that sleeping drives be skipped; device autodetection can still wake some bridges.
+  Raw counters normally require root/sudo or equivalent device permissions. Queries
+  have bounded output and a shared timeout. Missing tools, access failures or missing
+  counters leave an information button explaining the limitation. Raw counter byte
+  units are vendor-specific, so no universal bytes-per-increment is assumed.
+  Known UDisks2/libatasmart LBA scaling errors are not presented as actual totals.
+  Missing warnings do not guarantee a healthy drive.
 - **Reported capabilities are not performance tests.** Link speeds, battery
   capacity estimates and camera modes describe what the system or device reports.
 - **Resizable BAR has no universal BIOS on/off indicator.** The application shows

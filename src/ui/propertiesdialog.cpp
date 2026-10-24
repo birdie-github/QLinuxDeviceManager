@@ -34,6 +34,8 @@
 #include <QStyleOptionHeader>
 #include <QTimer>
 #include <QPushButton>
+#include <QToolButton>
+#include <QMessageBox>
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QSignalBlocker>
@@ -1868,7 +1870,7 @@ void PropertiesDialog::showHealth()
             tr("Current normalized value; not necessarily a percentage."),
             tr("Worst normalized value reported by the drive."),
             tr("Drive-reported normalized threshold."),
-            tr("UDisks2's interpreted value, not smartctl's raw attribute bytes."),
+            tr("UDisks2 interpreted value or smartctl raw counter, as labeled. See the value tooltip for its source and units."),
             tr("Raw attribute flags: bit 0 indicates pre-failure/old-age; bit 1 indicates online/offline collection.")
         };
         for (int column = 0; column < table->columnCount(); ++column) {
@@ -1892,6 +1894,24 @@ void PropertiesDialog::showHealth()
                 if (column == 0 || (column >= 2 && column <= 4) || column == 6)
                     item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
                 table->setItem(index, column, item);
+                if (column == 5 && !attribute.counterNotice.isEmpty()) {
+                    auto *cell = new QWidget(table);
+                    auto *cellLayout = new QHBoxLayout(cell);
+                    cellLayout->setContentsMargins(2, 0, 2, 0);
+                    cell->setToolTip(attribute.counterNotice);
+                    auto *info = new QToolButton(cell);
+                    info->setText(QStringLiteral("ℹ️"));
+                    info->setAutoRaise(true);
+                    info->setAccessibleName(tr("Raw SMART counter information"));
+                    info->setToolTip(attribute.counterNotice);
+                    const QString notice = attribute.counterNotice;
+                    connect(info, &QToolButton::clicked, this, [this, notice] {
+                        QMessageBox::information(this, tr("Raw SMART counters"), notice);
+                    });
+                    cellLayout->addWidget(info);
+                    cellLayout->addWidget(plainLabel(attribute.interpreted, cell), 1);
+                    table->setCellWidget(index, column, cell);
+                }
             }
         }
         layout->addWidget(table);

@@ -89,7 +89,7 @@ QString ataAttributeName(const QString &identifier)
     }
     return words.join(QLatin1Char(' '));
 }
-StorageDisplayAtaAttribute ataAttribute(const AtaSmartAttribute &attribute, const QString &drive)
+StorageDisplayAtaAttribute ataAttribute(const AtaSmartAttribute &attribute, const QString &drive, const QString &counterStatus)
 {
     const auto normalized = [](qint32 value) { return value < 0 ? tr("Unavailable") : QLocale().toString(value); };
     QString interpreted, tooltip;
@@ -110,10 +110,28 @@ StorageDisplayAtaAttribute ataAttribute(const AtaSmartAttribute &attribute, cons
     case 7: interpreted = tr("%1 MB").arg(QLocale().toString(attribute.interpreted)); break;
     default: interpreted = tr("Unavailable (unknown unit %1)").arg(attribute.unit); break;
     }
+    QString counterNotice;
+    QString source = drive + " : org.freedesktop.UDisks2.Drive.Ata.SmartGetAttributes : ID "
+        + QString::number(attribute.id) + " (" + attribute.name + ")";
+    if (attribute.name == "total-lbas-written" || attribute.name == "total-lbas-read") {
+        if (!attribute.rawCounter.isEmpty()) {
+            interpreted = tr("%1 (raw counter)").arg(QLocale().toString(attribute.rawCounter.toULongLong()));
+            tooltip = tr("Raw counter read by smartctl. Its byte scale is vendor-specific; no byte conversion is assumed.");
+            source = attribute.rawSource + '\n' + source;
+        } else {
+            interpreted = tr("Unavailable (raw counter)");
+            counterNotice = tr("Reading actual counters normally requires running the application as root or with sudo. "
+                "Install smartmontools if smartctl is missing.\n\n"
+                "Known UDisks2/libatasmart issue: cached Total LBAs Read/Written values may use incorrect "
+                "65536-sector scaling and produce greatly inflated totals. These values are not used as actual counters.");
+            if (!counterStatus.isEmpty()) counterNotice += "\n\n" + counterStatus;
+            tooltip = counterNotice;
+        }
+    }
     return {QString::number(attribute.id), attribute.name.isEmpty() ? tr("Unnamed attribute") : ataAttributeName(attribute.name),
         normalized(attribute.current), normalized(attribute.worst), normalized(attribute.threshold), interpreted,
         QStringLiteral("0x%1").arg(attribute.flags, 4, 16, QLatin1Char('0')),
-        drive + " : org.freedesktop.UDisks2.Drive.Ata.SmartGetAttributes : ID " + QString::number(attribute.id) + " (" + attribute.name + ")", tooltip};
+        source, tooltip, counterNotice};
 }
 void healthGroups(StorageDisplayRow &row, const StorageEntity &entity)
 {
@@ -188,7 +206,7 @@ void healthGroups(StorageDisplayRow &row, const StorageEntity &entity)
     std::sort(attributes.begin(), attributes.end(), [](const AtaSmartAttribute &a, const AtaSmartAttribute &b) {
         return a.id < b.id;
     });
-    for (const AtaSmartAttribute &attribute : attributes) row.ataAttributes.append(ataAttribute(attribute, entity.id));
+    for (const AtaSmartAttribute &attribute : attributes) row.ataAttributes.append(ataAttribute(attribute, entity.id, entity.ataCounterStatus));
 }
 QString relation(const StorageLink &link)
 {
@@ -365,7 +383,8 @@ QString storageRowsText(const QVector<StorageDisplayRow> &rows)
             for (const StorageDisplayAtaAttribute &attribute : row.ataAttributes)
                 attributes.append(tr("%1 (ID %2)\nNormalized value: %3\nWorst normalized value: %4\nThreshold: %5\nInterpreted value: %6\nFlags: %7\nSource: %8")
                     .arg(attribute.name, attribute.id, attribute.current, attribute.worst, attribute.threshold,
-                         attribute.interpreted, attribute.flags, attribute.source));
+                         attribute.interpreted, attribute.flags, attribute.source)
+                    + (attribute.interpretedTooltip.isEmpty() ? QString() : '\n' + attribute.interpretedTooltip));
             sections.append(attributes.join("\n\n"));
         }
         text.append(sections.join("\n\n"));

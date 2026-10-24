@@ -9,6 +9,7 @@ struct StorageDisplayField {
 struct StorageDisplayGroup { QString title; QVector<StorageDisplayField> fields; };
 struct StorageDisplayAtaAttribute {
     QString id, name, current, worst, threshold, interpreted, flags, source, interpretedTooltip;
+    QString counterNotice = {};
 };
 struct StorageDisplayRow {
     QString id, name, kind, capacity, filesystem, mounts;

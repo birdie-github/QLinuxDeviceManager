@@ -17,6 +17,11 @@
 #include <utility>
 #include <sys/stat.h>
 #ifdef QLDM_HAVE_DBUS
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QProcess>
+#include <QStandardPaths>
 #include <QDBusArgument>
 #include <QDBusConnection>
 #include <QDBusError>
@@ -562,6 +567,109 @@ void addServiceHealth(StorageEntity &entity, const StorageInterfaces &interfaces
     }
 }
 
+// Worker-only optional read. Share a time budget across related drives, bound
+// output, and never treat a JSON error envelope as a successful attribute read.
+void smartctlCounters(StorageEntity &entity, const StorageObjects &objects,
+                      const QMap<QString, QString> &blocks, QElapsedTimer &budget)
+{
+    const auto tr = [](const char *text) { return QCoreApplication::translate("Storage", text); };
+    bool needed = false;
+    for (const AtaSmartAttribute &attribute : entity.ataAttributes)
+        needed = needed || attribute.name == "total-lbas-written" || attribute.name == "total-lbas-read";
+    if (!needed) return;
+    entity.ataCounterStatus = tr("No usable raw counters returned by smartctl.");
+    const QString executable = QStandardPaths::findExecutable(QStringLiteral("smartctl"),
+        {QStringLiteral("/usr/sbin"), QStringLiteral("/usr/bin"), QStringLiteral("/sbin"), QStringLiteral("/bin")});
+    if (executable.isEmpty()) {
+        entity.ataCounterStatus = tr("smartctl is not installed (optional smartmontools package).");
+        return;
+    }
+    QString device, nativePath;
+    quint64 deviceNumber = 0;
+    for (auto it = objects.cbegin(); it != objects.cend(); ++it) {
+        const auto &interfaces = it.value();
+        const QVariantMap block = interfaces.value("org.freedesktop.UDisks2.Block");
+        if (!blocks.contains(it.key().path()) || interfaces.contains("org.freedesktop.UDisks2.Partition")
+            || objectPath(block.value("Drive")) != entity.id) continue;
+        QByteArray bytes = block.value("Device").toByteArray();
+        if (bytes.endsWith('\0')) bytes.chop(1);
+        if (bytes.contains('\0')) continue;
+        device = QString::fromUtf8(bytes);
+        nativePath = blocks.value(it.key().path());
+        deviceNumber = block.value("DeviceNumber").toULongLong();
+        break;
+    }
+    struct stat before{};
+    if (!device.startsWith("/dev/") || stat(device.toUtf8().constData(), &before) != 0
+        || !S_ISBLK(before.st_mode) || static_cast<quint64>(before.st_rdev) != deviceNumber) return;
+    const auto sameDevice = [&] {
+        struct stat now{};
+        return stat(device.toUtf8().constData(), &now) == 0 && S_ISBLK(now.st_mode)
+            && now.st_rdev == before.st_rdev && now.st_ino == before.st_ino && now.st_dev == before.st_dev
+            && QFileInfo(QStringLiteral("/sys/dev/block/%1:%2").arg(major(now.st_rdev)).arg(minor(now.st_rdev)))
+                .canonicalFilePath() == nativePath;
+    };
+    if (!sameDevice()) return;
+    if (!budget.isValid()) budget.start();
+    constexpr int timeoutMs = 5000, outputLimit = 1024 * 1024;
+    if (budget.elapsed() >= timeoutMs || QThread::currentThread()->isInterruptionRequested()) return;
+    QProcess process;
+    process.setStandardInputFile(QProcess::nullDevice());
+    process.setStandardErrorFile(QProcess::nullDevice());
+    process.start(executable, {"-j", "-a", "-n", "standby", device});
+    QByteArray output;
+    while (process.state() != QProcess::NotRunning) {
+        process.waitForFinished(50);
+        output += process.readAllStandardOutput();
+        if (output.size() > outputLimit || budget.elapsed() >= timeoutMs
+            || QThread::currentThread()->isInterruptionRequested()) {
+            process.kill();
+            process.waitForFinished(1000);
+            entity.ataCounterStatus = tr("smartctl query timed out, was cancelled, or exceeded its output limit.");
+            return;
+        }
+    }
+    output += process.readAllStandardOutput();
+    if (output.size() > outputLimit || process.exitStatus() != QProcess::NormalExit || !sameDevice()) return;
+    QJsonParseError error;
+    const QJsonDocument document = QJsonDocument::fromJson(output, &error);
+    if (error.error != QJsonParseError::NoError || !document.isObject()) return;
+    const QJsonObject json = document.object();
+    const int status = json.value("smartctl").toObject().value("exit_status").toInt(-1);
+    // Bit 2 may concern an optional log requested by -a; a valid attributes
+    // table can still be usable. Bits 3..7 are health findings, not read failures.
+    if (status < 0 || status > 255 || (status & 3) || process.exitCode() != status) {
+        entity.ataCounterStatus = tr("smartctl could not read the drive. Device permissions (root/sudo), "
+                                   "standby mode, or an unsupported command may prevent access.");
+        return;
+    }
+    const QJsonArray table = json.value("ata_smart_attributes").toObject().value("table").toArray();
+    if (table.isEmpty() || table.size() > 256) return;
+    QMap<int, QString> counters;
+    for (const QJsonValue &entry : table) {
+        const QJsonObject item = entry.toObject();
+        const int id = item.value("id").toInt(-1);
+        if (id != 241 && id != 242) continue;
+        if (counters.contains(id)) return;
+        const QJsonValue raw = item.value("raw").toObject().value("value");
+        if (!raw.isDouble()) return;
+        const double number = raw.toDouble(-1);
+        // ATA raw counters have at most 48 bits, exactly representable in JSON doubles.
+        if (!(number >= 0 && number <= 281474976710655.0)) return;
+        const quint64 integer = static_cast<quint64>(number);
+        if (static_cast<double>(integer) != number) return;
+        counters.insert(id, QString::number(integer));
+    }
+    for (AtaSmartAttribute &attribute : entity.ataAttributes) {
+        if (!((attribute.id == 241 && attribute.name == "total-lbas-written")
+            || (attribute.id == 242 && attribute.name == "total-lbas-read"))) continue;
+        if (!counters.contains(attribute.id)) continue;
+        attribute.rawCounter = counters.value(attribute.id);
+        attribute.rawSource = executable + " -j -a -n standby " + device
+            + " : ata_smart_attributes.table : ID " + QString::number(attribute.id);
+    }
+}
+
 void addService(StorageProperties &result, const QSet<QString> &nativePaths, const QString &selectedPath)
 {
     const StorageObjects objects = serviceSnapshot(result);
@@ -626,6 +734,7 @@ void addService(StorageProperties &result, const QSet<QString> &nativePaths, con
     std::stable_sort(ordered.begin(), ordered.end(), [&](const QDBusObjectPath &a, const QDBusObjectPath &b) {
         return selectedDrives.contains(a.path()) && !selectedDrives.contains(b.path());
     });
+    QElapsedTimer smartctlBudget;
     QElapsedTimer healthBudget; // Shared by all related ATA and NVMe cache-method calls.
     for (const QDBusObjectPath &path : ordered) {
         if (QThread::currentThread()->isInterruptionRequested())
@@ -640,6 +749,7 @@ void addService(StorageProperties &result, const QSet<QString> &nativePaths, con
         const auto &interfaces = object.value();
         addServiceFields(entity, interfaces, prefix);
         addServiceHealth(entity, interfaces, prefix, healthBudget);
+        smartctlCounters(entity, objects, blocks, smartctlBudget);
         for (auto iface = interfaces.cbegin(); iface != interfaces.cend(); ++iface) {
             for (const char *key : {"Drive", "CryptoBackingDevice", "MDRaid", "MDRaidMember", "Table",
                                     "LogicalVolume", "VolumeGroup"}) {
