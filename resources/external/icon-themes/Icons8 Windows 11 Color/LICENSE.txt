@@ -1,0 +1,21 @@
+Icons8 Windows 11 Color assets
+
+Copyright Icons8. All rights reserved.
+https://icons8.com/
+
+The Icons8 assets in this directory are NOT covered by QLinuxDeviceManager's
+GNU General Public License version 3 (GPLv3) or any other open-source license
+applicable to the application code.
+
+Icons8 has granted project-specific permission to include its icons in the
+QLinuxDeviceManager repository and application and to allow downstream forks
+to build the application with those icons, provided this disclaimer and Icons8
+attribution in the repository README and application About section are retained.
+
+These assets may not be extracted, redistributed, or reused independently
+without a license from Icons8. Inclusion in this source tree does not grant a
+standalone icon license. Obtain any independent-use license from Icons8.
+
+This notice records the project-specific permission described in PERMISSION.txt;
+it does not expand that permission or assert that Icons8 artwork is open source.
+The directory initially contains notices only, without icon artwork.

@@ -1,0 +1,30 @@
+Icons8 support correspondence supplied by the QLinuxDeviceManager maintainer
+
+The following substantive messages are transcribed from the correspondence
+supplied by the maintainer. Dates and an account email were not supplied. Mail
+interface boilerplate has been omitted. This file records permission for this
+project; it is not a general public license for independent use of Icons8 assets.
+
+Larry:
+
+We do support open-source projects, and you can use our icons for QLinuxDeviceManager!
+
+You can include the files in your repository and allow downstream forks to build the application with them, provided you add a specific disclaimer. While we allow our assets in open-source projects, they remain copyrighted by Icons8 and cannot be licensed under open-source licenses like GPLv3. You must include a notice in your repository stating that the Icons8 assets are not covered by the project's open-source license and cannot be extracted, redistributed, or reused independently without a license from Icons8.
+
+I'll pass your project details to the team — they will review your request for a free open-source license and follow up with you shortly.
+
+Larry:
+
+It is completely fine to have the raw files in your source tree. As long as your repository includes the disclaimer stating that the Icons8 assets aren't covered by your open-source license and cannot be reused independently, having the files visible is expected. There is no update on the license approval just yet, but the team will follow up with you shortly.
+
+Evan:
+
+Hi!
+
+As Larry mentioned, you’re welcome to use our icons, just not under the GPLv3 license. That’s why we ask you to include a disclaimer and keep the attribution in your README and About sections. This will be sufficient, and we understand that you can’t make promises on behalf of third parties.
+
+You can choose icons from our existing styles and gather the ones you need into a collection.
+
+Once you’ve put your collection together, just send us the email address associated with your Icons8 account, and we’ll arrange access to the downloads.
+
+Let us know if you have any questions.

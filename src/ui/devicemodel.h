@@ -28,6 +28,7 @@ public:
                       bool identityLost = false);
     std::optional<Device> device(const QString &path, quint64 generation) const;
     void setShowInternal(bool show);
+    void refreshIcons();
     QModelIndex findDevice(const QString &path, quint64 generation) const;
     QModelIndex findNode(const QString &key, const QString &path, quint64 generation) const;
     QVector<SearchRecord> searchRecords() const;

@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "icontheme.h"
 #include "devicemodel.h"
 #include "devicefilter.h"
 #include "propertiesdialog.h"
@@ -47,6 +48,7 @@ MainWindow::MainWindow()
     setWindowTitle(tr("QLinuxDeviceManager"));
     if (geteuid() == 0) setWindowTitle(windowTitle() + tr(" — Administrative mode"));
     resize(850, 650);
+    IconTheme::instance().setTheme(QSettings().value("icons/theme").toString());
     model_ = new DeviceModel(this);
     tree_ = new QTreeView(this);
     filter_ = new DeviceFilter(this);
@@ -97,8 +99,8 @@ MainWindow::MainWindow()
     connect(&searchWorker_, &QThread::finished, this, &MainWindow::searchFinished, Qt::QueuedConnection);
 
     auto *file = menuBar()->addMenu(tr("&File"));
-    auto *systemInfo = file->addAction(QIcon::fromTheme("dialog-information",
-        style()->standardIcon(QStyle::SP_MessageBoxInformation)), tr("System Information"));
+    auto *systemInfo = file->addAction(IconTheme::instance().icon("system-information", "dialog-information",
+        QStyle::SP_MessageBoxInformation), tr("System Information"));
     systemInfo->setToolTip(tr("Show System Information"));
     systemInfo->setShortcut(QKeySequence(Qt::ALT | Qt::Key_I));
     connect(systemInfo, &QAction::triggered, this, &MainWindow::openSystemInformation);
@@ -107,13 +109,13 @@ MainWindow::MainWindow()
     quit->setShortcut(QKeySequence::Quit);
     connect(quit, &QAction::triggered, this, &QWidget::close);
     auto *action = menuBar()->addMenu(tr("&Action"));
-    refreshAction_ = action->addAction(QIcon::fromTheme("view-refresh",
-        style()->standardIcon(QStyle::SP_BrowserReload)), tr("&Refresh"));
+    refreshAction_ = action->addAction(IconTheme::instance().icon("refresh", "view-refresh",
+        QStyle::SP_BrowserReload), tr("&Refresh"));
     refreshAction_->setShortcut(QKeySequence(Qt::Key_F5));
     refreshAction_->setToolTip(tr("Re-enumerate existing kernel devices; does not rescan buses."));
     connect(refreshAction_, &QAction::triggered, this, &MainWindow::refresh);
-    propertiesAction_ = action->addAction(QIcon::fromTheme("document-properties",
-        style()->standardIcon(QStyle::SP_FileDialogInfoView)), tr("&Properties"));
+    propertiesAction_ = action->addAction(IconTheme::instance().icon("properties", "document-properties",
+        QStyle::SP_FileDialogInfoView), tr("&Properties"));
     propertiesAction_->setEnabled(false);
     connect(propertiesAction_, &QAction::triggered, this, &MainWindow::openProperties);
     connect(tree_, &QTreeView::doubleClicked, this, [this](const QModelIndex &index) {
@@ -185,18 +187,66 @@ MainWindow::MainWindow()
     auto *collapse = view->addAction(tr("Collapse all"));
     connect(expand, &QAction::triggered, tree_, &QTreeView::expandAll);
     connect(collapse, &QAction::triggered, tree_, &QTreeView::collapseAll);
+    auto *options = menuBar()->addMenu(tr("&Options"));
+    auto *iconsMenu = options->addMenu(tr("&Icons"));
+    auto *iconChoices = new QActionGroup(iconsMenu);
+    iconChoices->setExclusive(true);
+    const auto updateIcons = [this, systemInfo] {
+        auto &theme = IconTheme::instance();
+        systemInfo->setIcon(theme.icon("system-information", "dialog-information", QStyle::SP_MessageBoxInformation));
+        refreshAction_->setIcon(theme.icon("refresh", "view-refresh", QStyle::SP_BrowserReload));
+        propertiesAction_->setIcon(theme.icon("properties", "document-properties", QStyle::SP_FileDialogInfoView));
+        model_->refreshIcons();
+    };
+    // Re-discover on opening, allowing icon directories to be installed while running.
+    connect(iconsMenu, &QMenu::aboutToShow, this, [iconsMenu, iconChoices, updateIcons] {
+        iconsMenu->clear();
+        auto &theme = IconTheme::instance();
+        const QStringList names = theme.availableThemes();
+        if (!theme.theme().isEmpty() && !names.contains(theme.theme())) {
+            theme.setTheme({});
+            QSettings().setValue("icons/theme", QString());
+            updateIcons();
+        }
+        const auto addChoice = [iconsMenu, iconChoices, &theme](const QString &name, const QString &label) {
+            auto *choice = iconsMenu->addAction(label);
+            choice->setCheckable(true);
+            choice->setData(name);
+            choice->setChecked(theme.theme() == name);
+            iconChoices->addAction(choice);
+        };
+        addChoice({}, tr("Default (System)"));
+        for (const QString &name : names) {
+            QString label = name;
+            label.replace('&', "&&"); // Directory names are literal labels, not mnemonics.
+            addChoice(name, label);
+        }
+    });
+    connect(iconChoices, &QActionGroup::triggered, this, [updateIcons](QAction *choice) {
+        auto &theme = IconTheme::instance();
+        theme.setTheme(choice->data().toString());
+        QSettings().setValue("icons/theme", theme.theme());
+        updateIcons();
+    });
     auto *help = menuBar()->addMenu(tr("&Help"));
     auto *about = help->addAction(tr("&About"));
     connect(about, &QAction::triggered, this, [this] {
         QMessageBox box(this);
         box.setWindowTitle(tr("About QLinuxDeviceManager"));
-        box.setTextFormat(Qt::PlainText);
+        box.setTextFormat(Qt::RichText);
+        box.setTextInteractionFlags(Qt::TextBrowserInteraction);
         box.setIconPixmap(QApplication::windowIcon().pixmap(QSize(96, 96), box.devicePixelRatioF()));
-        box.setText(QStringLiteral("%1 %2\n").arg(QCoreApplication::applicationName(), QCoreApplication::applicationVersion())
+        const QString description = QStringLiteral("%1 %2\n").arg(QCoreApplication::applicationName(), QCoreApplication::applicationVersion())
                     + tr("A read-only Linux hardware viewer.\n"
                        "Categories are application groupings, not native Linux device classes.\n"
                        "Device presence does not establish hardware health.\n"
-                       "Licensed under GNU GPL version 3; see LICENSE."));
+                       "Application code is licensed under GNU GPL version 3; see LICENSE.");
+        box.setText(description.toHtmlEscaped().replace('\n', "<br>")
+            + QStringLiteral("<br><br>")
+            + tr("Optional Windows 11 Color icons by %1. Copyright Icons8. "
+                 "Icons8 assets are excluded from GPLv3. They may be included in this project and downstream builds; "
+                 "independent extraction, redistribution or reuse requires a license from Icons8.")
+                .toHtmlEscaped().arg(QStringLiteral("<a href=\"https://icons8.com/\">Icons8</a>")));
         box.exec();
     });
     auto *toolbar = addToolBar(tr("Main toolbar"));

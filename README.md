@@ -186,5 +186,21 @@ source installation instructions.
 
 ## License
 
-QLinuxDeviceManager is free software under the
+QLinuxDeviceManager's application code is free software under the
 [GNU General Public License, version 3](LICENSE).
+
+Optional **Windows 11 Color icons by [Icons8](https://icons8.com/)** are copyrighted
+by Icons8 and **are not covered by GPLv3**. Icons8 permits their inclusion in this
+project and downstream application builds with the disclaimer and attribution
+retained. The Icons8 assets cannot be extracted, redistributed or reused
+independently without a license from Icons8. See the
+[Icons8 notice](resources/external/icon-themes/Icons8%20Windows%2011%20Color/LICENSE.txt)
+and [project-specific permission](resources/external/icon-themes/Icons8%20Windows%2011%20Color/PERMISSION.txt).
+
+Select installed icon sets under **Options → Icons**; the default is **Default
+(System)**. Sets are installed under `$PREFIX/share/QLinuxDeviceManager/icons`,
+with the directory name used as the theme name. See the
+[icon set guide and filename checklist](resources/external/icon-themes/README.md)
+for HiDPI sizes, optional device-specific icons, fallbacks and installation.
+Packagers can omit the separately licensed set with `-DICONS8_ICONS=OFF`.
+No Icons8 artwork is included until authorized downloads are added.

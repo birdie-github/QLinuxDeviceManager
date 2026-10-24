@@ -1,4 +1,5 @@
 #include "devicemodel.h"
+#include "icontheme.h"
 #include "devicelabel.h"
 #include "naturalsort.h"
 #include "resourceformat.h"
@@ -33,6 +34,16 @@ bool sameMetadata(const Device &a, const Device &b)
 }
 }
 DeviceModel::DeviceModel(QObject *parent) : QAbstractItemModel(parent) {}
+void DeviceModel::refreshIcons()
+{
+    const auto notify = [this](const auto &self, const QModelIndex &parent) -> void {
+        const int count = rowCount(parent);
+        if (!count) return;
+        emit dataChanged(index(0, 0, parent), index(count - 1, 0, parent), {Qt::DecorationRole});
+        for (int row = 0; row < count; ++row) self(self, index(row, 0, parent));
+    };
+    notify(notify, {});
+}
 DeviceModel::Node *DeviceModel::node(const QModelIndex &i) const
 {
     return i.isValid() ? static_cast<Node *>(i.internalPointer()) : const_cast<Node *>(&root_);
@@ -76,10 +87,13 @@ QVariant DeviceModel::data(const QModelIndex &i, int role) const
     if (role == GenerationRole) return d && !n->path.isEmpty() ? QVariant::fromValue(d->generation) : QVariant();
     if (role == Qt::DisplayRole) return n->label;
     if (role == Qt::DecorationRole && n->key == "computer")
-        return QIcon::fromTheme("computer", QApplication::style()->standardIcon(QStyle::SP_ComputerIcon));
-    if (role == Qt::DecorationRole)
-        return QIcon::fromTheme(categoryIcon(n->category), QApplication::style()->standardIcon(
-            d ? QStyle::SP_ComputerIcon : QStyle::SP_DirIcon));
+        return IconTheme::instance().icon("computer", "computer", QStyle::SP_ComputerIcon);
+    if (role == Qt::DecorationRole) {
+        const QString category = IconTheme::categoryRole(n->category);
+        // Resource/driver rows keep their category icon; only actual device rows use subtypes.
+        return IconTheme::instance().icon(d && !n->path.isEmpty() ? IconTheme::deviceRole(*d) : category,
+            categoryIcon(n->category), d ? QStyle::SP_ComputerIcon : QStyle::SP_DirIcon, category);
+    }
     if (role == Qt::ToolTipRole) {
         if (!n->description.isEmpty())
             return QStringLiteral("<qt>%1</qt>").arg(n->description.toHtmlEscaped().replace('\n', "<br>"));

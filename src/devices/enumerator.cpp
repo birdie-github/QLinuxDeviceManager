@@ -99,7 +99,7 @@ Inventory Enumerator::collect()
                               "PCI_ID", "ID_VENDOR_FROM_DATABASE", "ID_VENDOR", "ID_BUS",
                               "ID_INPUT_KEYBOARD", "ID_INPUT_MOUSE", "ID_INPUT_TOUCHPAD",
                               "ID_INPUT_POINTINGSTICK", "ID_INPUT_SWITCH", "PRODUCT", "PHYS", "DEVNUM",
-                              "USEC_INITIALIZED"}) {
+                              "USEC_INITIALIZED", "ID_DRIVE_THUMB"}) {
             const char *value = udev_device_get_property_value(raw.get(), key);
             if (value) d.properties.insert(QLatin1String(key), text(value));
         }
@@ -162,6 +162,8 @@ Inventory Enumerator::collect()
             d.attributes.insert("status", readAttribute(d.path + "/status"));
             d.attributes.insert("enabled", readAttribute(d.path + "/enabled"));
         }
+        if (d.subsystem == "block" && d.devtype == "disk")
+            d.attributes.insert("queue/rotational", readAttribute(d.path + "/queue/rotational"));
         if (!attribute.isEmpty()) d.attributes.insert(attribute, readAttribute(d.path + '/' + attribute));
         if (d.subsystem == "pci" || d.subsystem == "pnp") {
             DeviceResources resources;

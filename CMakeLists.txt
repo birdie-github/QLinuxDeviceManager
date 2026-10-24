@@ -76,6 +76,7 @@ add_executable(qlinuxdevicemanager
     src/devices/propertytext.h src/devices/propertytext.cpp
     src/ui/devicefilter.h src/ui/devicefilter.cpp
     src/ui/devicemodel.h src/ui/devicemodel.cpp
+    src/ui/icontheme.h src/ui/icontheme.cpp
     src/ui/mainwindow.h src/ui/mainwindow.cpp
     src/devices/pcielinktext.h
     src/ui/gpulinktest.h src/ui/gpulinktest.cpp
@@ -137,6 +138,20 @@ endforeach()
 install(FILES resources/external/icons/QLinuxDeviceManager.svg
     DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
     RENAME ${APP_DESKTOP_ID}.svg)
+# External application icon sets; no assets are embedded into the GPL executable.
+target_compile_definitions(qlinuxdevicemanager PRIVATE QLDM_HAVE_ICON_PATHS)
+set(QLDM_ICON_THEME_DIR "${CMAKE_INSTALL_FULL_DATADIR}/${APP_NAME}/icons")
+file(RELATIVE_PATH QLDM_RELATIVE_ICON_THEME_DIR "${CMAKE_INSTALL_FULL_BINDIR}" "${QLDM_ICON_THEME_DIR}")
+configure_file(resources/embedded/iconpaths.h.in generated/iconpaths.h @ONLY)
+option(ICONS8_ICONS "Install the separately licensed Icons8 icon set" ON)
+install(DIRECTORY resources/external/icon-themes/
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/${APP_NAME}/icons
+    PATTERN "Icons8 Windows 11 Color" EXCLUDE
+    PATTERN "README.md" EXCLUDE)
+if(ICONS8_ICONS)
+    install(DIRECTORY "resources/external/icon-themes/Icons8 Windows 11 Color"
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/${APP_NAME}/icons)
+endif()
 install(FILES project.json DESTINATION ${CMAKE_INSTALL_DATADIR}/QLinuxDeviceManager)
 set(ACPI_NAME_FILE "${CMAKE_CURRENT_SOURCE_DIR}/resources/external/device-names/acpi-pnp.ids")
 # Keep local builds usable without installation; the data stays outside the binary.
@@ -229,6 +244,7 @@ if(BUILD_TESTING)
         src/devices/functionnames.cpp src/devices/functionnames.h
         src/devices/acpivendors.cpp src/devices/acpivendors.h
         src/ui/devicemodel.cpp src/ui/devicemodel.h
+        src/ui/icontheme.cpp src/ui/icontheme.h
         src/ui/devicefilter.cpp src/ui/devicefilter.h)
     target_include_directories(device-search-test PRIVATE src/devices src/ui
         ${DISPLAY_X11_INCLUDE_DIRS} ${DISPLAY_WAYLAND_INCLUDE_DIRS})
