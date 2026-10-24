@@ -141,6 +141,11 @@ Other network backends retain native radio details but may lack connection metad
 Queries do not request scans, change settings, or retrieve passwords. Restricted
 station queries remain explicit permission errors; reload properties for a new snapshot.
 
+Report tables share alternating row colours and manually resizable columns.
+All rows are expanded; long or wide reports scroll with their containing page
+instead of using nested table scrollbars. Initial column widths are sized once,
+and refreshing an existing table preserves manual widths while its columns remain the same.
+
 ## Understanding the results
 
 QLinuxDeviceManager is **read-only**: it does not install drivers, change device

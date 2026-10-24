@@ -1,4 +1,5 @@
 #include "systemdialog.h"
+#include "reporttable.h"
 #include "propertytext.h"
 #include <QApplication>
 #include <QThread>
@@ -12,7 +13,6 @@
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QHeaderView>
-#include <QScrollBar>
 #include <QGroupBox>
 #include <QLabel>
 #include <QLocale>
@@ -92,21 +92,8 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
             QFont font = name->font(); font.setBold(true); name->setFont(font);
             form->addWidget(name, row, 0, 1, 2);
             delete value;
-            auto *view = new QTableWidget(form->parentWidget());
-            view->setEditTriggers(QAbstractItemView::NoEditTriggers);
-            // Size rows independently of column widths during initial layout.
-            view->setWordWrap(false);
+            auto *view = new ReportTable(form->parentWidget());
             view->setSelectionBehavior(QAbstractItemView::SelectItems);
-            view->setAlternatingRowColors(true);
-            view->setShowGrid(true);
-            view->setGridStyle(Qt::SolidLine);
-            view->setFrameStyle(QFrame::Box | QFrame::Plain);
-            view->setLineWidth(1);
-            view->verticalHeader()->hide();
-            view->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
-            view->horizontalHeader()->setStretchLastSection(true);
-            view->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-            view->setSizeAdjustPolicy(QAbstractScrollArea::AdjustToContents);
             tables_.insert(key, view);
             form->addWidget(view, row + 1, 0, 1, 2);
         } else {
@@ -498,17 +485,9 @@ void SystemDialog::rebuildMemory()
     tabs->setUsesScrollButtons(true);
     memoryForm_->addWidget(tabs, 1, 0);
     for (const FirmwareMemoryDevice &device : memory.devices) {
-        auto *table = new QTableWidget(tabs);
+        auto *table = new ReportTable(tabs);
         table->setColumnCount(2);
         table->setHorizontalHeaderLabels({tr("Property"), tr("Value")});
-        table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-        table->setAlternatingRowColors(true);
-        table->setShowGrid(true);
-        table->setGridStyle(Qt::SolidLine);
-        table->setWordWrap(false);
-        table->verticalHeader()->hide();
-        table->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
-        table->horizontalHeader()->setStretchLastSection(true);
         const auto fields = memoryFields();
         table->setRowCount(fields.size());
         const QString prefix = QStringLiteral("MEMORY_DEVICE_%1_").arg(device.index);
@@ -521,10 +500,7 @@ void SystemDialog::rebuildMemory()
             table->setItem(row, 0, name);
             table->setItem(row, 1, value);
         }
-        table->resizeRowsToContents();
-        // Keep long inventories inside the selected chip's table.
-        table->setMinimumHeight(table->horizontalHeader()->sizeHint().height()
-            + 6 * table->verticalHeader()->defaultSectionSize());
+        table->fitContents();
         const int tab = tabs->addTab(table, tr("Chip %1").arg(device.index + 1));
         tabs->setTabToolTip(tab, tr("Memory device %1 (firmware record %2)")
             .arg(device.index + 1).arg(device.index) + '\n' + memoryScope());
@@ -631,7 +607,7 @@ void SystemDialog::acceptResult(SystemProperties result)
                                  "It includes all memory unavailable to Linux, not just firmware reservations. "
                                  "It is omitted if physical capacity is unavailable or smaller than usable RAM.");
         const QString hint = "<qt>" + source.toHtmlEscaped().replace('\n', "<br>") + "</qt>";
-        if (QTableWidget *view = tables_.value(key, nullptr)) {
+        if (ReportTable *view = tables_.value(key, nullptr)) {
             view->clear();
             const bool available = snapshot_.values.value(key).state == ReadState::Available;
             const QStringList lines = displayValue(key, snapshot_.values.value(key), true).split('\n');
@@ -651,11 +627,7 @@ void SystemDialog::acceptResult(SystemProperties result)
                     view->setItem(row, column, item);
                 }
             }
-            view->resizeRowsToContents();
-            // Fit all rows, leaving room for a horizontal scrollbar on narrow dialogs.
-            view->setFixedHeight(view->verticalHeader()->length()
-                + (hasRows ? view->horizontalHeader()->sizeHint().height() : 0)
-                + 2 * view->frameWidth() + view->horizontalScrollBar()->sizeHint().height());
+            view->fitContents();
             view->setToolTip(hint);
         }
         for (QLabel *value : fields_.value(key)) {

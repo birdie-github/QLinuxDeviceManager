@@ -1,5 +1,6 @@
 #include "resourceformat.h"
 #include "propertiesdialog.h"
+#include "reporttable.h"
 #include "gpulinktest.h"
 #include "pcielinktext.h"
 #include "gpulinksample.h"
@@ -28,15 +29,11 @@
 #include <QLabel>
 #include <QLocale>
 #include <QPlainTextEdit>
-#include <QPainter>
-#include <QResizeEvent>
 #include <QStyle>
-#include <QStyleOptionHeader>
 #include <QTimer>
 #include <QPushButton>
 #include <QMessageBox>
 #include <QScrollArea>
-#include <QScrollBar>
 #include <QSignalBlocker>
 #include <QStringList>
 #include <QTabWidget>
@@ -53,89 +50,6 @@ QString propertyToolTip(const QString &source)
     if (source.trimmed().isEmpty()) return {};
     return "<qt>" + source.toHtmlEscaped().replace('\n', "<br>") + "</qt>";
 }
-
-// Long report tables scroll with the Properties page, not inside a short nested view.
-class PropertyReportHeader final : public QHeaderView {
-public:
-    explicit PropertyReportHeader(QWidget *parent) : QHeaderView(Qt::Horizontal, parent) {}
-    int wrappedHeight() const
-    {
-        int height = 0;
-        for (int index = 0; index < count(); ++index) {
-            if (isSectionHidden(index)) continue;
-            QStyleOptionHeaderV2 option;
-            initStyleOption(&option);
-            initStyleOptionForIndex(&option, index);
-            const int baseHeight = QHeaderView::sectionSizeFromContents(index).height();
-            option.rect = QRect(0, 0, sectionSize(index), baseHeight);
-            const QRect label = style()->subElementRect(QStyle::SE_HeaderLabel, &option, this);
-            const QRect wrapped = fontMetrics().boundingRect(QRect(0, 0, qMax(1, label.width()), QWIDGETSIZE_MAX),
-                Qt::AlignCenter | Qt::TextWordWrap, option.text);
-            height = qMax(height, qMax(baseHeight, wrapped.height() + baseHeight - label.height()));
-        }
-        return height;
-    }
-protected:
-    void paintSection(QPainter *painter, const QRect &rect, int index) const override
-    {
-        if (!rect.isValid()) return;
-        QStyleOptionHeaderV2 option;
-        initStyleOption(&option);
-        initStyleOptionForIndex(&option, index);
-        option.rect = rect;
-        const QString text = option.text;
-        const QRect label = style()->subElementRect(QStyle::SE_HeaderLabel, &option, this);
-        option.text.clear();
-        painter->save();
-        style()->drawControl(QStyle::CE_Header, &option, painter, this);
-        painter->setFont(font());
-        style()->drawItemText(painter, label, Qt::AlignCenter | Qt::TextWordWrap,
-            option.palette, option.state.testFlag(QStyle::State_Enabled), text, QPalette::ButtonText);
-        painter->restore();
-    }
-};
-class PropertyReportTable final : public QTableWidget {
-public:
-    PropertyReportTable(int rows, int columns, QWidget *parent) : QTableWidget(rows, columns, parent)
-    {
-        setHorizontalHeader(new PropertyReportHeader(this));
-        setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        connect(horizontalHeader(), &QHeaderView::sectionResized, this, [this] { fitContents(); });
-    }
-    void fitContents()
-    {
-        if (fitQueued_) return;
-        fitQueued_ = true;
-        // Let the stretched columns settle before measuring wrapped text.
-        QTimer::singleShot(0, this, [this] {
-            fitQueued_ = false;
-            auto *header = static_cast<PropertyReportHeader *>(horizontalHeader());
-            const int headerHeight = header->wrappedHeight();
-            if (header->height() != headerHeight) header->setFixedHeight(headerHeight);
-            resizeRowsToContents();
-            int height = verticalHeader()->length() + headerHeight + 2 * frameWidth();
-            if (horizontalScrollBarPolicy() != Qt::ScrollBarAlwaysOff)
-                height += horizontalScrollBar()->sizeHint().height();
-            if (minimumHeight() != height || maximumHeight() != height) setFixedHeight(height);
-        });
-    }
-protected:
-    void resizeEvent(QResizeEvent *event) override
-    {
-        QTableWidget::resizeEvent(event);
-        fitContents();
-    }
-    void changeEvent(QEvent *event) override
-    {
-        QTableWidget::changeEvent(event);
-        if (event->type() == QEvent::FontChange || event->type() == QEvent::StyleChange
-            || event->type() == QEvent::LayoutDirectionChange) fitContents();
-    }
-private:
-    bool fitQueued_ = false;
-};
 
 QString eventDescription(const DeviceEvent &event)
 {
@@ -185,18 +99,28 @@ QLabel *plainLabel(const QString &text, QWidget *parent)
     label->setFocusPolicy(Qt::StrongFocus);
     return label;
 }
-QFormLayout *storageDetailsForm(QVBoxLayout *layout, QWidget *parent)
+QVBoxLayout *reportPageLayout(QWidget *parent)
 {
+    auto *layout = new QVBoxLayout(parent);
     auto *scroll = new QScrollArea(parent);
     scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::StyledPanel);
+    scroll->setFrameShape(QFrame::NoFrame);
     auto *page = new QWidget(scroll);
+    auto *contents = new QVBoxLayout(page);
+    contents->setContentsMargins(0, 0, 0, 0);
+    contents->setAlignment(Qt::AlignTop);
+    scroll->setWidget(page);
+    layout->addWidget(scroll);
+    return contents;
+}
+QFormLayout *storageDetailsForm(QVBoxLayout *layout, QWidget *parent)
+{
+    auto *page = new QWidget(parent);
     auto *form = new QFormLayout(page);
     form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     form->setRowWrapPolicy(QFormLayout::WrapLongRows);
     form->setFormAlignment(Qt::AlignTop);
-    scroll->setWidget(page);
-    layout->addWidget(scroll, 1);
+    layout->addWidget(page);
     return form;
 }
 void showStorageFields(QFormLayout *form, const QVector<StorageDisplayField> &fields)
@@ -386,18 +310,13 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
 
     volumesPage_ = new QWidget(tabs);
     volumesPage_->hide();
-    auto *volumesLayout = new QVBoxLayout(volumesPage_);
+    auto *volumesLayout = reportPageLayout(volumesPage_);
     volumesNotice_ = plainLabel(tr("ℹ️ Related volumes and mounts"), volumesPage_);
     volumesLayout->addWidget(volumesNotice_);
-    volumesTable_ = new QTableWidget(0, 5, volumesPage_);
-    volumesTable_->setAlternatingRowColors(true);
+    volumesTable_ = new ReportTable(0, 5, volumesPage_);
     volumesTable_->setHorizontalHeaderLabels({tr("Device / label"), tr("Layer"), tr("Capacity"), tr("Content"), tr("Mount points")});
-    volumesTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     volumesTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
     volumesTable_->setSelectionMode(QAbstractItemView::SingleSelection);
-    volumesTable_->verticalHeader()->hide();
-    volumesTable_->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
-    volumesTable_->horizontalHeader()->setStretchLastSection(true);
     volumesTable_->setColumnWidth(0, 180);
     volumesTable_->setColumnWidth(1, 110);
     volumesTable_->setColumnWidth(2, 180);
@@ -482,15 +401,11 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     tabs->addTab(details, tr("Details"));
     resourcesPage_ = new QWidget(tabs);
     resourcesPage_->hide(); // Not a tab until metadata confirms applicability.
-    auto *resourcesLayout = new QVBoxLayout(resourcesPage_);
-    resourcesTable_ = new QTableWidget(0, 3, resourcesPage_);
+    auto *resourcesLayout = reportPageLayout(resourcesPage_);
+    resourcesTable_ = new ReportTable(0, 3, resourcesPage_);
     resourcesTable_->setHorizontalHeaderLabels({tr("Resource type"), tr("Setting"), tr("Details")});
-    resourcesTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     resourcesTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
     resourcesTable_->setSelectionMode(QAbstractItemView::ExtendedSelection);
-    resourcesTable_->verticalHeader()->hide();
-    resourcesTable_->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
-    resourcesTable_->horizontalHeader()->setStretchLastSection(true);
     resourcesLayout->addWidget(resourcesTable_);
     auto *resourceButtons = new QHBoxLayout;
     auto *copyResourceSelection = new QPushButton(tr("Copy selection"), resourcesPage_);
@@ -508,17 +423,13 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     resourcesLayout->addLayout(resourceButtons);
     // The tab appears only after collection finds resource records or read errors.
     auto *eventsPage = new QWidget(tabs);
-    auto *eventsLayout = new QVBoxLayout(eventsPage);
+    auto *eventsLayout = reportPageLayout(eventsPage);
     eventsNotice_ = plainLabel(tr("ℹ️ Live udev events since the application started"), eventsPage);
     eventsLayout->addWidget(eventsNotice_);
-    eventsTable_ = new QTableWidget(0, 3, eventsPage);
+    eventsTable_ = new ReportTable(0, 3, eventsPage);
     eventsTable_->setHorizontalHeaderLabels({tr("Observed time"), tr("Event type"), tr("Description")});
-    eventsTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     eventsTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
     eventsTable_->setSelectionMode(QAbstractItemView::ExtendedSelection);
-    eventsTable_->verticalHeader()->hide();
-    eventsTable_->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
-    eventsTable_->horizontalHeader()->setStretchLastSection(true);
     eventsLayout->addWidget(eventsTable_, 2);
     eventDetails_ = new QPlainTextEdit(eventsPage);
     eventDetails_->setReadOnly(true);
@@ -966,14 +877,10 @@ void PropertiesDialog::rebuildCamera()
         const QString title = tr("Format, size and frame rate combinations");
         auto *box = new QGroupBox(title, cameraGroups_->parentWidget());
         auto *layout = new QVBoxLayout(box);
-        auto *table = new PropertyReportTable(static_cast<int>(modes.size()), 4, box);
+        auto *table = new ReportTable(static_cast<int>(modes.size()), 4, box);
         const QStringList headers {tr("Capture queue"), tr("Pixel format"), tr("Resolution / range"), tr("Frame rates / intervals")};
         table->setHorizontalHeaderLabels(headers);
-        table->setEditTriggers(QAbstractItemView::NoEditTriggers);
         table->setSelectionBehavior(QAbstractItemView::SelectItems);
-        table->setWordWrap(true);
-        table->verticalHeader()->hide();
-        table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
         layout->addWidget(table); cameraGroups_->addWidget(box);
         copy.append(QString()); copy.append(title);
         const auto fractionText = [](const QJsonArray &f) { return QString::number(f.at(0).toInteger()) + '/' + QString::number(f.at(1).toInteger()); };
@@ -1898,8 +1805,7 @@ void PropertiesDialog::showHealth()
     if (!entry.ataAttributes.isEmpty()) {
         auto *box = new QGroupBox(tr("ATA SMART attributes"), healthGroups_->parentWidget());
         auto *layout = new QVBoxLayout(box);
-        auto *table = new PropertyReportTable(static_cast<int>(entry.ataAttributes.size()), 7, box);
-        table->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        auto *table = new ReportTable(static_cast<int>(entry.ataAttributes.size()), 7, box);
         table->setHorizontalHeaderLabels({tr("ID"), tr("Name"), tr("Current"), tr("Worst"), tr("Threshold"), tr("Interpreted value"), tr("Flags")});
         const QStringList hints {
             tr("Attribute ID; the drive-specific name is the authoritative identifier."),
@@ -1912,12 +1818,7 @@ void PropertiesDialog::showHealth()
         };
         for (int column = 0; column < table->columnCount(); ++column) {
             table->horizontalHeaderItem(column)->setToolTip(hints[column]);
-            table->horizontalHeader()->setSectionResizeMode(column,
-                column == 1 || column == 5 ? QHeaderView::Stretch : QHeaderView::ResizeToContents);
         }
-        table->verticalHeader()->hide();
-        table->setAlternatingRowColors(true);
-        table->setEditTriggers(QAbstractItemView::NoEditTriggers);
         table->setSelectionBehavior(QAbstractItemView::SelectRows);
         table->setSelectionMode(QAbstractItemView::ExtendedSelection);
         for (int index = 0; index < entry.ataAttributes.size(); ++index) {

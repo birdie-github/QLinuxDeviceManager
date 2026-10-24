@@ -47,6 +47,7 @@ if(KMOD)
 endif()
 add_executable(qlinuxdevicemanager
     src/main.cpp src/devices/device.h src/devices/device.cpp
+    src/ui/reporttable.h src/ui/reporttable.cpp
     src/devices/enumerator.h src/devices/enumerator.cpp
     src/devices/monitorstate.h src/devices/monitorstate.cpp
     src/devices/deviceevents.h src/devices/deviceevents.cpp

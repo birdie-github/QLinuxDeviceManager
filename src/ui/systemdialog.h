@@ -6,7 +6,7 @@
 #include <QVector>
 class QGridLayout;
 class QLabel;
-class QTableWidget;
+class ReportTable;
 class QTabWidget;
 class QPushButton;
 
@@ -28,7 +28,7 @@ private:
     QGridLayout *memoryForm_ = nullptr;
     QGridLayout *mokForm_ = nullptr;
     QHash<QString, QVector<QLabel *>> fields_;
-    QHash<QString, QTableWidget *> tables_;
+    QHash<QString, ReportTable *> tables_;
     QStringList order_;
     QHash<QString, int> keyTabs_;
     QTabWidget *tabs_ = nullptr;
