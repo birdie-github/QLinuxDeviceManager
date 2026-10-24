@@ -6,6 +6,7 @@
 #include <QDialog>
 #include <QVector>
 
+class HealthPage;
 class PciePage;
 class BatteryPage;
 class UsbPage;
@@ -49,7 +50,6 @@ private:
     void rebuildPcie();
     void rebuildBattery();
     void showVolumeDetails();
-    void showHealth();
     void copyResources(bool selectedOnly);
     void showDetail();
     void copyAll();
@@ -67,14 +67,11 @@ private:
     QFormLayout *storage_ = nullptr;
     QWidget *storagePage_ = nullptr;
     QWidget *volumesPage_ = nullptr;
-    QWidget *healthPage_ = nullptr;
+    HealthPage *healthPage_ = nullptr;
     QTableWidget *volumesTable_ = nullptr;
     QPushButton *volumeDetailsButton_ = nullptr;
-    QComboBox *healthDrive_ = nullptr;
-    QVBoxLayout *healthGroups_ = nullptr;
     QLabel *storageNotice_ = nullptr;
     QLabel *volumesNotice_ = nullptr;
-    QLabel *healthNotice_ = nullptr;
     StoragePresentation storagePresentation_;
     NetworkPage *networkPage_ = nullptr;
     BluetoothPage *bluetoothPage_ = nullptr;

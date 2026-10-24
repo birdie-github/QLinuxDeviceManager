@@ -92,6 +92,7 @@ add_executable(qlinuxdevicemanager
     src/ui/usbpage.h src/ui/usbpage.cpp
     src/ui/batterypage.h src/ui/batterypage.cpp
     src/ui/pciepage.h src/ui/pciepage.cpp
+    src/ui/healthpage.h src/ui/healthpage.cpp
     src/devices/secureboot.h src/devices/secureboot.cpp
     src/devices/systemproperties.h src/devices/systemproperties.cpp src/devices/cputopology.h
     src/ui/systemdialog.h src/ui/systemdialog.cpp)
