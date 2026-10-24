@@ -1,6 +1,7 @@
 ### Upcoming changes:
 
 - **Much richer CPU information**: Core groups (including performance vs. efficiency cores where applicable), how caches are shared between cores, maximum frequencies, and SMT (hyper-threading) status. This gives a clearer picture of how your processor is organized.
+- Much improved ATA drives health reporting - more sensible presentation, LBAs read/written are properly read and presented.
 - Memory modules from the firmware are shown in their own individual sections/tabs so each stick is easier to read.
 - Optional GPU PCIe link test: You can run a short graphics load on a selected GPU to see whether the PCIe connection actually speeds up or uses more lanes under load. Useful for checking if a graphics card is running at its full possible speed. The test only appears when the link readings look usable.
 - Better matching of display outputs on X11 systems by using the monitor’s unique EDID identity when the connector names don’t match perfectly.
