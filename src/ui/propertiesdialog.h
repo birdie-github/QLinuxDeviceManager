@@ -8,6 +8,7 @@
 #include <QPointer>
 #include <QProcess>
 
+class BluetoothPage;
 class QCheckBox;
 class QComboBox;
 class QFormLayout;
@@ -75,9 +76,7 @@ private:
     QWidget *networkPage_ = nullptr;
     QVBoxLayout *networkGroups_ = nullptr;
     QString networkText_;
-    QWidget *bluetoothPage_ = nullptr;
-    QVBoxLayout *bluetoothGroups_ = nullptr;
-    QString bluetoothText_;
+    BluetoothPage *bluetoothPage_ = nullptr;
     QWidget *cameraPage_ = nullptr;
     QVBoxLayout *cameraGroups_ = nullptr;
     QString cameraText_;

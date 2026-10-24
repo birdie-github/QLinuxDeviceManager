@@ -26,3 +26,9 @@ struct PropertyPageWidgets {
 PropertyPageWidgets createPropertyPage(QWidget *parent, const QString &heading,
     const QString &tooltip, const QString &copyCaption,
     const PropertyPageOptions &options = {});
+
+// Same layout for a page subclass. Call once on a widget without a layout.
+// The caller owns page; its children are owned by page as usual.
+PropertyPageWidgets setupPropertyPage(QWidget *page, const QString &heading,
+    const QString &tooltip, const QString &copyCaption,
+    const PropertyPageOptions &options = {});

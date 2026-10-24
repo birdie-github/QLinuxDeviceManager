@@ -8,7 +8,12 @@
 PropertyPageWidgets createPropertyPage(QWidget *parent, const QString &heading,
     const QString &tooltip, const QString &copyCaption, const PropertyPageOptions &options)
 {
-    auto *page = new QWidget(parent);
+    return setupPropertyPage(new QWidget(parent), heading, tooltip, copyCaption, options);
+}
+
+PropertyPageWidgets setupPropertyPage(QWidget *page, const QString &heading,
+    const QString &tooltip, const QString &copyCaption, const PropertyPageOptions &options)
+{
     page->hide();
     auto *layout = new QVBoxLayout(page);
     auto *notice = new QLabel(heading, page);
