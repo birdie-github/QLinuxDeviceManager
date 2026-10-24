@@ -2,6 +2,7 @@
 #include "propertiesdialog.h"
 #include "reporttable.h"
 #include "propertypage.h"
+#include "propertyreport.h"
 #include "gpulinktest.h"
 #include "pcielinktext.h"
 #include "gpulinksample.h"
@@ -46,12 +47,6 @@
 #include <utility>
 
 namespace {
-QString propertyToolTip(const QString &source)
-{
-    if (source.trimmed().isEmpty()) return {};
-    return "<qt>" + source.toHtmlEscaped().replace('\n', "<br>") + "</qt>";
-}
-
 QString eventDescription(const DeviceEvent &event)
 {
     if (event.action == "add") return QCoreApplication::translate("PropertiesDialog", "Device addition observed");
@@ -90,15 +85,6 @@ QString eventText(const DeviceEvent &event)
 void clearForm(QFormLayout *form)
 {
     while (form->rowCount()) form->removeRow(0);
-}
-QLabel *plainLabel(const QString &text, QWidget *parent)
-{
-    auto *label = new QLabel(text, parent);
-    label->setTextFormat(Qt::PlainText);
-    label->setWordWrap(true);
-    label->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
-    label->setFocusPolicy(Qt::StrongFocus);
-    return label;
 }
 struct ReportPageLayout {
     QVBoxLayout *contents;
@@ -777,36 +763,12 @@ void PropertiesDialog::rebuildNetwork()
     }
     networkText_.clear();
     if (!applicable) return;
-    QVector<QGridLayout *> forms;
-    QVector<QLabel *> captions;
     QStringList copy;
-    const auto group = [&](const QString &title) {
-        auto *box = new QGroupBox(title, networkGroups_->parentWidget());
-        auto *form = new QGridLayout(box);
-        form->setColumnStretch(1, 1);
-        forms.append(form);
-        networkGroups_->addWidget(box);
-        if (!copy.isEmpty()) copy.append(QString());
-        copy.append(title);
-        return form;
-    };
-    const auto field = [&](QGridLayout *form, const QString &caption, const QString &text, const QString &source) {
-        auto *name = new QLabel(caption, form->parentWidget());
-        name->setTextFormat(Qt::PlainText);
-        captions.append(name);
-        auto *value = plainLabel(text, form->parentWidget());
-        QSizePolicy policy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        policy.setHeightForWidth(true);
-        value->setSizePolicy(policy);
-        value->setAlignment(Qt::AlignLeading | Qt::AlignTop);
-        value->setMinimumWidth(120);
-        const QString hint = propertyToolTip(source);
-        name->setToolTip(hint);
-        value->setToolTip(hint);
-        const int row = form->count() / 2;
-        form->addWidget(name, row, 0, Qt::AlignLeading | Qt::AlignTop);
-        form->addWidget(value, row, 1);
-        copy.append(caption + ": " + text);
+    PropertyReport fieldsReport(networkGroups_, copy);
+    const auto group = [&](const QString &title) { return fieldsReport.group(title); };
+    const auto field = [&](QGridLayout *form, const QString &caption, const QString &text,
+                           const QString &source = QString()) {
+        fieldsReport.field(form, caption, text, source);
     };
     const auto ethernetValue = [&](const Attribute &value) {
         if (value.state == ReadState::Unsupported) return tr("Query unsupported by the kernel/device");
@@ -938,9 +900,7 @@ void PropertiesDialog::rebuildNetwork()
                 address.address + '/' + propertyReadValue(address.netmask), source);
     }
     // Match System Information: one font-derived caption width across sections.
-    int captionWidth = 0;
-    for (const QLabel *caption : captions) captionWidth = qMax(captionWidth, caption->sizeHint().width());
-    for (QGridLayout *form : forms) form->setColumnMinimumWidth(0, captionWidth);
+    fieldsReport.alignCaptions();
     networkGroups_->addStretch();
     networkText_ = copy.join('\n');
 }
@@ -955,30 +915,11 @@ void PropertiesDialog::rebuildCamera()
     cameraText_.clear();
     if (!data.applicable) return;
     QStringList copy;
-    QVector<QLabel *> captions;
-    QVector<QGridLayout *> forms;
-    const auto group = [&](const QString &title) {
-        auto *box = new QGroupBox(title, cameraGroups_->parentWidget());
-        auto *form = new QGridLayout(box);
-        form->setColumnStretch(1, 1);
-        forms.append(form); cameraGroups_->addWidget(box);
-        if (!copy.isEmpty()) copy.append(QString());
-        copy.append(title);
-        return form;
-    };
-    const auto field = [&](QGridLayout *form, const QString &caption, const QString &value, const QString &source) {
-        auto *name = new QLabel(caption, form->parentWidget());
-        name->setTextFormat(Qt::PlainText); captions.append(name);
-        auto *label = plainLabel(value, form->parentWidget());
-        QSizePolicy policy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        policy.setHeightForWidth(true);
-        label->setSizePolicy(policy);
-        label->setMinimumWidth(120);
-        label->setAlignment(Qt::AlignLeading | Qt::AlignTop);
-        name->setToolTip(propertyToolTip(source)); label->setToolTip(name->toolTip());
-        const int row = form->count() / 2;
-        form->addWidget(name, row, 0, Qt::AlignLeading | Qt::AlignTop); form->addWidget(label, row, 1);
-        copy.append(caption + ": " + value);
+    PropertyReport fieldsReport(cameraGroups_, copy);
+    const auto group = [&](const QString &title) { return fieldsReport.group(title); };
+    const auto field = [&](QGridLayout *form, const QString &caption, const QString &text,
+                           const QString &source = QString()) {
+        fieldsReport.field(form, caption, text, source);
     };
     const auto errorText = [&](int error) {
         if (error == EBUSY) return tr("Device busy");
@@ -1008,10 +949,7 @@ void PropertiesDialog::rebuildCamera()
     auto *scope = group(tr("Collection scope"));
     field(scope, tr("Coverage"), tr("This capture node and current media pipeline. No capture or configuration changes. "
         "Reported modes do not guarantee throughput or compatibility with other simultaneous streams."), querySource);
-    for (QGridLayout *form : forms) {
-        int width = 0; for (const QLabel *caption : captions) width = qMax(width, caption->sizeHint().width());
-        form->setColumnMinimumWidth(0, width);
-    }
+    fieldsReport.alignCaptions();
     if (!modes.isEmpty()) {
         const QString title = tr("Format, size and frame rate combinations");
         auto *box = new QGroupBox(title, cameraGroups_->parentWidget());
@@ -1110,42 +1048,14 @@ void PropertiesDialog::rebuildDisplay()
     displayText_.clear();
     if (!applicable) return;
     const DisplayProperties &data = snapshot_.display;
-    QVector<QGridLayout *> forms;
-    QVector<QLabel *> captions;
     QStringList copy;
-    const auto group = [&](const QString &title) {
-        auto *box = new QGroupBox(title, displayGroups_->parentWidget());
-        auto *form = new QGridLayout(box);
-        form->setColumnStretch(1, 1);
-        forms.append(form);
-        displayGroups_->addWidget(box);
-        if (!copy.isEmpty()) copy.append(QString());
-        copy.append(title);
-        return form;
+    PropertyReport fieldsReport(displayGroups_, copy);
+    const auto group = [&](const QString &title) { return fieldsReport.group(title); };
+    const auto field = [&](QGridLayout *form, const QString &caption, const QString &text,
+                           const QString &source = QString()) {
+        fieldsReport.field(form, caption, text, source);
     };
-    const auto field = [&](QGridLayout *form, const QString &caption, const QString &text, const QString &source = QString()) {
-        auto *name = new QLabel(caption, form->parentWidget());
-        name->setTextFormat(Qt::PlainText);
-        captions.append(name);
-        auto *value = plainLabel(text, form->parentWidget());
-        QSizePolicy policy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        policy.setHeightForWidth(true);
-        value->setSizePolicy(policy);
-        value->setAlignment(Qt::AlignLeading | Qt::AlignTop);
-        value->setMinimumWidth(120);
-        const QString hint = propertyToolTip(source);
-        name->setToolTip(hint);
-        value->setToolTip(hint);
-        const int row = form->count() / 2;
-        form->addWidget(name, row, 0, Qt::AlignLeading | Qt::AlignTop);
-        form->addWidget(value, row, 1);
-        copy.append(caption + ": " + text);
-    };
-    const auto alignCaptions = [&] {
-        int captionWidth = 0;
-        for (const QLabel *caption : captions) captionWidth = qMax(captionWidth, caption->sizeHint().width());
-        for (QGridLayout *form : forms) form->setColumnMinimumWidth(0, captionWidth);
-    };
+
     const MonitorProperties &monitor = snapshot_.monitor;
     if (monitor.applicable) {
         const auto hardwareValue = [&](const QString &key) { return propertyReadValue(monitor.values.value(key)); };
@@ -1199,7 +1109,7 @@ void PropertiesDialog::rebuildDisplay()
     if (data.status.state == ReadState::Available && data.status.value == "disconnected") {
         auto *session = group(tr("Desktop session"));
         field(session, tr("Configuration"), tr("Disconnected"), data.sources.value("configuration"));
-        alignCaptions();
+        fieldsReport.alignCaptions();
         displayGroups_->addStretch();
         displayText_ = copy.join('\n');
         return;
@@ -1246,7 +1156,7 @@ void PropertiesDialog::rebuildDisplay()
     field(transform, tr("Rotation"), formatted("rotation"), data.sources.value("rotation"));
     field(transform, tr("Reflection"), formatted("reflection"), data.sources.value("reflection"));
     field(transform, tr("Output scale"), formatted("scale"), data.sources.value("scale"));
-    alignCaptions();
+    fieldsReport.alignCaptions();
     displayGroups_->addStretch();
     displayText_ = copy.join('\n');
 }
@@ -1267,36 +1177,12 @@ void PropertiesDialog::rebuildUsb()
     usbText_.clear();
     if (!applicable) return;
     const UsbProperties &data = snapshot_.usb;
-    QVector<QGridLayout *> forms;
-    QVector<QLabel *> captions;
     QStringList copy;
-    const auto group = [&](const QString &title) {
-        auto *box = new QGroupBox(title, usbGroups_->parentWidget());
-        auto *form = new QGridLayout(box);
-        form->setColumnStretch(1, 1);
-        forms.append(form);
-        usbGroups_->addWidget(box);
-        if (!copy.isEmpty()) copy.append(QString());
-        copy.append(title);
-        return form;
-    };
-    const auto field = [&](QGridLayout *form, const QString &caption, const QString &text, const QString &source = QString()) {
-        auto *name = new QLabel(caption, form->parentWidget());
-        name->setTextFormat(Qt::PlainText);
-        captions.append(name);
-        auto *value = plainLabel(text, form->parentWidget());
-        QSizePolicy policy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        policy.setHeightForWidth(true);
-        value->setSizePolicy(policy);
-        value->setAlignment(Qt::AlignLeading | Qt::AlignTop);
-        value->setMinimumWidth(120);
-        const QString hint = propertyToolTip(source);
-        name->setToolTip(hint);
-        value->setToolTip(hint);
-        const int row = form->count() / 2;
-        form->addWidget(name, row, 0, Qt::AlignLeading | Qt::AlignTop);
-        form->addWidget(value, row, 1);
-        copy.append(caption + ": " + text);
+    PropertyReport fieldsReport(usbGroups_, copy);
+    const auto group = [&](const QString &title) { return fieldsReport.group(title); };
+    const auto field = [&](QGridLayout *form, const QString &caption, const QString &text,
+                           const QString &source = QString()) {
+        fieldsReport.field(form, caption, text, source);
     };
     const auto value = [&](const QString &key) { return propertyReadValue(data.values.value(key)); };
     const auto source = [&](const QString &key) { return device().path + '/' + key; };
@@ -1396,9 +1282,7 @@ void PropertiesDialog::rebuildUsb()
         field(form, tr("Bound driver"), driver.state == ReadState::Available && driver.value.isEmpty()
             ? tr("Unbound") : propertyReadValue(driver), interface.path + "/driver");
     }
-    int captionWidth = 0;
-    for (const QLabel *caption : captions) captionWidth = qMax(captionWidth, caption->sizeHint().width());
-    for (QGridLayout *form : forms) form->setColumnMinimumWidth(0, captionWidth);
+    fieldsReport.alignCaptions();
     usbGroups_->addStretch();
     usbText_ = copy.join('\n');
 }
@@ -1685,36 +1569,12 @@ void PropertiesDialog::rebuildBattery()
     }
     batteryText_.clear();
     if (!applicable) return;
-    QVector<QGridLayout *> forms;
-    QVector<QLabel *> captions;
     QStringList copy;
-    const auto group = [&](const QString &title) {
-        auto *box = new QGroupBox(title, batteryGroups_->parentWidget());
-        auto *form = new QGridLayout(box);
-        form->setColumnStretch(1, 1);
-        forms.append(form);
-        batteryGroups_->addWidget(box);
-        if (!copy.isEmpty()) copy.append(QString());
-        copy.append(title);
-        return form;
-    };
-    const auto field = [&](QGridLayout *form, const QString &caption, const QString &text, const QString &source = QString()) {
-        auto *name = new QLabel(caption, form->parentWidget());
-        name->setTextFormat(Qt::PlainText);
-        captions.append(name);
-        auto *value = plainLabel(text, form->parentWidget());
-        QSizePolicy policy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        policy.setHeightForWidth(true);
-        value->setSizePolicy(policy);
-        value->setAlignment(Qt::AlignLeading | Qt::AlignTop);
-        value->setMinimumWidth(120);
-        const QString hint = propertyToolTip(source);
-        name->setToolTip(hint);
-        value->setToolTip(hint);
-        const int row = form->count() / 2;
-        form->addWidget(name, row, 0, Qt::AlignLeading | Qt::AlignTop);
-        form->addWidget(value, row, 1);
-        copy.append(caption + ": " + text);
+    PropertyReport fieldsReport(batteryGroups_, copy);
+    const auto group = [&](const QString &title) { return fieldsReport.group(title); };
+    const auto field = [&](QGridLayout *form, const QString &caption, const QString &text,
+                           const QString &source = QString()) {
+        fieldsReport.field(form, caption, text, source);
     };
     const auto source = [&](const QString &key) { return device().path + '/' + key; };
     const auto readValue = [&](const Attribute &value) {
@@ -1816,9 +1676,7 @@ void PropertiesDialog::rebuildBattery()
         field(identity, tr("Model"), textValue("model_name"), source("model_name"));
         field(identity, tr("Serial number"), textValue("serial_number"), source("serial_number"));
     }
-    int captionWidth = 0;
-    for (const QLabel *caption : captions) captionWidth = qMax(captionWidth, caption->sizeHint().width());
-    for (QGridLayout *form : forms) form->setColumnMinimumWidth(0, captionWidth);
+    fieldsReport.alignCaptions();
     batteryGroups_->addStretch();
     batteryText_ = copy.join('\n');
 }
