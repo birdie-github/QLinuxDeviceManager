@@ -36,6 +36,18 @@ QString detailsPropertyStatus(const PropertyEntry &entry)
         return entry.value.isEmpty() ? QCoreApplication::translate("PropertiesDialog", "Empty value").toLower() : QString();
     return propertyReadValue({entry.state, {}, entry.error}).toLower();
 }
+// Elapsed operating time has no calendar origin: use fixed 365-day years
+// and 30-day months, then preserve the remaining days and clock time.
+QString storageDuration(quint64 seconds)
+{
+    const quint64 days = seconds / 86400;
+    return QCoreApplication::translate("Storage", "%1y %2m %3d %4:%5:%6")
+        .arg(days / 365).arg((days % 365) / 30).arg((days % 365) % 30)
+        .arg((seconds / 3600) % 24, 2, 10, QLatin1Char('0'))
+        .arg((seconds / 60) % 60, 2, 10, QLatin1Char('0'))
+        .arg(seconds % 60, 2, 10, QLatin1Char('0'));
+}
+
 QString storageFieldValue(const StorageField &field)
 {
     const Attribute &value = field.value;
@@ -94,7 +106,7 @@ QString storageFieldValue(const StorageField &field)
         if (!valid) return QCoreApplication::translate("Storage", "Invalid health metadata");
         const QString text = QLocale().toString(number);
         if (field.format == Format::Percent) return QCoreApplication::translate("Storage", "%1%").arg(text);
-        if (field.format == Format::Seconds) return QCoreApplication::translate("Storage", "%1 seconds (%2 hours)").arg(text, QLocale().toString(number / 3600.0, 'f', 1));
+        if (field.format == Format::Seconds) return storageDuration(number);
         if (field.format == Format::Hours) return QCoreApplication::translate("Storage", "%1 hours").arg(text);
         if (field.format == Format::Minutes) return QCoreApplication::translate("Storage", "%1 minutes").arg(text);
         return text;

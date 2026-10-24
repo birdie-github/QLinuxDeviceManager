@@ -1844,7 +1844,7 @@ void PropertiesDialog::showHealth()
             value->setSizePolicy(policy);
             value->setAlignment(Qt::AlignLeading | Qt::AlignTop);
             value->setMinimumWidth(120);
-            const QString hint = propertyToolTip(field.source);
+            const QString hint = propertyToolTip(field.tooltip.isEmpty() ? field.source : field.tooltip + '\n' + field.source);
             caption->setToolTip(hint);
             value->setToolTip(hint);
             form->addWidget(caption, fieldRow, 0, Qt::AlignLeading | Qt::AlignTop);
@@ -1887,7 +1887,8 @@ void PropertiesDialog::showHealth()
                                       attribute.threshold, attribute.interpreted, attribute.flags};
             for (int column = 0; column < values.size(); ++column) {
                 auto *item = new QTableWidgetItem(values[column]);
-                item->setToolTip(propertyToolTip(hints[column] + '\n' + attribute.source));
+                item->setToolTip(propertyToolTip((column == 5 && !attribute.interpretedTooltip.isEmpty()
+                    ? attribute.interpretedTooltip + '\n' : QString()) + hints[column] + '\n' + attribute.source));
                 if (column == 0 || (column >= 2 && column <= 4) || column == 6)
                     item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
                 table->setItem(index, column, item);

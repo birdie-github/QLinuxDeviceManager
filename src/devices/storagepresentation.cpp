@@ -78,23 +78,42 @@ void fact(QVector<StorageDisplayField> &output, const StorageEntity &entity,
     if (values.size() > 1) text = tr("Conflicting metadata:") + '\n' + text;
     output.append({tr(caption), text, sources.join('\n')});
 }
+QString ataAttributeName(const QString &identifier)
+{
+    QStringList words = identifier.split(QLatin1Char('-'), Qt::SkipEmptyParts);
+    for (QString &word : words) {
+        if (word.compare("lbas", Qt::CaseInsensitive) == 0) word = QStringLiteral("LBAs");
+        else if (word.compare("udma", Qt::CaseInsensitive) == 0) word = QStringLiteral("UDMA");
+        else if (word.compare("crc", Qt::CaseInsensitive) == 0) word = QStringLiteral("CRC");
+        else if (!word.isEmpty()) word[0] = word[0].toUpper();
+    }
+    return words.join(QLatin1Char(' '));
+}
 StorageDisplayAtaAttribute ataAttribute(const AtaSmartAttribute &attribute, const QString &drive)
 {
     const auto normalized = [](qint32 value) { return value < 0 ? tr("Unavailable") : QLocale().toString(value); };
-    QString interpreted;
+    QString interpreted, tooltip;
     if (attribute.unit == 0 || (attribute.unit == 4 && attribute.interpreted == 0)) interpreted = tr("Unavailable");
     else if (attribute.interpreted < 0) interpreted = tr("Invalid health metadata");
     else switch (attribute.unit) {
     case 1: interpreted = QLocale().toString(attribute.interpreted); break;
-    case 2: interpreted = tr("%1 milliseconds").arg(QLocale().toString(attribute.interpreted)); break;
+    case 2:
+        interpreted = storageDuration(static_cast<quint64>(attribute.interpreted / 1000));
+        tooltip = tr("%1 seconds").arg(QLocale().toString(attribute.interpreted / 1000.0, 'f', 3));
+        break;
     case 3: interpreted = tr("%1 sectors").arg(QLocale().toString(attribute.interpreted)); break;
     case 4: interpreted = tr("%1 °C").arg(QLocale().toString(attribute.interpreted / 1000.0 - 273.15, 'f', 1)); break;
+    // libatasmart's extended unit enum: thousandths of a percent, percent, MB.
+    // Keep MB as supplied; these are interpreted values, not raw LBA counts.
+    case 5: interpreted = tr("%1%").arg(QLocale().toString(attribute.interpreted / 1000.0, 'f', 3)); break;
+    case 6: interpreted = tr("%1%").arg(QLocale().toString(attribute.interpreted)); break;
+    case 7: interpreted = tr("%1 MB").arg(QLocale().toString(attribute.interpreted)); break;
     default: interpreted = tr("Unavailable (unknown unit %1)").arg(attribute.unit); break;
     }
-    return {QString::number(attribute.id), attribute.name.isEmpty() ? tr("Unnamed attribute") : attribute.name,
+    return {QString::number(attribute.id), attribute.name.isEmpty() ? tr("Unnamed attribute") : ataAttributeName(attribute.name),
         normalized(attribute.current), normalized(attribute.worst), normalized(attribute.threshold), interpreted,
         QStringLiteral("0x%1").arg(attribute.flags, 4, 16, QLatin1Char('0')),
-        drive + " : org.freedesktop.UDisks2.Drive.Ata.SmartGetAttributes : ID " + QString::number(attribute.id)};
+        drive + " : org.freedesktop.UDisks2.Drive.Ata.SmartGetAttributes : ID " + QString::number(attribute.id) + " (" + attribute.name + ")", tooltip};
 }
 void healthGroups(StorageDisplayRow &row, const StorageEntity &entity)
 {
@@ -133,6 +152,11 @@ void healthGroups(StorageDisplayRow &row, const StorageEntity &entity)
         nvme = nvme || field.id.contains(".NVMe.Controller/");
         const QString key = field.id.section('/', -1);
         StorageDisplayField shown = display(field);
+        if (key == "SmartPowerOnSeconds" && field.value.state == ReadState::Available) {
+            bool valid = false;
+            const quint64 seconds = field.value.value.toULongLong(&valid);
+            if (valid) shown.tooltip = tr("%1 seconds").arg(QLocale().toString(seconds));
+        }
         if (const char *caption = captions.value(key, nullptr)) shown.label = tr(caption);
         if (key == "SmartGetAttributes") shown.label = field.id.contains(".Drive.Ata/")
             ? tr("ATA SMART attributes") : tr("NVMe health details");
