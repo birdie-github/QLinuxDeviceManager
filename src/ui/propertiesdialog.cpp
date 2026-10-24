@@ -320,7 +320,7 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     volumesTable_->setColumnWidth(0, 180);
     volumesTable_->setColumnWidth(1, 110);
     volumesTable_->setColumnWidth(2, 180);
-    volumesLayout->addWidget(volumesTable_, 2);
+    volumesLayout->addWidget(volumesTable_);
     auto *volumeButtons = new QHBoxLayout;
     volumeDetailsButton_ = new QPushButton(tr("Volume details…"), volumesPage_);
     volumeDetailsButton_->setEnabled(false);
@@ -331,6 +331,7 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     volumeButtons->addWidget(copyVolumes);
     volumeButtons->addStretch();
     volumesLayout->addLayout(volumeButtons);
+    volumesLayout->addStretch();
     connect(volumesTable_, &QTableWidget::currentCellChanged, this, [this] {
         volumeDetailsButton_->setEnabled(volumesTable_->currentRow() >= 0);
     });
@@ -427,6 +428,7 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     resourceButtons->addWidget(copyResourceAll);
     resourceButtons->addStretch();
     resourcesLayout->addLayout(resourceButtons);
+    resourcesLayout->addStretch();
     // The tab appears only after collection finds resource records or read errors.
     auto *eventsPage = new QWidget(tabs);
     auto *eventsLayout = reportPageLayout(eventsPage);
@@ -436,7 +438,7 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     eventsTable_->setHorizontalHeaderLabels({tr("Observed time"), tr("Event type"), tr("Description")});
     eventsTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
     eventsTable_->setSelectionMode(QAbstractItemView::ExtendedSelection);
-    eventsLayout->addWidget(eventsTable_, 2);
+    eventsLayout->addWidget(eventsTable_);
     eventDetails_ = new QPlainTextEdit(eventsPage);
     eventDetails_->setReadOnly(true);
     eventsLayout->addWidget(eventDetails_, 1);
