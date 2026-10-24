@@ -43,6 +43,10 @@ dialogs for troubleshooting or bug reports. Deep search does not cover every
 field in specialized hardware tabs.
 
 ## Unique features not found in other such applications
+- **Shows extended CPU hierarchy and cache configuration**, including CPU groups, i.e.
+  performance and efficiency cores,  their maximum frequency, and per-domain caches.
+  Sadly, Intel doesn't provide the information  needed to distinguish between efficiency
+  cores and low-power efficiency cores.
 - **Shows full RAM information**, including manufacturer, performance (speed in MT/s),
   number of modules, whether they are soldered or replaceable.
 - **Shows PCI-express devices** link speed, link width, PCIe version standard.
