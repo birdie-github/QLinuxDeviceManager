@@ -5,6 +5,7 @@
 #include <QDialog>
 #include <QVector>
 
+class EventsPage;
 class StoragePage;
 class VolumesPage;
 class HealthPage;
@@ -53,8 +54,6 @@ private:
     void copyResources(bool selectedOnly);
     void showDetail();
     void copyAll();
-    void showEvent();
-    void copyEvents(bool selectedOnly);
     DeviceProperties snapshot_;
     QVector<PropertyEntry> entries_;
     QLabel *banner_ = nullptr;
@@ -79,10 +78,6 @@ private:
     QLabel *source_ = nullptr;
     QCheckBox *advanced_ = nullptr;
     QPushButton *reload_ = nullptr;
-    QLabel *eventsNotice_ = nullptr;
-    QTableWidget *eventsTable_ = nullptr;
-    QPlainTextEdit *eventDetails_ = nullptr;
-    QVector<DeviceEvent> displayedEvents_;
-    QString eventScope_;
+    EventsPage *eventsPage_ = nullptr;
     bool removed_ = false;
 };
