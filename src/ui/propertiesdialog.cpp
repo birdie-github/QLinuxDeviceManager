@@ -200,7 +200,9 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     bluetoothPage_->hide();
     auto *bluetoothLayout = new QVBoxLayout(bluetoothPage_);
     auto *bluetoothNotice = plainLabel(tr("ℹ️ Bluetooth controller and known-device snapshot"), bluetoothPage_);
-    bluetoothNotice->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
+    auto bluetoothNoticePolicy = bluetoothNotice->sizePolicy();
+    bluetoothNoticePolicy.setVerticalPolicy(QSizePolicy::Maximum);
+    bluetoothNotice->setSizePolicy(bluetoothNoticePolicy);
     bluetoothNotice->setToolTip(tr("Reload properties to refresh. Known devices are current BlueZ objects, not a pairing history. "
         "Signal and advertising data are last reported values. Services are advertised/supported, not necessarily active. "
         "No scanning, pairing, connection changes or remote characteristic reads are performed."));
