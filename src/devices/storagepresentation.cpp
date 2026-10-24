@@ -115,8 +115,13 @@ StorageDisplayAtaAttribute ataAttribute(const AtaSmartAttribute &attribute, cons
         + QString::number(attribute.id) + " (" + attribute.name + ")";
     if (attribute.name == "total-lbas-written" || attribute.name == "total-lbas-read") {
         if (!attribute.rawCounter.isEmpty()) {
-            interpreted = tr("%1 (raw counter)").arg(QLocale().toString(attribute.rawCounter.toULongLong()));
-            tooltip = tr("Raw counter read by smartctl. Its byte scale is vendor-specific; no byte conversion is assumed.");
+            // The collector validates raw counters as unsigned 48-bit integers,
+            // so multiplying by the conventional 512 bytes per LBA fits quint64.
+            const quint64 raw = attribute.rawCounter.toULongLong();
+            const quint64 bytes = raw * 512;
+            interpreted = tr("%1 MB").arg(QLocale().toString(bytes / 1000000.0, 'f', 2));
+            tooltip = tr("Raw smartctl counter: %1\nConversion assumes 512 bytes per LBA; 1 MB = 1,000,000 bytes. "
+                         "Vendor-specific counter scales may differ.").arg(QLocale().toString(raw));
             source = attribute.rawSource + '\n' + source;
         } else {
             // Keep the UDisks2 value formatted above, but flag its uncertain scale.

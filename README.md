@@ -137,8 +137,9 @@ shown explicitly; some PCIe connection details require root access.
   Raw counters normally require root/sudo or equivalent device permissions. Queries
   have bounded output and a shared timeout. Missing tools, access failures or missing
   counters leave the UDisks2 value visible with a clickable ℹ️ prefix explaining
-  its reliability and access limitations. Raw counter byte
-  units are vendor-specific, so no universal bytes-per-increment is assumed.
+  its reliability and access limitations. Raw LBA counters are displayed in decimal
+  MB assuming 512 bytes per LBA. Tooltips retain the raw counts and explain the
+  assumption; vendor-specific counter scales may differ.
   Known UDisks2/libatasmart LBA scaling errors are not presented as actual totals.
   Missing warnings do not guarantee a healthy drive.
 - **Reported capabilities are not performance tests.** Link speeds, battery
