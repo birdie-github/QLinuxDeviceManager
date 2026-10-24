@@ -1,22 +1,11 @@
 #include "propertiesdialog.h"
-#include "bluetoothpage.h"
-#include "networkpage.h"
-#include "camerapage.h"
-#include "displaypage.h"
-#include "usbpage.h"
-#include "batterypage.h"
-#include "pciepage.h"
-#include "healthpage.h"
-#include "volumespage.h"
-#include "storagepage.h"
-#include "eventspage.h"
-#include "resourcespage.h"
 #include "storagepresentation.h"
-#include "propertypage.h"
 #include "reporttable.h"
 #include "propertyreport.h"
-#include <QDateTime>
 #include "devicelabel.h"
+#include "devicepages/all.h"
+
+#include <QDateTime>
 #include <QApplication>
 #include <QThread>
 #include <QCoreApplication>

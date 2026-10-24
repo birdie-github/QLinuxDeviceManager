@@ -83,20 +83,21 @@ add_executable(qlinuxdevicemanager
     src/devices/pcielinktext.h
     src/ui/gpulinktest.h src/ui/gpulinktest.cpp
     src/ui/propertiesdialog.h src/ui/propertiesdialog.cpp
-    src/ui/propertypage.h src/ui/propertypage.cpp
     src/ui/propertyreport.h src/ui/propertyreport.cpp
-    src/ui/bluetoothpage.h src/ui/bluetoothpage.cpp
-    src/ui/networkpage.h src/ui/networkpage.cpp
-    src/ui/camerapage.h src/ui/camerapage.cpp
-    src/ui/displaypage.h src/ui/displaypage.cpp
-    src/ui/usbpage.h src/ui/usbpage.cpp
-    src/ui/batterypage.h src/ui/batterypage.cpp
-    src/ui/pciepage.h src/ui/pciepage.cpp
-    src/ui/healthpage.h src/ui/healthpage.cpp
-    src/ui/volumespage.h src/ui/volumespage.cpp
-    src/ui/storagepage.h src/ui/storagepage.cpp
-    src/ui/eventspage.h src/ui/eventspage.cpp
-    src/ui/resourcespage.h src/ui/resourcespage.cpp
+    src/ui/devicepages/all.h
+    src/ui/devicepages/propertypage.h src/ui/devicepages/propertypage.cpp
+    src/ui/devicepages/bluetoothpage.h src/ui/devicepages/bluetoothpage.cpp
+    src/ui/devicepages/networkpage.h src/ui/devicepages/networkpage.cpp
+    src/ui/devicepages/camerapage.h src/ui/devicepages/camerapage.cpp
+    src/ui/devicepages/displaypage.h src/ui/devicepages/displaypage.cpp
+    src/ui/devicepages/usbpage.h src/ui/devicepages/usbpage.cpp
+    src/ui/devicepages/batterypage.h src/ui/devicepages/batterypage.cpp
+    src/ui/devicepages/pciepage.h src/ui/devicepages/pciepage.cpp
+    src/ui/devicepages/healthpage.h src/ui/devicepages/healthpage.cpp
+    src/ui/devicepages/volumespage.h src/ui/devicepages/volumespage.cpp
+    src/ui/devicepages/storagepage.h src/ui/devicepages/storagepage.cpp
+    src/ui/devicepages/eventspage.h src/ui/devicepages/eventspage.cpp
+    src/ui/devicepages/resourcespage.h src/ui/devicepages/resourcespage.cpp
     src/devices/secureboot.h src/devices/secureboot.cpp
     src/devices/systemproperties.h src/devices/systemproperties.cpp src/devices/cputopology.h
     src/ui/systemdialog.h src/ui/systemdialog.cpp)
