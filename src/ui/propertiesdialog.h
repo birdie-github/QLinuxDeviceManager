@@ -8,6 +8,7 @@
 #include <QPointer>
 #include <QProcess>
 
+class UsbPage;
 class DisplayPage;
 class CameraPage;
 class BluetoothPage;
@@ -80,9 +81,7 @@ private:
     BluetoothPage *bluetoothPage_ = nullptr;
     CameraPage *cameraPage_ = nullptr;
     DisplayPage *displayPage_ = nullptr;
-    QWidget *usbPage_ = nullptr;
-    QVBoxLayout *usbGroups_ = nullptr;
-    QString usbText_;
+    UsbPage *usbPage_ = nullptr;
     QWidget *pciePage_ = nullptr;
     QVBoxLayout *pcieGroups_ = nullptr;
     QString pcieText_;
