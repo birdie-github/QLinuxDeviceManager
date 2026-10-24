@@ -615,6 +615,9 @@ DeviceProperties collectDeviceProperties(const Device &device, bool cachedStorag
             if (!QThread::currentThread()->isInterruptionRequested())
                 result.display = collectDisplayProperties(d, readText(deviceFd.fd, "status"));
         }
+        if (cachedStorageService && d.subsystem == "bluetooth" && bluetoothControllerName(d.sysname)
+            && !QThread::currentThread()->isInterruptionRequested())
+            result.bluetooth = collectBluetoothProperties(d);
         // Binding can change during a read even if the device instance remains.
         const Attribute afterLink = linkTarget(deviceFd.fd, "driver");
         if (afterLink.state != driverLink.state || afterLink.value != driverLink.value || afterLink.error != driverLink.error) {
@@ -633,6 +636,8 @@ DeviceProperties collectDeviceProperties(const Device &device, bool cachedStorag
         result.efiBytes.clear();
     }
     if (QThread::currentThread()->isInterruptionRequested()) { result.state = ReadState::Error; result.error = ECANCELED; }
+    if (result.state != ReadState::Available && result.bluetooth.applicable)
+        result.bluetooth.invalidate({result.state, {}, result.error});
     return result;
 }
 

@@ -37,6 +37,7 @@ private:
     void rebuildResources();
     void rebuildStorage();
     void rebuildNetwork();
+    void rebuildBluetooth();
     void rebuildDisplay();
     void rebuildCamera();
     void rebuildUsb();
@@ -74,6 +75,9 @@ private:
     QWidget *networkPage_ = nullptr;
     QVBoxLayout *networkGroups_ = nullptr;
     QString networkText_;
+    QWidget *bluetoothPage_ = nullptr;
+    QVBoxLayout *bluetoothGroups_ = nullptr;
+    QString bluetoothText_;
     QWidget *cameraPage_ = nullptr;
     QVBoxLayout *cameraGroups_ = nullptr;
     QString cameraText_;

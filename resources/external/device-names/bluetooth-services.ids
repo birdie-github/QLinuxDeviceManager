@@ -1,0 +1,36 @@
+# Common Bluetooth SIG assigned service UUIDs. Short UUID<TAB>display caption.
+# Reference: https://www.bluetooth.com/specifications/assigned-numbers/
+# Unknown and vendor-specific UUIDs remain visible in full.
+1101	Serial Port
+1105	OBEX Object Push
+1106	OBEX File Transfer
+1108	Headset
+110a	Audio Source (A2DP)
+110b	Audio Sink (A2DP)
+110c	AV Remote Control Target
+110e	AV Remote Control
+110f	AV Remote Control Controller
+1112	Headset Audio Gateway
+1115	Personal Area Networking User
+1116	Network Access Point
+111e	Hands-Free
+111f	Hands-Free Audio Gateway
+1124	Human Interface Device
+1200	PnP Information
+1800	Generic Access
+1801	Generic Attribute
+180a	Device Information
+180d	Heart Rate
+180f	Battery Service
+1812	Human Interface Device over GATT
+1844	Volume Control
+1846	Coordinated Set Identification
+1848	Media Control
+1849	Generic Media Control
+184b	Telephone Bearer
+184c	Generic Telephone Bearer
+184d	Microphone Control
+184e	Audio Stream Control
+184f	Broadcast Audio Scan
+1850	Published Audio Capabilities
+1853	Common Audio

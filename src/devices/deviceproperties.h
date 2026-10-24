@@ -7,6 +7,7 @@
 #include "displayproperties.h"
 #include "monitorproperties.h"
 #include "cameraproperties.h"
+#include "bluetoothproperties.h"
 #include <QByteArray>
 #include <QThread>
 
@@ -41,6 +42,7 @@ struct DeviceProperties {
     CameraProperties camera;
     UsbProperties usb;
     BatteryProperties battery;
+    BluetoothProperties bluetooth;
     bool pcieApplicable = false; // Evidence from this PCI device's link attributes only.
     Attribute pcieType; // Numeric PCI Express device/port type; no GPU-ID inference.
     QString pcieTypeSource;

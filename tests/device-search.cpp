@@ -4,6 +4,8 @@
 #include "resourceformat.h"
 #include "propertytext.h"
 #include "storagepresentation.h"
+#include "bluetoothproperties.h"
+#include <QtEndian>
 #include <QCoreApplication>
 #include <QObject>
 #include <cstdio>
@@ -18,6 +20,39 @@ int main(int argc, char **argv)
     const auto check = [&](bool ok, const char *message) {
         if (!ok) { std::fprintf(stderr, "%s\n", message); ++failures; }
     };
+    {
+        check(bluetoothControllerName("hci0") && bluetoothControllerName("hci12")
+              && !bluetoothControllerName("hci0:256") && !bluetoothControllerName("hci"),
+              "Only local HCI controllers qualify for the Bluetooth tab");
+        BluetoothProperties bt;
+        bt.controllerPath = "/sys/fixture/hci0";
+        QByteArray info(280, '\0');
+        info[6] = 13; // Core 5.4
+        qToLittleEndian<quint16>(2, info.data() + 7);
+        qToLittleEndian<quint32>((1U << 9) | (1U << 11), info.data() + 9);
+        qToLittleEndian<quint32>(1U << 9, info.data() + 13);
+        check(decodeBluetoothControllerInfo(info, bt)
+              && bt.values.value("supported/11").value == "1"
+              && bt.values.value("enabled/11").value == "0"
+              && bt.values.value("enabled/9").value == "1"
+              && bluetoothPropertyText("ManagementVersion", bt.values.value("ManagementVersion")) == "5.4",
+              "Controller information retains supported and enabled settings independently");
+        BluetoothProperties invalid;
+        check(!decodeBluetoothControllerInfo(info.left(279), invalid) && invalid.values.isEmpty(),
+              "Truncated management payloads cannot produce partial capabilities");
+        const auto remote = bluetoothKnownDevice("/org/bluez/hci0/dev_fixture", {
+            {"Address", QStringLiteral("AA:BB:CC:DD:EE:FF")}, {"Paired", true}, {"Trusted", false},
+            {"Connected", false}, {"RSSI", QVariant::fromValue<qint16>(-42)}});
+        check(remote.values.value("Paired").value == "1" && remote.values.value("Trusted").value == "0"
+              && remote.values.value("Connected").value == "0"
+              && remote.values.value("Bonded").state == ReadState::Unavailable
+              && bluetoothPropertyText("RSSI", remote.values.value("RSSI")) == "-42 dBm",
+              "Remote states and missing properties are independent; RSSI keeps signed units");
+        bt.devices.append(remote);
+        bt.invalidate({ReadState::Removed, {}, 0});
+        check(bt.devices.isEmpty() && bt.values.value("supported/11").state == ReadState::Removed,
+              "Device identity failure invalidates Bluetooth data and known-device associations");
+    }
     Device device;
     device.path = "/sys/devices/fixture";
     device.incarnation = "fixture:1";

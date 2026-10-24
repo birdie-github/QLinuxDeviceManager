@@ -27,7 +27,8 @@ set(CMAKE_AUTOMOC ON)
 find_package(Qt6 ${APP_MINIMUM_QT} REQUIRED COMPONENTS Widgets Network)
 # Optional read-only UDisks2 cache access. Native storage viewing still works without it.
 option(UDISKS2 "Use optional QtDBus for cached UDisks2 storage metadata" ON)
-if(UDISKS2)
+option(BLUETOOTH "Use optional QtDBus for BlueZ Bluetooth metadata" ON)
+if(UDISKS2 OR BLUETOOTH)
     find_package(Qt6 ${APP_MINIMUM_QT} QUIET COMPONENTS DBus)
 endif()
 find_package(PkgConfig REQUIRED)
@@ -58,6 +59,7 @@ add_executable(qlinuxdevicemanager
     src/devices/displayproperties.h src/devices/displayproperties.cpp
     src/devices/monitorproperties.h src/devices/monitorproperties.cpp
     src/devices/cameraproperties.h src/devices/cameraproperties.cpp
+    src/devices/bluetoothproperties.h src/devices/bluetoothproperties.cpp
     src/devices/displaybackend.h src/devices/displayx11.cpp src/devices/displaywayland.cpp
     src/devices/displayidentity.h src/devices/displayidentity.cpp
     src/devices/storageproperties.h src/devices/storageproperties.cpp
@@ -115,6 +117,10 @@ if(KMOD AND TARGET PkgConfig::KMOD)
 else()
     message(STATUS "Module description naming: disabled (libkmod >= 30 unavailable or disabled)")
 endif()
+if(BLUETOOTH AND TARGET Qt6::DBus)
+    target_link_libraries(qlinuxdevicemanager PRIVATE Qt6::DBus)
+    target_compile_definitions(qlinuxdevicemanager PRIVATE QLDM_HAVE_BLUEZ)
+endif()
 if(UDISKS2 AND TARGET Qt6::DBus)
     target_link_libraries(qlinuxdevicemanager PRIVATE Qt6::DBus)
     target_compile_definitions(qlinuxdevicemanager PRIVATE QLDM_HAVE_DBUS)
@@ -157,6 +163,11 @@ set(ACPI_NAME_FILE "${CMAKE_CURRENT_SOURCE_DIR}/resources/external/device-names/
 # Keep local builds usable without installation; the data stays outside the binary.
 configure_file("${ACPI_NAME_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/acpi-pnp.ids" COPYONLY)
 install(FILES "${ACPI_NAME_FILE}" DESTINATION ${CMAKE_INSTALL_DATADIR}/${APP_NAME})
+set(BLUETOOTH_SERVICE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/resources/external/device-names/bluetooth-services.ids")
+configure_file("${BLUETOOTH_SERVICE_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/bluetooth-services.ids" COPYONLY)
+install(FILES "${BLUETOOTH_SERVICE_FILE}" DESTINATION ${CMAKE_INSTALL_DATADIR}/${APP_NAME})
+target_compile_definitions(qlinuxdevicemanager PRIVATE
+    QLDM_INSTALLED_BLUETOOTH_SERVICES="${CMAKE_INSTALL_FULL_DATADIR}/${APP_NAME}/bluetooth-services.ids")
 target_compile_definitions(qlinuxdevicemanager PRIVATE
     QLDM_INSTALLED_ACPI_IDS="${CMAKE_INSTALL_FULL_DATADIR}/${APP_NAME}/acpi-pnp.ids")
 # Optional tools: basic viewing never requires Linguist.
@@ -231,6 +242,7 @@ if(BUILD_TESTING)
         src/devices/displayproperties.cpp src/devices/displayproperties.h
         src/devices/monitorproperties.cpp src/devices/monitorproperties.h
         src/devices/cameraproperties.cpp src/devices/cameraproperties.h
+        src/devices/bluetoothproperties.cpp src/devices/bluetoothproperties.h
         src/devices/displaybackend.h src/devices/displayx11.cpp src/devices/displaywayland.cpp
         src/devices/displayidentity.h src/devices/displayidentity.cpp
         src/devices/storageproperties.cpp src/devices/storageproperties.h
@@ -256,6 +268,10 @@ if(BUILD_TESTING)
     if(KMOD AND TARGET PkgConfig::KMOD)
         target_link_libraries(device-search-test PRIVATE PkgConfig::KMOD)
         target_compile_definitions(device-search-test PRIVATE QLDM_HAVE_KMOD)
+    endif()
+    if(BLUETOOTH AND TARGET Qt6::DBus)
+        target_link_libraries(device-search-test PRIVATE Qt6::DBus)
+        target_compile_definitions(device-search-test PRIVATE QLDM_HAVE_BLUEZ)
     endif()
     if(UDISKS2 AND TARGET Qt6::DBus)
         target_link_libraries(device-search-test PRIVATE Qt6::DBus)

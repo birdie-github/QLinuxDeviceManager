@@ -150,6 +150,21 @@ All rows are expanded; long or wide reports scroll with their containing page
 instead of using nested table scrollbars. Initial column widths are sized once,
 and refreshing an existing table preserves manual widths while its columns remain the same.
 
+### Bluetooth details
+
+Local `hciN` controllers have a Bluetooth tab with controller identity, radio
+state, rfkill blocking and BlueZ's currently known devices. Connected, paired,
+bonded, trusted and blocked states are shown separately. Service UUIDs retain
+their full identifiers; common services receive readable names from the external
+`bluetooth-services.ids` file installed beside the ACPI naming database.
+
+The optional BlueZ D-Bus backend works without root on systems whose bus policy
+permits it. The read-only Linux management query adds supported/enabled settings
+when permitted, commonly under root/sudo. Missing access is reported explicitly.
+No scanning, pairing, connection changes, radio changes or remote GATT reads are
+performed. Reload properties to refresh the snapshot; known devices are not a
+complete history, and signal/advertising metadata may be stale.
+
 ## Understanding the results
 
 QLinuxDeviceManager is **read-only**: it does not install drivers, change device

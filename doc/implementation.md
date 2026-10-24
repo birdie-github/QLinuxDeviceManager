@@ -751,7 +751,7 @@ Requirements:
 - libv4l2 development headers/library (Fedora: **libv4l-devel**; Debian/Ubuntu: **libv4l-dev**).
 - XCB RandR and Wayland client **1.20 or newer** development headers (runtime
   libraries are required only for the corresponding Display backend).
-- Optional QtDBus **6.8 or newer** for cached UDisks2 storage metadata.
+- Optional QtDBus **6.8 or newer** for cached UDisks2 storage metadata and BlueZ Bluetooth metadata.
 - Optional libkmod **30 or newer** for installed-module metadata and fallback names.
 - Optional libdisplay-info **0.1.1 or newer** for monitor EDID decoding.
 - Optional Qt Linguist tools **6.8 or newer** to build translation catalogs.
@@ -799,6 +799,11 @@ sudo cmake --install build --prefix /usr/local
 ```
 
 Use `-DKMOD=OFF` to omit libkmod or `-DUDISKS2=OFF` for a native-only storage build.
+Use `-DBLUETOOTH=OFF` to omit the optional BlueZ D-Bus backend. Native controller
+association, rfkill reads and the permission-dependent read-only management query
+remain available. No libbluetooth development package is required; the optional
+runtime `libbluetooth.so.3` supplies SIG company names, otherwise numeric IDs are
+shown. BlueZ absence does not prevent ordinary hardware viewing.
 Basic hardware viewing requires neither QtDBus nor UDisks2. The interface uses
 system-theme icons with Qt fallbacks and standard Qt X11/Wayland platform selection.
 The application window and About dialog use embedded application icons, available
