@@ -7,6 +7,7 @@
 class QGridLayout;
 class QLabel;
 class QTableWidget;
+class QTabWidget;
 class QPushButton;
 
 class SystemDialog final : public QDialog {
@@ -23,14 +24,18 @@ private:
     void rebuildMemory();
     QString memoryValue(const QString &key, const Attribute &value) const;
     void copyAll();
+    void copyInformation(int tab);
     QGridLayout *memoryForm_ = nullptr;
     QGridLayout *mokForm_ = nullptr;
     QHash<QString, QVector<QLabel *>> fields_;
     QHash<QString, QTableWidget *> tables_;
     QStringList order_;
+    QHash<QString, int> keyTabs_;
+    QTabWidget *tabs_ = nullptr;
     QHash<QString, QString> captions_;
     SystemProperties snapshot_;
     QPushButton *refresh_ = nullptr;
     QPushButton *copy_ = nullptr;
+    QPushButton *copyTab_ = nullptr;
     QPushButton *featuresCopy_ = nullptr;
 };

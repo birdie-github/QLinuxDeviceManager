@@ -47,7 +47,8 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
     setWindowTitle(tr("System Information"));
     resize(680, 650);
     auto *layout = new QVBoxLayout(this);
-    auto *tabs = new QTabWidget(this);
+    tabs_ = new QTabWidget(this);
+    auto *tabs = tabs_;
     tabs->setUsesScrollButtons(true);
     layout->addWidget(tabs, 1);
     QVector<QGridLayout *> forms;
@@ -67,6 +68,10 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
         form->setColumnStretch(1, 1);
         forms.append(form);
         return form;
+    };
+    const auto registerKey = [&](const QString &key) {
+        order_.append(key);
+        keyTabs_.insert(key, tabs->count() - 1);
     };
     const auto field = [&](QGridLayout *form, const QString &key, const QString &caption) {
         auto *name = new QLabel(caption, form->parentWidget());
@@ -110,7 +115,7 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
         }
         if (!fields_.contains(key)) {
             captions_.insert(key, caption);
-            order_.append(key);
+            registerKey(key);
         }
         if (!table) fields_[key].append(value);
     };
@@ -144,7 +149,7 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
     mokForm_->setContentsMargins(0, 0, 0, 0);
     mokForm_->setColumnStretch(1, 1);
     hardware->addWidget(mokPage, hardware->rowCount(), 0, 1, 2);
-    order_.append("mok");
+    registerKey("mok");
     captions_.insert("mok", tr("MOK certificates"));
 
     auto *processor = group(tr("Processor"));
@@ -163,7 +168,7 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
     processor->addWidget(featuresLabel, featuresRow, 0);
     processor->addWidget(featuresCopy_, featuresRow, 1, Qt::AlignLeading);
     captions_.insert("instruction_sets", featuresCaption);
-    order_.append("instruction_sets");
+    registerKey("instruction_sets");
     connect(featuresCopy_, &QPushButton::clicked, this, [this] {
         QApplication::clipboard()->setText(displayValue("instruction_sets", snapshot_.values.value("instruction_sets")));
     });
@@ -181,7 +186,7 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
     memoryForm_->setColumnStretch(1, 1);
     memory->addWidget(memoryPage, memory->rowCount(), 0, 1, 2);
     forms.append(memoryForm_);
-    order_.append("memory_devices");
+    registerKey("memory_devices");
     captions_.insert("memory_devices", tr("RAM/Memory"));
     // Use one font-derived caption width for every section, so values align.
     int captionWidth = 0;
@@ -199,9 +204,13 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
     rebuildMok();
     rebuildMemory();
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
+    copyTab_ = buttons->addButton(tr("Copy"), QDialogButtonBox::ActionRole);
+    copyTab_->setToolTip(tr("Copy information from the current tab"));
     copy_ = buttons->addButton(tr("Copy all"), QDialogButtonBox::ActionRole);
     refresh_ = buttons->addButton(tr("Refresh"), QDialogButtonBox::ActionRole);
+    copyTab_->setEnabled(false);
     copy_->setEnabled(false);
+    connect(copyTab_, &QPushButton::clicked, this, [this] { copyInformation(tabs_->currentIndex()); });
     connect(copy_, &QPushButton::clicked, this, &SystemDialog::copyAll);
     connect(refresh_, &QPushButton::clicked, this, &SystemDialog::refreshRequested);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::close);
@@ -653,13 +662,20 @@ void SystemDialog::acceptResult(SystemProperties result)
     featuresCopy_->setToolTip(features.state == ReadState::Available
         ? tr("Copy kernel-reported instruction sets and CPU features to the clipboard.")
         : propertyReadValue(features));
+    copyTab_->setEnabled(true);
     copy_->setEnabled(true);
 }
 void SystemDialog::copyAll()
 {
+    copyInformation(-1);
+}
+void SystemDialog::copyInformation(int tab)
+{
     QStringList lines;
-    for (const QString &key : order_)
+    for (const QString &key : order_) {
+        if (tab >= 0 && keyTabs_.value(key, -1) != tab) continue;
         lines.append(captions_.value(key) + (key == "core_groups" || key == "cache_topology" ? ":\n" : ": ")
                      + displayValue(key, snapshot_.values.value(key)));
+    }
     QApplication::clipboard()->setText(lines.join('\n'));
 }
