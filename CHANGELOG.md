@@ -2,7 +2,12 @@
 
 - **Much richer CPU information**: Core groups (including performance vs. efficiency cores where applicable), how caches are shared between cores, maximum frequencies, and SMT (hyper-threading) status. This gives a clearer picture of how your processor is organized.
 - Much improved ATA drives health reporting - more sensible presentation, LBAs read/written are properly read and presented.
-- A ton of previously not shown Wi-Fi related information: connected SSID (router/access point/hotspot) name, channel, bandwidth, signal strength/transmit power in dBm, mode (client/server), security (WPA1/WPA2/WPA3-Personal (SAE)) - requires running under `root`/`sudo` - can't do anything about that - a silly Linux network API limitation.  
+- A ton of Bluetooth information, including version, MAC address, capabilities, previously paired devices and their statuses.
+- A ton of previously not shown Wi-Fi related information: connected SSID (router/access point/hotspot) name, channel, bandwidth, signal strength/transmit power in dBm, mode (client/server), security (WPA1/WPA2/WPA3-Personal (SAE)) - requires running under `root`/`sudo` - can't do anything about that as it is a silly Linux network API limitation.
+- A ton of previously unidentified devices are now shown properly. They were shown before, they just lacked proper names.
+- Fixed sorting across the application.
+- Implemented theming support (icon images can be overridden).
+- Now calculating and showing display PPI.
 - Memory modules from the firmware are shown in their own individual sections/tabs so each stick is easier to read.
 - Optional GPU PCIe link test: You can run a short graphics load on a selected GPU to see whether the PCIe connection actually speeds up or uses more lanes under load. Useful for checking if a graphics card is running at its full possible speed. The test only appears when the link readings look usable.
 - Better matching of display outputs on X11 systems by using the monitor’s unique EDID identity when the connector names don’t match perfectly.
