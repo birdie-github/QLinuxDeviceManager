@@ -332,7 +332,10 @@ NetworkProperties networkInterface(int fd, const QString &path, const QString &n
             if (fstatat(fd, marker, &entry, AT_SYMLINK_NOFOLLOW) == 0) wireless = true;
             else if (errno != ENOENT) scopeError = errno;
         }
-        if (!wireless && scopeError) {
+        if (wireless && index.state == ReadState::Available && valid && number
+            && !QThread::currentThread()->isInterruptionRequested()) {
+            result.wireless = collectWirelessProperties(name, number, path);
+        } else if (!wireless && scopeError) {
             result.ethernet.scope = failure(scopeError);
             result.ethernet.source = path + "/phy80211; " + path + "/wireless";
         } else if (!wireless && index.state == ReadState::Available && valid && number
@@ -352,6 +355,7 @@ NetworkProperties networkInterface(int fd, const QString &path, const QString &n
             = result.assignmentType = result.mtu = error;
         if (result.ethernet.applicable || result.ethernet.scope.state != ReadState::NotApplicable)
             result.ethernet.invalidate(error);
+        if (result.wireless.applicable) result.wireless.invalidate(error);
     }
     return result;
 }

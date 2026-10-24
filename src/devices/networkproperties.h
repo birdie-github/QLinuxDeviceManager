@@ -2,6 +2,7 @@
 
 #include "device.h"
 #include "ethernetproperties.h"
+#include "wirelessproperties.h"
 
 struct NetworkAddress {
     QString family;
@@ -21,6 +22,7 @@ struct NetworkProperties {
     Attribute addressState;
     Attribute permanentAddress;
     EthernetProperties ethernet;
+    WirelessProperties wireless;
 };
 
 NetworkProperties collectNetworkProperties(const QString &name, unsigned int index, bool ethernet);

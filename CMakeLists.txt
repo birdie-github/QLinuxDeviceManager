@@ -53,6 +53,7 @@ add_executable(qlinuxdevicemanager
     src/devices/deviceproperties.h src/devices/deviceproperties.cpp
     src/devices/networkproperties.h src/devices/networkproperties.cpp
     src/devices/ethernetproperties.h src/devices/ethernetproperties.cpp
+    src/devices/genericnetlink.h src/devices/wirelessproperties.h src/devices/wirelessproperties.cpp
     src/devices/displayproperties.h src/devices/displayproperties.cpp
     src/devices/monitorproperties.h src/devices/monitorproperties.cpp
     src/devices/cameraproperties.h src/devices/cameraproperties.cpp
@@ -196,6 +197,7 @@ if(BUILD_TESTING)
         src/devices/deviceproperties.cpp src/devices/deviceproperties.h
         src/devices/networkproperties.cpp src/devices/networkproperties.h
         src/devices/ethernetproperties.cpp src/devices/ethernetproperties.h
+        src/devices/genericnetlink.h src/devices/wirelessproperties.cpp src/devices/wirelessproperties.h
         src/devices/displayproperties.cpp src/devices/displayproperties.h
         src/devices/monitorproperties.cpp src/devices/monitorproperties.h
         src/devices/cameraproperties.cpp src/devices/cameraproperties.h

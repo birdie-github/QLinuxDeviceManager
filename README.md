@@ -123,6 +123,24 @@ browse. Devices update automatically when hardware changes; use **F5** if you ne
 to refresh manually. Open Properties dialogs retain a snapshot until you reload
 them. System Information has its own **Refresh** and **Copy all** buttons.
 
+### Wireless network details
+
+The Network tab includes a Wireless section for Wi-Fi interfaces. Read-only
+nl80211 queries report operating mode, channel/frequency, channel width, transmit
+power, and per-direction link rates, signal and spatial streams when the driver
+and permissions allow them. Rates are PHY snapshots, not measured throughput;
+hotspot rates are per client, so no single hotspot link speed is shown. An adapter
+maximum speed is not inferred from its marketing generation or AP advertisements.
+
+Optional QtDBus support uses NetworkManager for the active SSID/BSSID and fallback
+link rate/signal quality. The system wpa_supplicant service supplies negotiated
+client authentication when accessible; AP security advertisements are not treated
+as the selected authentication. Hotspot security uses the active NetworkManager
+profile's non-secret key-management setting and is explicitly labeled configured.
+Other network backends retain native radio details but may lack connection metadata.
+Queries do not request scans, change settings, or retrieve passwords. Restricted
+station queries remain explicit permission errors; reload properties for a new snapshot.
+
 ## Understanding the results
 
 QLinuxDeviceManager is **read-only**: it does not install drivers, change device

@@ -775,6 +775,42 @@ void PropertiesDialog::rebuildNetwork()
     }
     for (const NetworkProperties &interface : snapshot_.network) {
         const EthernetProperties &ethernet = interface.ethernet;
+        const WirelessProperties &wireless = interface.wireless;
+        if (wireless.applicable) {
+            auto *form = group(tr("%1 — Wireless").arg(interface.name));
+            const auto wifiField = [&](const char *caption, const char *key, const QString &extra = QString()) {
+                field(form, QCoreApplication::translate("Wireless", caption),
+                    wirelessPropertyText(QLatin1String(key), wireless.values.value(QLatin1String(key))),
+                    wireless.sources.value(QLatin1String(key)) + extra);
+            };
+            field(form, tr("Interface"), tr("802.11 Wi-Fi"), interface.path);
+            wifiField(QT_TRANSLATE_NOOP("Wireless", "Operating mode"), "mode");
+            if (wireless.values.value("connection").state == ReadState::Available)
+                wifiField(QT_TRANSLATE_NOOP("Wireless", "Connection state"), "connection");
+            const bool hotspot = wireless.values.value("mode").state == ReadState::Available
+                && wireless.values.value("mode").value == "3";
+            wifiField(hotspot ? QT_TRANSLATE_NOOP("Wireless", "Hotspot") : QT_TRANSLATE_NOOP("Wireless", "Connected to"), "ssid");
+            wifiField(hotspot ? QT_TRANSLATE_NOOP("Wireless", "Hotspot MAC (BSSID)") : QT_TRANSLATE_NOOP("Wireless", "Access point MAC (BSSID)"), "bssid");
+            wifiField(QT_TRANSLATE_NOOP("Wireless", "Radio channel"), "frequency");
+            wifiField(QT_TRANSLATE_NOOP("Wireless", "Channel width"), "width");
+            if (!hotspot) {
+                wifiField(QT_TRANSLATE_NOOP("Wireless", "Signal"), "signal");
+                if (wireless.values.value("signal").state != ReadState::Available
+                    && wireless.values.value("quality").state == ReadState::Available)
+                    wifiField(QT_TRANSLATE_NOOP("Wireless", "Signal quality"), "quality");
+                wifiField(QT_TRANSLATE_NOOP("Wireless", "Transmit link rate"), "txrate");
+                wifiField(QT_TRANSLATE_NOOP("Wireless", "Receive link rate"), "rxrate");
+                if (wireless.values.value("nmrate").state == ReadState::Available
+                    && wireless.values.value("txrate").state != ReadState::Available
+                    && wireless.values.value("rxrate").state != ReadState::Available)
+                    wifiField(QT_TRANSLATE_NOOP("Wireless", "Link rate (NetworkManager)"), "nmrate");
+                wifiField(QT_TRANSLATE_NOOP("Wireless", "TX spatial streams"), "txstreams");
+                wifiField(QT_TRANSLATE_NOOP("Wireless", "RX spatial streams"), "rxstreams");
+            }
+            wifiField(QT_TRANSLATE_NOOP("Wireless", "Transmit power"), "txpower");
+            if (hotspot) wifiField(QT_TRANSLATE_NOOP("Wireless", "Security (configured)"), "securityconfig");
+            else wifiField(QT_TRANSLATE_NOOP("Wireless", "Security"), "security");
+        }
         if (ethernet.applicable) {
             auto *form = group(tr("%1 — Ethernet link").arg(interface.name));
             const QString source = interface.path + '\n' + ethernet.source;
