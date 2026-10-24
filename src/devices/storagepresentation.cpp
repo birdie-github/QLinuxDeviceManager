@@ -119,13 +119,13 @@ StorageDisplayAtaAttribute ataAttribute(const AtaSmartAttribute &attribute, cons
             tooltip = tr("Raw counter read by smartctl. Its byte scale is vendor-specific; no byte conversion is assumed.");
             source = attribute.rawSource + '\n' + source;
         } else {
-            interpreted = tr("Unavailable (raw counter)");
-            counterNotice = tr("Reading actual counters normally requires running the application as root or with sudo. "
-                "Install smartmontools if smartctl is missing.\n\n"
-                "Known UDisks2/libatasmart issue: cached Total LBAs Read/Written values may use incorrect "
-                "65536-sector scaling and produce greatly inflated totals. These values are not used as actual counters.");
-            if (!counterStatus.isEmpty()) counterNotice += "\n\n" + counterStatus;
+            // Keep the UDisks2 value formatted above, but flag its uncertain scale.
+            counterNotice = tr("This value is reported by UDisks2 and may be unreliable due to a known "
+                "UDisks2/libatasmart scaling issue.\n\n"
+                "To read the actual raw counter with smartctl, run the application as root or with sudo. "
+                "The optional smartmontools package must be installed.");
             tooltip = counterNotice;
+            if (!counterStatus.isEmpty()) tooltip += "\n\n" + counterStatus;
         }
     }
     return {QString::number(attribute.id), attribute.name.isEmpty() ? tr("Unnamed attribute") : ataAttributeName(attribute.name),

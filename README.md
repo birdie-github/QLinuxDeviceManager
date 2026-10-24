@@ -136,7 +136,8 @@ shown explicitly; some PCIe connection details require root access.
   that sleeping drives be skipped; device autodetection can still wake some bridges.
   Raw counters normally require root/sudo or equivalent device permissions. Queries
   have bounded output and a shared timeout. Missing tools, access failures or missing
-  counters leave an information button explaining the limitation. Raw counter byte
+  counters leave the UDisks2 value visible with a clickable ℹ️ prefix explaining
+  its reliability and access limitations. Raw counter byte
   units are vendor-specific, so no universal bytes-per-increment is assumed.
   Known UDisks2/libatasmart LBA scaling errors are not presented as actual totals.
   Missing warnings do not guarantee a healthy drive.

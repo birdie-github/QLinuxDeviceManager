@@ -34,7 +34,6 @@
 #include <QStyleOptionHeader>
 #include <QTimer>
 #include <QPushButton>
-#include <QToolButton>
 #include <QMessageBox>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -1895,25 +1894,17 @@ void PropertiesDialog::showHealth()
                     item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
                 table->setItem(index, column, item);
                 if (column == 5 && !attribute.counterNotice.isEmpty()) {
-                    auto *cell = new QWidget(table);
-                    auto *cellLayout = new QHBoxLayout(cell);
-                    cellLayout->setContentsMargins(2, 0, 2, 0);
-                    cell->setToolTip(attribute.counterNotice);
-                    auto *info = new QToolButton(cell);
-                    info->setText(QStringLiteral("ℹ️"));
-                    info->setAutoRaise(true);
-                    info->setAccessibleName(tr("Raw SMART counter information"));
-                    info->setToolTip(attribute.counterNotice);
-                    const QString notice = attribute.counterNotice;
-                    connect(info, &QToolButton::clicked, this, [this, notice] {
-                        QMessageBox::information(this, tr("Raw SMART counters"), notice);
-                    });
-                    cellLayout->addWidget(info);
-                    cellLayout->addWidget(plainLabel(attribute.interpreted, cell), 1);
-                    table->setCellWidget(index, column, cell);
+                    // Paint the prefix and value together: cell widgets would overlap
+                    // the underlying item text and interfere with row sizing.
+                    item->setText(QStringLiteral("ℹ️ ") + attribute.interpreted);
+                    item->setData(Qt::UserRole, attribute.counterNotice);
                 }
             }
         }
+        connect(table, &QTableWidget::itemClicked, this, [this](QTableWidgetItem *item) {
+            const QString notice = item->data(Qt::UserRole).toString();
+            if (!notice.isEmpty()) QMessageBox::information(this, tr("SMART counter information"), notice);
+        });
         layout->addWidget(table);
         table->fitContents();
         healthGroups_->addWidget(box);
