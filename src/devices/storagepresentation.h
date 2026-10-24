@@ -2,7 +2,10 @@
 #include "storageproperties.h"
 
 // Owned, widget-free presentation of one bounded collector snapshot.
-struct StorageDisplayField { QString label, value, source, tooltip; };
+struct StorageDisplayField {
+    QString label, value, source;
+    QString tooltip = {};
+};
 struct StorageDisplayGroup { QString title; QVector<StorageDisplayField> fields; };
 struct StorageDisplayAtaAttribute {
     QString id, name, current, worst, threshold, interpreted, flags, source, interpretedTooltip;
