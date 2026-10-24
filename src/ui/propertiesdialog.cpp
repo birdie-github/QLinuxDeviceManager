@@ -693,6 +693,30 @@ void PropertiesDialog::rebuildBluetooth()
         value->setToolTip(propertyToolTip(source));
         form->addRow(label, value);
     };
+    const auto renderServices = [](QFormLayout *form, const Attribute &value, const QString &source) {
+        if (value.state != ReadState::Available || value.value.isEmpty()) {
+            auto *status = plainLabel(bluetoothPropertyText("UUIDs", value), form->parentWidget());
+            status->setToolTip(propertyToolTip(source));
+            form->addRow(status);
+            return;
+        }
+        auto *table = new ReportTable(0, 2, form->parentWidget());
+        table->setHorizontalHeaderLabels({tr("Service"), tr("UUID")});
+        table->setSelectionBehavior(QAbstractItemView::SelectRows);
+        for (const QString &uuid : value.value.split('\n', Qt::SkipEmptyParts)) {
+            const int row = table->rowCount();
+            table->insertRow(row);
+            const QString name = bluetoothServiceName(uuid);
+            auto *service = new QTableWidgetItem(name.isEmpty() ? tr("Unknown service") : name);
+            auto *identifier = new QTableWidgetItem(uuid);
+            const QString hint = propertyToolTip(source + '\n' + uuid);
+            service->setToolTip(hint);
+            identifier->setToolTip(hint);
+            table->setItem(row, 0, service);
+            table->setItem(row, 1, identifier);
+        }
+        form->addRow(table);
+    };
     const auto field = [&](QFormLayout *form, const QString &caption, const QString &key,
                            const QString &fallback = QString()) {
         const QString selected = !fallback.isEmpty() && bt.values.value(key).state != ReadState::Available
@@ -715,8 +739,11 @@ void PropertiesDialog::rebuildBluetooth()
     field(controller, tr("Alias"), "Alias");
     field(controller, tr("Device class"), "Class", "ManagementClass");
     field(controller, tr("Supported roles"), "Roles");
-    field(controller, tr("Local services"), "UUIDs");
     controller->addRow(plainLabel(tr("The Core version does not guarantee every optional feature in that specification."), controller->parentWidget()));
+    auto *localServices = group(tr("Local Services"));
+    renderServices(localServices, bt.values.value("UUIDs"), bt.sources.value("UUIDs"));
+    copy.append(bluetoothPropertyText("UUIDs", bt.values.value("UUIDs"))
+        + '\n' + tr("Source: %1").arg(bt.sources.value("UUIDs")));
     auto *radio = group(tr("Radio state"));
     for (const auto &entry : QVector<QPair<QString, QString>> {
              {"Powered", tr("Powered")}, {"Discoverable", tr("Discoverable")}, {"Pairable", tr("Pairable")},
@@ -787,7 +814,7 @@ void PropertiesDialog::rebuildBluetooth()
         details->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
         details->setRowWrapPolicy(QFormLayout::WrapLongRows);
         known->addRow(page);
-        const auto show = [details, devices = bt.devices, remoteFields, renderField](int index) {
+        const auto show = [details, devices = bt.devices, remoteFields, renderField, renderServices](int index) {
             clearForm(details);
             if (index < 0 || index >= devices.size()) return;
             const auto &remote = devices[index];
@@ -795,7 +822,12 @@ void PropertiesDialog::rebuildBluetooth()
                 const Attribute value = remote.values.value(entry.first);
                 const QString source = remote.path + " : org.bluez.Device1." + entry.first
                     + (value.state == ReadState::Available ? "\n" + value.value : QString());
-                renderField(details, entry.second, bluetoothPropertyText(entry.first, value), source);
+                if (entry.first == "UUIDs") {
+                    auto *box = new QGroupBox(tr("Services"), details->parentWidget());
+                    auto *services = new QFormLayout(box);
+                    renderServices(services, value, source);
+                    details->addRow(box);
+                } else renderField(details, entry.second, bluetoothPropertyText(entry.first, value), source);
             }
         };
         connect(selector, &QComboBox::currentIndexChanged, selector, show);

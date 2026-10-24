@@ -25,3 +25,5 @@ bool bluetoothControllerName(const QString &name);
 BluetoothDeviceProperties bluetoothKnownDevice(const QString &path, const QVariantMap &properties);
 QString bluetoothPropertyText(const QString &key, const Attribute &value);
 QString bluetoothSettingName(int bit);
+// Uses the same worker-loaded service-name snapshot as the copy formatter.
+QString bluetoothServiceName(const QString &uuid);

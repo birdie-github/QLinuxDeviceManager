@@ -52,6 +52,9 @@ the configured install location. The first valid file wins; the file is bounded
 to 64 KiB and is read once in the worker. UUIDs outside this small common-service
 list, including vendor UUIDs, remain visible in full. BLE appearance is shown as
 its assigned numeric code, while Class of Device is decoded to its major class.
+The controller's **Local Services** section and each known device's **Services**
+section use ReportTable, with separate service-name and full-UUID columns.
+Unknown services retain their UUID; empty and unavailable lists show their status.
 All signal strength/transmit-power values are last-reported metadata, not live
 telemetry. Service availability does not prove that a profile is currently active.
 

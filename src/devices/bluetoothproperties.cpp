@@ -83,7 +83,7 @@ QString company(quint16 id)
     const QString code = QStringLiteral("0x%1").arg(id, 4, 16, QLatin1Char('0'));
     return name.isEmpty() ? tr("Company ID %1").arg(code) : name + " (" + code + ')';
 }
-QString services(const QString &text)
+QString serviceName(const QString &uuid)
 {
     static const QHash<QString, QString> names = [] {
         QStringList paths {QCoreApplication::applicationDirPath() + "/bluetooth-services.ids",
@@ -115,14 +115,9 @@ QString services(const QString &text)
         }
         return QHash<QString, QString>{};
     }();
-    QStringList output;
-    for (const QString &uuid : text.split('\n', Qt::SkipEmptyParts)) {
-        const QString normalized = uuid.toLower();
-        const QString name = normalized.size() == 36 && normalized.startsWith("0000")
-            && normalized.mid(8) == "-0000-1000-8000-00805f9b34fb" ? names.value(normalized.mid(4, 4)) : QString();
-        output.append(name.isEmpty() ? uuid : name + " — " + uuid);
-    }
-    return output.isEmpty() ? tr("None reported") : output.join('\n');
+    const QString normalized = uuid.toLower();
+    return normalized.size() == 36 && normalized.startsWith("0000")
+        && normalized.mid(8) == "-0000-1000-8000-00805f9b34fb" ? names.value(normalized.mid(4, 4)) : QString();
 }
 Attribute scalar(const QVariantMap &properties, const QString &key)
 {
@@ -268,6 +263,11 @@ void bluezInfo(BluetoothProperties &result)
 #endif
 }
 
+QString bluetoothServiceName(const QString &uuid)
+{
+    return serviceName(uuid);
+}
+
 bool bluetoothControllerName(const QString &name)
 {
     static const QRegularExpression controller(QStringLiteral("^hci[0-9]+$"));
@@ -339,7 +339,7 @@ BluetoothProperties collectBluetoothProperties(const Device &device)
     const QString classPath = "/sys/class/bluetooth/" + device.sysname;
     if (QFileInfo(classPath).canonicalFilePath() != device.path) { result.invalidate(failure(ENODEV)); return result; }
     // Warm optional naming data in the worker, keeping file/library I/O out of UI formatters.
-    services(QString());
+    serviceName(QString());
     company(0xffff);
     put(result, "Interface", available(device.sysname), classPath);
     put(result, "KernelAddress", readText(device.path + "/address"), device.path + "/address");
@@ -418,7 +418,14 @@ QString bluetoothPropertyText(const QString &key, const Attribute &value)
 {
     if (value.state != ReadState::Available) return propertyReadValue(value);
     const QString &text = value.value;
-    if (key == "UUIDs") return services(text);
+    if (key == "UUIDs") {
+        QStringList output;
+        for (const QString &uuid : text.split('\n', Qt::SkipEmptyParts)) {
+            const QString name = bluetoothServiceName(uuid);
+            output.append(name.isEmpty() ? uuid : name + " — " + uuid);
+        }
+        return output.isEmpty() ? tr("None reported") : output.join('\n');
+    }
     if (key == "Version" || key == "ManagementVersion") {
         bool valid = false;
         const uint code = text.toUInt(&valid);
