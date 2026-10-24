@@ -112,6 +112,30 @@ int main(int argc, char **argv)
     Device hidden = device;
     hidden.path += "/hidden";
     hidden.hidden = true;
+    {
+        DeviceModel sorted;
+        const QStringList expected {"cpu0", "cpu01", "cpu1", "cpu2", "cpu10",
+            "cpu999999999999999999999999", "cpu1000000000000000000000000",
+            "nvme0n1p2", "nvme0n1p10", "nvme0n2p1", "nvme0n10p1"};
+        QVector<Device> numbered;
+        for (auto it = expected.crbegin(); it != expected.crend(); ++it) {
+            Device item;
+            item.path = "/sys/devices/sort-fixture/" + *it;
+            item.incarnation = item.path;
+            item.name = item.sysname = *it;
+            item.subsystem = "fixture";
+            item.category = "other";
+            numbered.append(item);
+        }
+        sorted.setInventory(numbered);
+        for (const auto view : {DeviceModel::View::Type, DeviceModel::View::Connection}) {
+            sorted.setView(view);
+            QStringList actual;
+            for (const SearchRecord &record : sorted.searchRecords()) actual.append(record.device.sysname);
+            check(actual == expected,
+                  "Tree order handles numeric runs, leading-zero ties and numbers beyond integer range");
+        }
+    }
     DeviceModel model;
     model.setInventory({device, hidden});
     const auto records = model.searchRecords();
