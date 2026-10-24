@@ -41,3 +41,21 @@ PropertyPageWidgets setupPropertyPage(QWidget *page, const QString &heading,
     layout->addWidget(copyButton);
     return {page, groups, copyButton};
 }
+
+// Only report content scrolls; tab actions stay above the dialog-wide footer.
+ReportPageLayout reportPageLayout(QWidget *parent)
+{
+    auto *layout = new QVBoxLayout(parent);
+    auto *scroll = new QScrollArea(parent);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    auto *page = new QWidget(scroll);
+    auto *contents = new QVBoxLayout(page);
+    contents->setContentsMargins(0, 0, 0, 0);
+    contents->setAlignment(Qt::AlignTop);
+    scroll->setWidget(page);
+    layout->addWidget(scroll, 1);
+    auto *actions = new QHBoxLayout;
+    layout->addLayout(actions);
+    return {contents, actions};
+}

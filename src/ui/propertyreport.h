@@ -29,3 +29,7 @@ private:
     QVector<QGridLayout *> forms_;
     QVector<QLabel *> captions_;
 };
+
+class QFormLayout;
+struct StorageDisplayField;
+void showStorageFields(QFormLayout *form, const QVector<StorageDisplayField> &fields);

@@ -8,6 +8,8 @@
 #include "batterypage.h"
 #include "pciepage.h"
 #include "healthpage.h"
+#include "volumespage.h"
+#include "propertypage.h"
 #include "reporttable.h"
 #include "propertyreport.h"
 #include <QDateTime>
@@ -83,55 +85,7 @@ void clearForm(QFormLayout *form)
 {
     while (form->rowCount()) form->removeRow(0);
 }
-struct ReportPageLayout {
-    QVBoxLayout *contents;
-    QHBoxLayout *actions;
-};
-// Only report content scrolls; tab actions stay above the dialog-wide footer.
-ReportPageLayout reportPageLayout(QWidget *parent)
-{
-    auto *layout = new QVBoxLayout(parent);
-    auto *scroll = new QScrollArea(parent);
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    auto *page = new QWidget(scroll);
-    auto *contents = new QVBoxLayout(page);
-    contents->setContentsMargins(0, 0, 0, 0);
-    contents->setAlignment(Qt::AlignTop);
-    scroll->setWidget(page);
-    layout->addWidget(scroll, 1);
-    auto *actions = new QHBoxLayout;
-    layout->addLayout(actions);
-    return {contents, actions};
-}
-QFormLayout *storageDetailsForm(QVBoxLayout *layout, QWidget *parent)
-{
-    auto *page = new QWidget(parent);
-    auto *form = new QFormLayout(page);
-    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
-    form->setRowWrapPolicy(QFormLayout::WrapLongRows);
-    form->setFormAlignment(Qt::AlignTop);
-    layout->addWidget(page);
-    return form;
-}
-void showStorageFields(QFormLayout *form, const QVector<StorageDisplayField> &fields)
-{
-    clearForm(form);
-    for (const StorageDisplayField &field : fields) {
-        auto *caption = plainLabel(field.label + ':', form->parentWidget());
-        auto *value = plainLabel(field.value, form->parentWidget());
-        const QString hint = propertyToolTip(field.source);
-        caption->setToolTip(hint);
-        value->setToolTip(hint);
-        form->addRow(caption, value);
-    }
-}
-QString selectedStorageText(const QVector<StorageDisplayRow> &rows, int index)
-{
-    if (index < 0 || index >= rows.size()) return {};
-    const StorageDisplayRow &row = rows[index];
-    return storageRowsText({row});
-}
+
 }
 
 PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDialog(parent)
@@ -188,41 +142,7 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
             + "\n\n" + storagePresentation_.notes);
     });
 
-    volumesPage_ = new QWidget(tabs);
-    volumesPage_->hide();
-    const auto volumesReport = reportPageLayout(volumesPage_);
-    auto *volumesLayout = volumesReport.contents;
-    volumesNotice_ = plainLabel(tr("ℹ️ Related volumes and mounts"), volumesPage_);
-    volumesLayout->addWidget(volumesNotice_);
-    volumesTable_ = new ReportTable(0, 5, volumesPage_);
-    volumesTable_->setHorizontalHeaderLabels({tr("Device / label"), tr("Layer"), tr("Capacity"), tr("Content"), tr("Mount points")});
-    volumesTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
-    volumesTable_->setSelectionMode(QAbstractItemView::SingleSelection);
-    volumesTable_->setColumnWidth(0, 180);
-    volumesTable_->setColumnWidth(1, 110);
-    volumesTable_->setColumnWidth(2, 180);
-    volumesLayout->addWidget(volumesTable_);
-    auto *volumeButtons = volumesReport.actions;
-    volumeDetailsButton_ = new QPushButton(tr("Volume details…"), volumesPage_);
-    volumeDetailsButton_->setEnabled(false);
-    auto *copyVolume = new QPushButton(tr("Copy selected volume"), volumesPage_);
-    auto *copyVolumes = new QPushButton(tr("Copy all volumes"), volumesPage_);
-    volumeButtons->addWidget(volumeDetailsButton_);
-    volumeButtons->addWidget(copyVolume);
-    volumeButtons->addWidget(copyVolumes);
-    volumeButtons->addStretch();
-    volumesLayout->addStretch();
-    connect(volumesTable_, &QTableWidget::currentCellChanged, this, [this] {
-        volumeDetailsButton_->setEnabled(volumesTable_->currentRow() >= 0);
-    });
-    connect(volumeDetailsButton_, &QPushButton::clicked, this, &PropertiesDialog::showVolumeDetails);
-    connect(volumesTable_, &QTableWidget::cellDoubleClicked, this, [this] { showVolumeDetails(); });
-    connect(copyVolume, &QPushButton::clicked, this, [this] {
-        QApplication::clipboard()->setText(selectedStorageText(storagePresentation_.volumes, volumesTable_->currentRow()));
-    });
-    connect(copyVolumes, &QPushButton::clicked, this, [this] {
-        QApplication::clipboard()->setText(storageRowsText(storagePresentation_.volumes));
-    });
+    volumesPage_ = new VolumesPage(tabs);
 
     healthPage_ = new HealthPage(tabs);
     auto *details = new QWidget(tabs);
@@ -583,7 +503,7 @@ void PropertiesDialog::rebuildBattery()
 void PropertiesDialog::rebuildStorage()
 {
     for (const auto &page : {qMakePair(storagePage_, tr("Storage")),
-                             qMakePair(volumesPage_, tr("Volumes")), qMakePair(static_cast<QWidget *>(healthPage_), tr("Health"))}) {
+                             qMakePair(static_cast<QWidget *>(volumesPage_), tr("Volumes")), qMakePair(static_cast<QWidget *>(healthPage_), tr("Health"))}) {
         const int existing = tabs_->indexOf(page.first);
         if (snapshot_.storage.applicable && existing < 0) tabs_->addTab(page.first, page.second);
         else if (!snapshot_.storage.applicable && existing >= 0) {
@@ -591,8 +511,6 @@ void PropertiesDialog::rebuildStorage()
             page.first->hide();
         }
     }
-    const QString previousVolume = volumesTable_->currentRow() >= 0
-        ? volumesTable_->item(volumesTable_->currentRow(), 0)->data(Qt::UserRole).toString() : QString();
     storagePresentation_ = storagePresentation(snapshot_.storage, device().path);
     const QString scope = tr("Read-only metadata snapshot. Each entity is a separate layer; capacities are not added. "
         "Kernel and UDisks2 block records are merged only by their exact device-number mapping. "
@@ -601,60 +519,10 @@ void PropertiesDialog::rebuildStorage()
         label->setToolTip(propertyToolTip(text));
     };
     hint(storageNotice_, scope + "\n\n" + storagePresentation_.notes);
-    hint(volumesNotice_, scope + '\n' + tr("Related volumes may span several drives. Mount points cover only the application "
-        "mount namespace. No filesystem is probed, mounted or unlocked.") + "\n\n" + storagePresentation_.notes);
     showStorageFields(storage_, storagePresentation_.overview);
-    {
-        const QSignalBlocker blocker(volumesTable_);
-        volumesTable_->setRowCount(0);
-        int selected = -1;
-        for (const StorageDisplayRow &entry : storagePresentation_.volumes) {
-            const int row = volumesTable_->rowCount();
-            volumesTable_->insertRow(row);
-            const QStringList columns {entry.name, entry.kind, entry.capacity, entry.filesystem, entry.mounts};
-            for (int column = 0; column < columns.size(); ++column) {
-                auto *item = new QTableWidgetItem(columns[column]);
-                item->setToolTip(entry.source.toHtmlEscaped());
-                volumesTable_->setItem(row, column, item);
-            }
-            volumesTable_->item(row, 0)->setData(Qt::UserRole, entry.id);
-            if (entry.id == previousVolume || (previousVolume.isEmpty() && entry.id == device().path)) selected = row;
-        }
-        if (selected < 0 && volumesTable_->rowCount()) selected = 0;
-        volumesTable_->setCurrentCell(selected, 0);
-    }
-    volumeDetailsButton_->setEnabled(volumesTable_->currentRow() >= 0);
+    volumesPage_->setSnapshot(storagePresentation_.volumes, device().path, scope, storagePresentation_.notes);
     healthPage_->setSnapshot(storagePresentation_.health, storagePresentation_.preferredHealthDrive,
                              storagePresentation_.notes);
-}
-void PropertiesDialog::showVolumeDetails()
-{
-    const int row = volumesTable_->currentRow();
-    if (row < 0 || row >= storagePresentation_.volumes.size()) return;
-    // Own the selected snapshot while the modal dialog runs its event loop.
-    const StorageDisplayRow entry = storagePresentation_.volumes[row];
-    QDialog details(this);
-    details.setWindowTitle(tr("Volume details"));
-    details.resize(720, 520);
-    auto *layout = new QVBoxLayout(&details);
-    layout->addWidget(plainLabel(entry.name, &details));
-    auto *scroll = new QScrollArea(&details);
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    auto *page = new QWidget(scroll);
-    auto *contents = new QVBoxLayout(page);
-    showStorageFields(storageDetailsForm(contents, page), entry.fields);
-    contents->addStretch();
-    scroll->setWidget(page);
-    layout->addWidget(scroll, 1);
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, &details);
-    auto *copy = buttons->addButton(tr("Copy volume details"), QDialogButtonBox::ActionRole);
-    connect(copy, &QPushButton::clicked, &details, [entry] {
-        QApplication::clipboard()->setText(storageRowsText({entry}));
-    });
-    connect(buttons, &QDialogButtonBox::rejected, &details, &QDialog::reject);
-    layout->addWidget(buttons);
-    details.exec();
 }
 
 void PropertiesDialog::updateEvents(const DeviceEventsSnapshot &history, const QString &monitorNote)

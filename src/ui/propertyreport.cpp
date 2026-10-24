@@ -1,4 +1,6 @@
 #include "propertyreport.h"
+#include "storagepresentation.h"
+#include <QFormLayout>
 
 #include <QGridLayout>
 #include <QGroupBox>
@@ -65,4 +67,17 @@ void PropertyReport::alignCaptions()
     int width = 0;
     for (const QLabel *caption : captions_) width = qMax(width, caption->sizeHint().width());
     for (QGridLayout *form : forms_) form->setColumnMinimumWidth(0, width);
+}
+
+void showStorageFields(QFormLayout *form, const QVector<StorageDisplayField> &fields)
+{
+    while (form->rowCount()) form->removeRow(0);
+    for (const StorageDisplayField &field : fields) {
+        auto *caption = plainLabel(field.label + ':', form->parentWidget());
+        auto *value = plainLabel(field.value, form->parentWidget());
+        const QString hint = propertyToolTip(field.source);
+        caption->setToolTip(hint);
+        value->setToolTip(hint);
+        form->addRow(caption, value);
+    }
 }

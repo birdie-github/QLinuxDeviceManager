@@ -32,3 +32,10 @@ PropertyPageWidgets createPropertyPage(QWidget *parent, const QString &heading,
 PropertyPageWidgets setupPropertyPage(QWidget *page, const QString &heading,
     const QString &tooltip, const QString &copyCaption,
     const PropertyPageOptions &options = {});
+
+class QHBoxLayout;
+struct ReportPageLayout {
+    QVBoxLayout *contents;
+    QHBoxLayout *actions;
+};
+ReportPageLayout reportPageLayout(QWidget *parent);
