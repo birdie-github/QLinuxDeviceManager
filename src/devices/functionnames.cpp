@@ -34,6 +34,7 @@ FunctionName knownFunctionName(const Device &d)
         {"ACPI000F", QT_TRANSLATE_NOOP("DeviceFunctions", "User presence detector")},
         {"PNP0103", QT_TRANSLATE_NOOP("DeviceFunctions", "High precision event timer")},
         {"PNP0303", QT_TRANSLATE_NOOP("DeviceFunctions", "PS/2 keyboard interface")},
+        {"PNP0800", QT_TRANSLATE_NOOP("DeviceFunctions", "PC speaker (firmware)")},
         {"PNP0A03", QT_TRANSLATE_NOOP("DeviceFunctions", "PCI bus")},
         {"PNP0A08", QT_TRANSLATE_NOOP("DeviceFunctions", "PCI Express bus")},
         {"PNP0B00", QT_TRANSLATE_NOOP("DeviceFunctions", "Real-time clock")},
@@ -63,6 +64,7 @@ FunctionName knownFunctionName(const Device &d)
             if (id.compare(QLatin1String(entry.id), Qt::CaseInsensitive) == 0)
                 return {QString::fromLatin1(entry.label), QStringLiteral("standard ACPI/PNP ID: %1").arg(id)};
     static const Entry platformAliases[] = {
+        {"platform:pcspkr", QT_TRANSLATE_NOOP("DeviceFunctions", "PC speaker (beeper interface)")},
         {"platform:coretemp", QT_TRANSLATE_NOOP("DeviceFunctions", "Intel CPU temperature monitor")},
         {"platform:rtc-efi", QT_TRANSLATE_NOOP("DeviceFunctions", "EFI real-time clock interface")},
         {"platform:alarmtimer", QT_TRANSLATE_NOOP("DeviceFunctions", "Kernel alarm timer")}

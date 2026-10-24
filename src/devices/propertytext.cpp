@@ -242,6 +242,19 @@ QVector<PropertyEntry> propertyEntries(const DeviceProperties &snapshot, bool re
         ? QCoreApplication::translate("PropertiesDialog", "No directly bound driver") : propertyReadValue(binding);
     add("driver/name", QCoreApplication::translate("PropertiesDialog", "Bound kernel driver"), driverName, efi ? QString() : d.path + "/driver", false, 0, binding.state, binding.error);
     QStringList identifiers;
+    const Attribute alias = snapshot.values.value("udev/MODALIAS",
+        d.properties.contains("MODALIAS")
+            ? Attribute{ReadState::Available, d.properties.value("MODALIAS"), 0} : Attribute());
+    if (alias.state == ReadState::Available && !alias.value.isEmpty()) {
+        // Use the collected alias, never a device-name prefix or a related device's ID.
+        if ((d.subsystem == "acpi" || d.subsystem == "platform" || d.subsystem == "i2c")
+            && alias.value.startsWith("acpi:")) {
+            const QStringList ids = alias.value.mid(5).split(':', Qt::SkipEmptyParts);
+            if (!ids.isEmpty()) identifiers.append(
+                QCoreApplication::translate("PropertiesDialog", "ACPI identifiers: %1").arg(ids.join(", ")));
+        }
+        identifiers.append(QCoreApplication::translate("PropertiesDialog", "Modalias: %1").arg(alias.value));
+    }
     for (const QString &key : {QStringLiteral("PCI_ID"), QStringLiteral("PCI_SUBSYS_ID"), QStringLiteral("PRODUCT"),
                              QStringLiteral("ID_VENDOR_ID"), QStringLiteral("ID_MODEL_ID"), QStringLiteral("ID_SERIAL_SHORT")}) {
         const Attribute a = snapshot.values.value("udev/" + key,

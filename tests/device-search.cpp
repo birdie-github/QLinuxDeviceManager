@@ -52,6 +52,28 @@ int main(int argc, char **argv)
         if (entry.id == "identifiers")
             check(entry.state == ReadState::Unavailable, "Missing derived hardware identifiers carry an unavailable status");
     }
+    {
+        DeviceProperties speaker;
+        speaker.device.path = "/sys/devices/fixture/PNP0800:00";
+        speaker.device.subsystem = "platform";
+        speaker.device.properties.insert("MODALIAS", "acpi:PNP0800:");
+        const auto identifiers = [](const DeviceProperties &snapshot) {
+            for (const PropertyEntry &entry : propertyEntries(snapshot))
+                if (entry.id == "identifiers") return entry;
+            return PropertyEntry{};
+        };
+        auto shown = identifiers(speaker);
+        check(shown.state == ReadState::Available && shown.value.contains("ACPI identifiers: PNP0800")
+              && shown.value.contains("Modalias: acpi:PNP0800:"),
+              "Collected ACPI aliases identify unbound platform devices");
+        speaker.values.insert("udev/MODALIAS", {ReadState::Available, "platform:pcspkr", 0});
+        shown = identifiers(speaker);
+        check(shown.value.contains("Modalias: platform:pcspkr") && !shown.value.contains("PNP0800"),
+              "Property snapshots take precedence over inventory aliases without mixing device identities");
+        speaker.values.insert("udev/MODALIAS", {ReadState::Unavailable, {}, 0});
+        check(identifiers(speaker).state == ReadState::Unavailable,
+              "An unavailable snapshot alias does not resurrect a stale inventory identifier");
+    }
     PropertyEntry failedProperty {"failed", "Failure", "localized explanation", {}, false, 2, ReadState::Error, 5};
     check(detailsPropertyStatus(failedProperty) == "read error (errno 5)", "Read error suffix preserves errno");
     DeviceProperties efiStatus = properties;

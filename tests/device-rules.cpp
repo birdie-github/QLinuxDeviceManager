@@ -157,6 +157,22 @@ int main()
     for (auto &d : behindBridge) classify(d);
     refinePresentation(behindBridge);
     check(!behindBridge[1].hidden, "A PCI bridge is not an NVMe controller duplicate");
+    Device speaker;
+    speaker.subsystem = "platform";
+    speaker.sysname = "PNP0800:00";
+    speaker.properties.insert("MODALIAS", "acpi:PNP0800:");
+    nameDevice(speaker);
+    check(speaker.name == "PC speaker (firmware)" && speaker.nameTranslated
+          && speaker.nameSource.endsWith("PNP0800") && speaker.driver.isEmpty(),
+          "The firmware speaker name comes from its ACPI identity without inventing a binding");
+    speaker.sysname = "pcspkr";
+    speaker.properties.insert("MODALIAS", "platform:pcspkr");
+    nameDevice(speaker);
+    check(speaker.name == "PC speaker (beeper interface)" && speaker.nameTranslated,
+          "The exact platform speaker alias provides a distinct interface name");
+    speaker.properties.insert("MODALIAS", "platform:pcspkr-extra");
+    nameDevice(speaker);
+    check(speaker.name == "pcspkr", "Speaker names do not match arbitrary alias prefixes");
     Device embedded;
     embedded.subsystem = "platform";
     embedded.sysname = "PNP0C09:00";
