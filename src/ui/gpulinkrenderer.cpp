@@ -476,6 +476,18 @@ int runGpuLinkTest(const QString &path, const QString &incarnation)
         if (error.isEmpty() && classError) error = text("Could not read the selected device's PCI class.");
         if (error.isEmpty() && (!valid || deviceClass >> 16 != 3)) error = text("The selected device is not a PCI display adapter.");
     }
+    // Validate fresh readings before Vulkan startup or opening a workload window.
+    // A PCI display function does not necessarily expose a conventional PCIe link.
+    if (error.isEmpty()) {
+        int speedError = 0, widthError = 0;
+        const QByteArray speed = readAttribute(directory, "current_link_speed", &speedError);
+        const QByteArray width = readAttribute(directory, "current_link_width", &widthError);
+        GpuLinkSample sample;
+        if (speedError == EACCES || speedError == EPERM || widthError == EACCES || widthError == EPERM)
+            error = text("Permission denied reading the GPU PCIe link.");
+        else if (speedError || widthError || !parseGpuLinkSample(speed, width, sample))
+            error = text("No readable PCIe link speed and width are available for this device. The link test cannot run.");
+    }
     if (error.isEmpty()) {
         QVulkanInstance instance;
         instance.setApiVersion(QVersionNumber(1, 1));

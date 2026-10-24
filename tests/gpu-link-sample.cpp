@@ -22,6 +22,9 @@ int main(int argc, char **argv)
         check(!parseGpuLinkSample(bad, "16", loaded), "invalid speed accepted");
     for (const auto &bad : {"", "0", "-1", "999999999999999", "65", "x16", "16junk"})
         check(!parseGpuLinkSample("8.0 GT/s PCIe", bad, loaded), "invalid width accepted");
+    // Integrated/root-complex functions may expose these kernel sentinel values.
+    check(!parseGpuLinkSample("Unknown", "0", loaded), "unknown laptop link accepted");
+    check(!parseGpuLinkSample("8.0 GT/s PCIe", "255", loaded), "unknown width sentinel accepted");
     check(loaded.speed == 16 && loaded.width == 8, "failed parse modified the previous observation");
     return failures ? 1 : 0;
 }

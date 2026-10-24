@@ -2,6 +2,7 @@
 #include "propertiesdialog.h"
 #include "gpulinktest.h"
 #include "pcielinktext.h"
+#include "gpulinksample.h"
 #include <QJsonDocument>
 #include <QDateTime>
 #include <unistd.h>
@@ -1477,7 +1478,16 @@ void PropertiesDialog::rebuildPcie()
             QString source = tr("Highest link speed and width observed together during graphics load; not a guaranteed maximum or the device's advertised capability.");
             if (!gpuTestRate_.isEmpty()) source += '\n' + gpuTestRate_;
             if (!gpuTestTime_.isEmpty()) source += '\n' + tr("Observed: %1").arg(gpuTestTime_);
-            field(current, tr("Maximum observed link"), gpuTestText_.isEmpty() ? tr("Not tested") : gpuTestText_, source, true);
+            const Attribute speed = snapshot_.values.value("sysfs/current_link_speed");
+            const Attribute width = snapshot_.values.value("sysfs/current_link_width");
+            GpuLinkSample sample;
+            const bool readableLink = speed.state == ReadState::Available
+                && width.state == ReadState::Available
+                && parseGpuLinkSample(speed.value.toLatin1(), width.value.toLatin1(), sample);
+            const QString observation = readableLink
+                ? (gpuTestText_.isEmpty() ? tr("Not tested") : gpuTestText_)
+                : tr("Unavailable — no readable PCIe link speed and width for this device.");
+            field(current, tr("Maximum observed link"), observation, source, readableLink);
             if (!gpuTestTime_.isEmpty()) copy.append(tr("Observed: %1").arg(gpuTestTime_));
         }
         entry(current, "current_link_width", tr("Link width"), false, currentScope);
@@ -1499,6 +1509,12 @@ void PropertiesDialog::rebuildPcie()
 void PropertiesDialog::testGpuLink()
 {
     if (removed_ || gpuTest_ || !gpuLinkTestBuilt() || geteuid() == 0 || !gpuTestButton_) return;
+    // Recheck the snapshot when the queued button action runs.
+    const Attribute speed = snapshot_.values.value("sysfs/current_link_speed");
+    const Attribute width = snapshot_.values.value("sysfs/current_link_width");
+    GpuLinkSample sample;
+    if (speed.state != ReadState::Available || width.state != ReadState::Available
+        || !parseGpuLinkSample(speed.value.toLatin1(), width.value.toLatin1(), sample)) return;
     gpuTestTime_.clear();
     gpuTestRate_.clear();
     auto *process = startGpuLinkTest(device(), this);

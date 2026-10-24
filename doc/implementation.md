@@ -666,7 +666,13 @@ refresh rate; this is diagnostic information rather than a GPU benchmark score.
 
 The **Current link** table places **Maximum observed link** between Link speed
 and Link width for PCI display adapters. A compact **Test/Retest** button sits
-beside that row's caption. Its value contains only the observed speed/width pair;
+beside that row's caption only when the current kernel speed and width are readable
+and pass the sampler's validation. Unknown/zero/sentinel readings show an unavailable
+explanation without a test button; they do not establish that the GPU is integrated.
+Known root-complex types continue to show no conventional PCIe link. The helper
+also checks fresh link readings before Vulkan startup or opening the workload window,
+so unavailable readings do not cause a popup to flash and immediately close.
+Its value contains only the observed speed/width pair;
 the timestamp and interpretation are in its tooltip and timestamp is included by
 **Copy PCIe properties**. There is no separate test button or result footer.
 Current and observed links use generation and lane count in their main values,
