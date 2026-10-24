@@ -74,6 +74,23 @@ int main(int argc, char **argv)
         check(identifiers(speaker).state == ReadState::Unavailable,
               "An unavailable snapshot alias does not resurrect a stale inventory identifier");
     }
+    {
+        DeviceProperties acpi;
+        acpi.device.subsystem = "platform";
+        acpi.device.properties.insert("ID_VENDOR_FROM_DATABASE", "Interphase Corporation");
+        acpi.values.insert("udev/ID_VENDOR_FROM_DATABASE", {ReadState::Available, "Interphase Corporation", 0});
+        acpi.values.insert("acpi/vendor", {ReadState::Available, "Intel Corporation", 0});
+        acpi.sources.insert("acpi/vendor", "fixture:acpi:INTC*:");
+        for (const PropertyEntry &entry : propertyEntries(acpi))
+            if (entry.id == "manufacturer")
+                check(entry.value == "Intel Corporation" && entry.source == "fixture:acpi:INTC*:",
+                      "Registry attribution overrides ambiguous udev vendor metadata with its source");
+        acpi.values.insert("sysfs/manufacturer", {ReadState::Available, "Direct hardware vendor", 0});
+        for (const PropertyEntry &entry : propertyEntries(acpi))
+            if (entry.id == "manufacturer")
+                check(entry.value == "Direct hardware vendor",
+                      "Direct manufacturer metadata retains priority over a registry vendor");
+    }
     PropertyEntry failedProperty {"failed", "Failure", "localized explanation", {}, false, 2, ReadState::Error, 5};
     check(detailsPropertyStatus(failedProperty) == "read error (errno 5)", "Read error suffix preserves errno");
     DeviceProperties efiStatus = properties;

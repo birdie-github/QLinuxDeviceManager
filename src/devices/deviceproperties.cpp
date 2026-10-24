@@ -1,5 +1,6 @@
 #include "deviceproperties.h"
 #include "directoryscan.h"
+#include "acpivendors.h"
 #include <libudev.h>
 #ifdef QLDM_HAVE_KMOD
 #include <libkmod.h>
@@ -549,6 +550,12 @@ DeviceProperties collectDeviceProperties(const Device &device, bool cachedStorag
             const Attribute value = boundedText(udev_device_get_property_value(raw.get(), key));
             if (value.state != ReadState::Unavailable)
                 put(result, QStringLiteral("udev/") + QLatin1String(key), value, QStringLiteral("udev: %1 on %2").arg(QLatin1String(key), d.path));
+        }
+        const Attribute alias = result.values.value("udev/MODALIAS");
+        if (alias.state == ReadState::Available) {
+            const AcpiVendor vendor = acpiVendor(d.subsystem, alias.value);
+            if (!vendor.name.isEmpty())
+                put(result, "acpi/vendor", {ReadState::Available, vendor.name, 0}, vendor.source);
         }
         const Attribute driverLink = linkTarget(deviceFd.fd, "driver");
         Attribute driverPath = driverLink;

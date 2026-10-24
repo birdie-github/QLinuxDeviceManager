@@ -3,6 +3,7 @@
 #include "cpumetadata.h"
 #include "devicepresentation.h"
 #include "functionnames.h"
+#include "acpivendors.h"
 #include "devicelabel.h"
 #include "efivariables.h"
 #include <QFile>
@@ -16,6 +17,27 @@ static void check(bool result, const char *message)
 }
 int main()
 {
+    {
+        const auto registry = AcpiVendorRegistry::parse(
+            "acpi:INTC*:\n ID_VENDOR_FROM_DATABASE=Intel Corporation\n\n"
+            "acpi:MSFT*:\n ID_VENDOR_FROM_DATABASE=Microsoft Corporation\n\n"
+            "acpi:INT*:\n ID_VENDOR_FROM_DATABASE=Interphase Corporation\n\n"
+            "acpi:INTC????:*\n ID_VENDOR_FROM_DATABASE=Not a vendor-prefix record\n",
+            "fixture:20-acpi-vendor.hwdb");
+        const auto vendor = registry.lookup("platform", "acpi:INTC1025:INT_PTL_SINIT:");
+        check(vendor.name == "Intel Corporation" && vendor.source.contains("acpi:INTC*:"),
+              "Four-character ACPI vendors cannot be overridden by shorter prefix collisions");
+        check(registry.lookup("platform", "acpi:MSFT0101:INTC1025:").name == "Microsoft Corporation",
+              "Compatible IDs cannot change the primary HID's vendor");
+        check(registry.lookup("platform", "acpi:INT1234:").name.isEmpty()
+              && registry.lookup("platform", "acpi:INTC12345:").name.isEmpty()
+              && registry.lookup("pci", "acpi:INTC1025:").name.isEmpty(),
+              "Registry fallback does not guess vendors for other ID formats or buses");
+        const auto unsupported = AcpiVendorRegistry::parse(
+            "acpi:INTC*:\nacpi:*OTHER*:\n ID_VENDOR_FROM_DATABASE=Unsupported record\n", "fixture");
+        check(unsupported.lookup("platform", "acpi:INTC1025:").name.isEmpty(),
+              "Complex hwdb records are not partially interpreted as vendor registry entries");
+    }
     QString databaseError;
     check(loadAcpiFunctionNames(QStringLiteral(QLDM_TEST_ACPI_IDS), databaseError),
           "The external ACPI/PNP database loads before device naming");

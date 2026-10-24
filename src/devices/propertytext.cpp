@@ -191,6 +191,7 @@ QVector<PropertyEntry> propertyEntries(const DeviceProperties &snapshot, bool re
     if (efi) manufacturer = notApplicable;
     else {
         for (const QString &id : {QStringLiteral("sysfs/manufacturer"), QStringLiteral("sysfs/vendor_name"),
+                                 QStringLiteral("acpi/vendor"),
                                  QStringLiteral("udev/ID_VENDOR_FROM_DATABASE"), QStringLiteral("udev/ID_VENDOR")}) {
             const Attribute candidate = raw(id);
             if (candidate.state == ReadState::Available && !candidate.value.isEmpty()) {

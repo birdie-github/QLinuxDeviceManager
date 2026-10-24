@@ -32,6 +32,29 @@ This file maps complete ACPI/PNP device IDs to function descriptions. It is not
 interchangeable with hwdata's `pnp.ids`, which maps vendor codes to manufacturers.
 PCI/USB naming continues to use existing system udev/hwdb metadata.
 
+## ACPI vendor attribution
+
+Manufacturer attribution is separate from the function-name database. Some
+system hwdb versions let a later three-character glob such as `acpi:INT*:`
+override `acpi:INTC*:`, assigning the wrong vendor to an eight-character ACPI ID.
+A fresh compiled-hwdb lookup reproduces that result.
+
+For a primary ACPI ID consisting of four vendor characters and four hexadecimal
+product digits, the application therefore consults the installed
+`20-acpi-vendor.hwdb` registry's literal `acpi:XXXX*:` vendor records directly.
+No vendor names or individual device IDs are hardcoded. Compatible IDs do not
+determine the vendor. Direct manufacturer attributes retain priority, and the
+original udev value remains available in advanced Details.
+
+The registry is read once in a property worker, with a 1 MiB input limit.
+Same-name files are searched in `/etc/udev/hwdb.d`, `/run/udev/hwdb.d`,
+`/usr/local/lib/udev/hwdb.d`, `/usr/lib/udev/hwdb.d`, then `/lib/udev/hwdb.d`.
+A replacement or `/dev/null` mask stops that search. Restart to pick up changes.
+This is a narrow vendor-registry reader, not a replacement hwdb rule engine:
+complex match records and other hwdb filenames are not interpreted. If no
+applicable registry entry can be read, normal udev manufacturer attribution is
+retained. Seven-character PNP IDs and unknown formats are not reinterpreted.
+
 ## Updating from ACPICA
 
 Keep the downloaded ACPICA checkout outside the application repository. Inspect

@@ -67,6 +67,7 @@ add_executable(qlinuxdevicemanager
     src/devices/resourceformat.h src/devices/resourceformat.cpp
     src/devices/cpumetadata.h src/devices/cpumetadata.cpp
     src/devices/functionnames.h src/devices/functionnames.cpp
+    src/devices/acpivendors.h src/devices/acpivendors.cpp
     src/devices/devicelabel.h src/devices/devicelabel.cpp
     src/devices/efivariables.h src/devices/efivariables.cpp
     src/devices/modulenames.h src/devices/modulenames.cpp
@@ -193,6 +194,7 @@ if(BUILD_TESTING)
         src/devices/device.cpp src/devices/device.h
         src/devices/cpumetadata.cpp src/devices/cpumetadata.h
         src/devices/functionnames.cpp src/devices/functionnames.h
+        src/devices/acpivendors.cpp src/devices/acpivendors.h
         src/devices/devicelabel.cpp src/devices/devicelabel.h
         src/devices/efivariables.cpp src/devices/efivariables.h
         src/devices/devicepresentation.cpp src/devices/devicepresentation.h)
@@ -225,6 +227,7 @@ if(BUILD_TESTING)
         src/devices/resourceformat.cpp src/devices/resourceformat.h
         src/devices/efivariables.cpp src/devices/efivariables.h
         src/devices/functionnames.cpp src/devices/functionnames.h
+        src/devices/acpivendors.cpp src/devices/acpivendors.h
         src/ui/devicemodel.cpp src/ui/devicemodel.h
         src/ui/devicefilter.cpp src/ui/devicefilter.h)
     target_include_directories(device-search-test PRIVATE src/devices src/ui
