@@ -8,6 +8,7 @@
 #include <QPointer>
 #include <QProcess>
 
+class BatteryPage;
 class UsbPage;
 class DisplayPage;
 class CameraPage;
@@ -90,9 +91,7 @@ private:
     QString gpuTestText_;
     QString gpuTestTime_;
     QString gpuTestRate_;
-    QWidget *batteryPage_ = nullptr;
-    QVBoxLayout *batteryGroups_ = nullptr;
-    QString batteryText_;
+    BatteryPage *batteryPage_ = nullptr;
     QComboBox *property_ = nullptr;
     QPlainTextEdit *value_ = nullptr;
     QLabel *source_ = nullptr;
