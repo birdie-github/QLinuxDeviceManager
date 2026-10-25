@@ -1,12 +1,9 @@
 #pragma once
 #include "systemproperties.h"
 #include <QDialog>
-#include <QHash>
-#include <QStringList>
-#include <QVector>
 class SystemRamPage;
 class SystemMotherboardPage;
-class QLabel;
+class SystemOperatingSystemPage;
 class SystemProcessorPage;
 class QTabWidget;
 class QPushButton;
@@ -20,18 +17,13 @@ public:
 signals:
     void refreshRequested();
 private:
-    QString displayValue(const QString &key, const Attribute &value) const;
     void copyAll();
     void copyInformation(int tab);
+    SystemOperatingSystemPage *osPage_ = nullptr;
     SystemRamPage *ramPage_ = nullptr;
     SystemMotherboardPage *motherboardPage_ = nullptr;
-    QHash<QString, QVector<QLabel *>> fields_;
     SystemProcessorPage *processorPage_ = nullptr;
-    QStringList order_;
-    QHash<QString, int> keyTabs_;
     QTabWidget *tabs_ = nullptr;
-    QHash<QString, QString> captions_;
-    SystemProperties snapshot_;
     QPushButton *refresh_ = nullptr;
     QPushButton *copy_ = nullptr;
     QPushButton *copyTab_ = nullptr;
