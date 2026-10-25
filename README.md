@@ -107,6 +107,7 @@ To compile and install the application yourself, see the
 ### Distro support
 
 * [Alt Linux package](https://packages.altlinux.org/en/sisyphus/srpms/qlinuxdevicemanager/), maintainer [Nikolay Strelkov](https://github.com/k0ly4n)
+* [pkgs.org package](https://pkgs.org/download/qlinuxdevicemanager)
 
 ## Getting started
 
