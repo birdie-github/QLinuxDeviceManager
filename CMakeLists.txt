@@ -102,6 +102,7 @@ add_executable(qlinuxdevicemanager
     src/devices/secureboot.h src/devices/secureboot.cpp
     src/devices/systemproperties.h src/devices/systemproperties.cpp src/devices/cputopology.h
     src/ui/systempages/rampage.h src/ui/systempages/rampage.cpp
+    src/ui/systempages/motherboardpage.h src/ui/systempages/motherboardpage.cpp
     src/ui/systemdialog.h src/ui/systemdialog.cpp)
 # Embed existing PNG assets so a build-tree executable has its own icon without
 # an installed icon theme or Qt SVG image plugin. Keep every supplied raster size.

@@ -5,7 +5,7 @@
 #include <QStringList>
 #include <QVector>
 class SystemRamPage;
-class QGridLayout;
+class SystemMotherboardPage;
 class QLabel;
 class ReportTable;
 class QTabWidget;
@@ -21,11 +21,10 @@ signals:
     void refreshRequested();
 private:
     QString displayValue(const QString &key, const Attribute &value, bool compact = false) const;
-    void rebuildMok();
     void copyAll();
     void copyInformation(int tab);
     SystemRamPage *ramPage_ = nullptr;
-    QGridLayout *mokForm_ = nullptr;
+    SystemMotherboardPage *motherboardPage_ = nullptr;
     QHash<QString, QVector<QLabel *>> fields_;
     QHash<QString, ReportTable *> tables_;
     QStringList order_;

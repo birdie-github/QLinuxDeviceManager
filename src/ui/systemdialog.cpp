@@ -1,11 +1,11 @@
 #include "systemdialog.h"
 #include "systempages/rampage.h"
+#include "systempages/motherboardpage.h"
 #include "reporttable.h"
 #include "propertytext.h"
 #include <QApplication>
 #include <QThread>
 #include <QClipboard>
-#include <QDateTime>
 #include <QDialogButtonBox>
 #include <QGridLayout>
 #include <QFont>
@@ -14,7 +14,6 @@
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QHeaderView>
-#include <QGroupBox>
 #include <QLabel>
 #include <QLocale>
 #include <QPushButton>
@@ -106,21 +105,8 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
     field(os, "uptime", tr("Uptime"));
     field(os, "gpu_rebar", tr("Resizable BAR (GPU)"));
 
-    auto *hardware = group(tr("Motherboard"));
-    field(hardware, "manufacturer", tr("System manufacturer"));
-    field(hardware, "model", tr("System model"));
-    field(hardware, "board_vendor", tr("Motherboard manufacturer"));
-    field(hardware, "board_model", tr("Motherboard model"));
-    field(hardware, "firmware", tr("Firmware version"));
-    field(hardware, "firmware_date", tr("Firmware date (reported)"));
-
-    auto *mokPage = new QWidget(hardware->parentWidget());
-    mokForm_ = new QGridLayout(mokPage);
-    mokForm_->setContentsMargins(0, 0, 0, 0);
-    mokForm_->setColumnStretch(1, 1);
-    hardware->addWidget(mokPage, hardware->rowCount(), 0, 1, 2);
-    registerKey("mok");
-    captions_.insert("mok", tr("MOK certificates"));
+    motherboardPage_ = new SystemMotherboardPage(tabs);
+    tabs->addTab(motherboardPage_, tr("Motherboard"));
 
     auto *processor = group(tr("Processor"));
     field(processor, "cpu", tr("CPU model(s)"));
@@ -151,15 +137,11 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
     // Use one font-derived caption width for every section, so values align.
     int captionWidth = 0;
     for (const QLabel *name : names) captionWidth = qMax(captionWidth, name->sizeHint().width());
-    for (const QString &caption : {tr("Owner:"), tr("Issuer:"), tr("Expires:")}) {
-        const QLabel name(caption);
-        captionWidth = qMax(captionWidth, name.sizeHint().width());
-    }
+    captionWidth = qMax(captionWidth, motherboardPage_->captionWidthHint());
     captionWidth = qMax(captionWidth, ramPage_->captionWidthHint());
     ramPage_->setCaptionWidth(captionWidth);
     for (QGridLayout *form : forms) form->setColumnMinimumWidth(0, captionWidth);
-    mokForm_->setColumnMinimumWidth(0, captionWidth);
-    rebuildMok();
+    motherboardPage_->setCaptionWidth(captionWidth);
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
     copyTab_ = buttons->addButton(tr("Copy"), QDialogButtonBox::ActionRole);
     copyTab_->setToolTip(tr("Copy information from the current tab"));
@@ -220,18 +202,6 @@ QString SystemDialog::displayValue(const QString &key, const Attribute &value, b
             devices.append(lines.join('\n'));
         }
         return devices.join("\n\n");
-    }
-    if (key == "mok") {
-        const MokCertificates &mok = snapshot_.mok;
-        if (mok.status.state != ReadState::Available) return propertyReadValue(mok.status);
-        QStringList certificates;
-        const auto known = [this](const QString &text) { return text.isEmpty() ? tr("Unavailable") : text; };
-        for (const MokCertificate &certificate : mok.certificates)
-            certificates.append(tr("Owner: %1\nIssuer: %2\nExpires: %3")
-                .arg(known(certificate.subject), known(certificate.issuer), known(certificate.expires)));
-        if (certificates.isEmpty()) certificates.append(tr("No X.509 certificates in the exposed MOK list"));
-        if (mok.otherSignatures) certificates.append(tr("%1 non-certificate signatures omitted").arg(mok.otherSignatures));
-        return certificates.join("\n\n");
     }
     if (key == "logical") {
         const Attribute online = snapshot_.values.value("online");
@@ -388,82 +358,11 @@ QString SystemDialog::displayValue(const QString &key, const Attribute &value, b
     }
     return value.value;
 }
-void SystemDialog::rebuildMok()
-{
-    while (QLayoutItem *item = mokForm_->takeAt(0)) {
-        delete item->widget();
-        delete item;
-    }
-    const MokCertificates &mok = snapshot_.mok;
-    const QString scope = snapshot_.sources.value("mok") + '\n'
-        + tr("Exposed runtime MOK certificates. Issuer and expiration are certificate metadata, "
-             "not verification of the signer or proof that this key signed the running kernel. Dates are UTC. "
-             "Firmware db certificates and pending enrollments are not included.");
-    int row = 0;
-    const auto label = [](const QString &text, QWidget *parent) {
-        auto *value = new QLabel(text, parent);
-        value->setTextFormat(Qt::PlainText);
-        value->setWordWrap(true);
-        value->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
-        value->setAlignment(Qt::AlignLeading | Qt::AlignTop);
-        QSizePolicy policy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        policy.setHeightForWidth(true);
-        value->setSizePolicy(policy);
-        value->setMinimumWidth(120);
-        return value;
-    };
-    const auto hint = [&scope](QLabel *value, const QString &details) {
-        value->setToolTip("<qt>" + (scope + "\n\n" + details).toHtmlEscaped().replace('\n', "<br>") + "</qt>");
-    };
-    const auto message = [&](const QString &text) {
-        auto *value = label(text, mokForm_->parentWidget());
-        hint(value, {});
-        mokForm_->addWidget(value, row++, 0, 1, 2);
-    };
-    if (mok.status.state != ReadState::Available || mok.certificates.isEmpty()) {
-        message(displayValue("mok", {}));
-        return;
-    }
-    const auto known = [this](const QString &text) { return text.isEmpty() ? tr("Unavailable") : text; };
-    int index = 0;
-    for (const MokCertificate &certificate : mok.certificates) {
-        const QString title = mok.certificates.size() == 1 ? tr("MOK Certificate")
-            : tr("MOK Certificate %1").arg(++index);
-        auto *box = new QGroupBox(title, mokForm_->parentWidget());
-        auto *form = new QGridLayout(box);
-        form->setColumnStretch(1, 1);
-        form->setColumnMinimumWidth(0, mokForm_->columnMinimumWidth(0));
-        mokForm_->addWidget(box, row++, 0, 1, 2);
-        int certificateRow = 0;
-        const auto field = [&](const QString &caption, const QString &text, const QString &details) {
-            auto *name = new QLabel(caption, box);
-            name->setTextFormat(Qt::PlainText);
-            auto *value = label(text, box);
-            hint(name, details);
-            hint(value, details);
-            form->addWidget(name, certificateRow, 0, Qt::AlignLeading | Qt::AlignTop);
-            form->addWidget(value, certificateRow++, 1);
-        };
-        const QString owner = certificate.subjectDisplay.isEmpty() ? certificate.subject : certificate.subjectDisplay;
-        const QString issuer = !certificate.subject.isEmpty() && certificate.subject == certificate.issuer
-            ? tr("Same as owner")
-            : (certificate.issuerDisplay.isEmpty() ? certificate.issuer : certificate.issuerDisplay);
-        const QDateTime expires = QDateTime::fromString(certificate.expires, Qt::ISODate);
-        const QString date = expires.isValid()
-            ? tr("%1 UTC").arg(QLocale().toString(expires.toUTC(), "d MMM yyyy, HH:mm:ss")) : known(certificate.expires);
-        field(tr("Owner:"), known(owner), certificate.subject);
-        field(tr("Issuer:"), known(issuer), certificate.issuer);
-        field(tr("Expires:"), date, certificate.expires);
-    }
-    if (mok.otherSignatures)
-        message(tr("%1 non-certificate signatures omitted").arg(mok.otherSignatures));
-}
 void SystemDialog::acceptResult(SystemProperties result)
 {
     Q_ASSERT(QThread::isMainThread());
     snapshot_ = std::move(result);
     for (const QString &key : order_) {
-        if (key == "mok") continue; // Variable-length sections are rebuilt separately.
         const QString text = displayValue(key, snapshot_.values.value(key));
         QString source = snapshot_.sources.value(key);
         if (key == "secure_boot")
@@ -513,7 +412,7 @@ void SystemDialog::acceptResult(SystemProperties result)
             value->setToolTip(hint);
         }
     }
-    rebuildMok();
+    motherboardPage_->setSnapshot(snapshot_);
     ramPage_->setSnapshot(snapshot_);
     setBusy(false);
     const Attribute features = snapshot_.values.value("instruction_sets");
@@ -531,11 +430,16 @@ void SystemDialog::copyAll()
 void SystemDialog::copyInformation(int tab)
 {
     QStringList lines;
-    for (const QString &key : order_) {
-        if (tab >= 0 && keyTabs_.value(key, -1) != tab) continue;
-        lines.append(captions_.value(key) + (key == "core_groups" || key == "cache_topology" ? ":\n" : ": ")
-                     + displayValue(key, snapshot_.values.value(key)));
+    for (int index = 0; index < tabs_->count(); ++index) {
+        if (tab >= 0 && tab != index) continue;
+        QWidget *page = tabs_->widget(index);
+        if (page == motherboardPage_) lines.append(motherboardPage_->copyText());
+        else if (page == ramPage_) lines.append(ramPage_->copyText());
+        else for (const QString &key : order_) {
+            if (keyTabs_.value(key, -1) != index) continue;
+            lines.append(captions_.value(key) + (key == "core_groups" || key == "cache_topology" ? ":\n" : ": ")
+                         + displayValue(key, snapshot_.values.value(key)));
+        }
     }
-    if (tab < 0 || tabs_->widget(tab) == ramPage_) lines.append(ramPage_->copyText());
     QApplication::clipboard()->setText(lines.join('\n'));
 }
