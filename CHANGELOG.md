@@ -1,3 +1,6 @@
+### v1.4.1 (25 October 2026)
+- Fixed RAM chips tabs switching
+
 ### v1.4.0 (25 October 2026)
 
 - **Richer processor information:** View core groups, maximum frequencies, performance and efficiency cores where reported, SMT/Hyper-Threading status, and how caches are shared. A dedicated Copy button copies the supported instruction sets and CPU features.
