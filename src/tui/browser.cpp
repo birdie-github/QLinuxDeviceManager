@@ -13,7 +13,7 @@ class Browser final : public FDialog {
 public:
     Browser(Inventory inventory, FWidget *parent) : FDialog(parent), inventory_(std::move(inventory))
     {
-        tree_.addColumn("Device (Enter: properties; Left/Right: collapse/expand)");
+        tree_.addColumn("Device (Enter: expand/collapse branch; properties for leaves)");
         tree_.setTreeView();
         filter_.setLabelText("&Filter");
         // Keep the field and its separate label out of initial layout/focus.

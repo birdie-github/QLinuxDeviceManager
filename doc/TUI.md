@@ -41,8 +41,9 @@ GPM/terminal libraries linked dynamically remain runtime dependencies.
 TUI defaults to OFF. Missing FINAL CUT skips only the TUI target with a warning;
 the GUI retains its existing installation conventions.
 
-F2 switches devices by type / connection. Arrow keys navigate, Right/Left
-expand/collapse, Enter (or the native mouse activation) opens properties.
+F2 switches devices by type / connection. Arrow keys navigate; Enter toggles
+branches and opens properties for leaf devices. Right/Left still expand/collapse.
+Native mouse activation is unchanged, including properties for device branches.
 General and Driver use the GUI's shared common-property formatter, including
 manufacturer, hardware identifiers, binding and module ownership when captured.
 Details retains raw inventory properties and attributes separately.
@@ -188,3 +189,8 @@ Maintainer checks: at 211x60, verify the dialog is centered and no larger than
 and Details, check aligned columns and alternating field backgrounds, including
 multiline identifiers. Scroll long values and resize while each page is open.
 Check a monochrome terminal if available; alignment must remain readable.
+
+For Enter navigation, check the computer/category rows and multi-level connection
+branches: repeated Enter must expand/collapse without opening Properties. Enter
+on a leaf device must still open Properties. Repeat after filtering and while
+horizontally scrolled, and confirm Left/Right and mouse activation still work.

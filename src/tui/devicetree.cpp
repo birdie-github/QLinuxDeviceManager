@@ -2,6 +2,24 @@
 
 using namespace finalcut;
 
+void DeviceTree::onKeyPress(FKeyEvent *event)
+{
+    auto *item = getCurrentItem();
+    if ((event->key() == FKey::Enter || event->key() == FKey::Return)
+        && item && item->hasChildren()) {
+        if (item->isExpand()) item->collapse();
+        else item->expand();
+        // Recompute the native viewport and scrollbars, including when the
+        // list is horizontally scrolled (Left would otherwise only scroll).
+        FListView::adjustSize();
+        redraw();
+        event->accept();
+        return;
+    }
+    // Native activation emits "clicked", opening properties for leaf devices.
+    FListView::onKeyPress(event);
+}
+
 void DeviceTree::navigate(FKey key)
 {
     // firstPos()/stepForward() are private in released FINAL CUT versions.
