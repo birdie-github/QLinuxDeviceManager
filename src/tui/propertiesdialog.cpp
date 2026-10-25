@@ -1,5 +1,6 @@
 #include "propertiesdialog.h"
 #include "propertypages.h"
+#include "propertypagecontrol.h"
 #include "terminaltext.h"
 #include "devicelabel.h"
 #include <algorithm>
@@ -17,11 +18,17 @@ public:
         driver_.addCallback("clicked", [this] { setPage(1); });
         details_.addCallback("clicked", [this] { setPage(2); });
         close_.addCallback("clicked", [this] { close(); });
+        const std::array<FWidget*, 5> controls {&text_, &general_, &driver_, &details_, &close_};
+        for (auto *control : controls) {
+            control->addCallback("next-page", [this] { setPage((page_ + 1) % 3); });
+            control->addCallback("previous-page", [this] { setPage((page_ + 2) % 3); });
+        }
         setPage(0);
     }
 private:
     void setPage(int page)
     {
+        page_ = page;
         const std::array<const char*, 3> titles {"General", "Driver", "Details"};
         setText(display(deviceDisplayName(device_) + " - " + titles.at(page)));
         QString text = "Inventory snapshot; no additional property reads.\n";
@@ -41,7 +48,10 @@ private:
         general_.setEnable(page != 0);
         driver_.setEnable(page != 1);
         details_.setEnable(page != 2);
-        if (isShown()) adjustSize();
+        if (isShown()) {
+            adjustSize();
+            text_.setFocus();
+        }
         redraw();
     }
     void adjustSize() override
@@ -70,15 +80,21 @@ private:
         close_.setGeometry(FPoint{int(w) - 12, int(h) - 3}, FSize{10, 1});
         FDialog::adjustSize();
     }
-    void initLayout() override { adjustSize(); FDialog::initLayout(); }
+    void initLayout() override
+    {
+        adjustSize();
+        FDialog::initLayout();
+        text_.setFocus();
+    }
     const Device device_;
     const QVector<PropertyEntry> entries_;
     std::size_t preferredHeight_ = 12;
-    FTextView text_{this};
-    FButton general_{"&General", this};
-    FButton driver_{"&Driver", this};
-    FButton details_{"De&tails", this};
-    FButton close_{"&Close", this};
+    int page_ = 0;
+    PropertyPageControl<FTextView> text_{this};
+    PropertyPageControl<FButton> general_{"&General", this};
+    PropertyPageControl<FButton> driver_{"&Driver", this};
+    PropertyPageControl<FButton> details_{"De&tails", this};
+    PropertyPageControl<FButton> close_{"&Close", this};
 };
 }
 
