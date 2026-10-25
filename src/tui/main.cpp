@@ -1,4 +1,5 @@
 #include "inventory.h"
+#include "searchdialog.h"
 #include "devicelabel.h"
 #include <final/final.h>
 #include <QCoreApplication>
@@ -74,6 +75,23 @@ QString driver(const Device &d)
           "\n\nNo module loading, unloading or device-management actions are performed.";
 }
 
+// Snapshot-only matching: do not trigger deep collectors or filesystem reads.
+bool matches(const Device &d, const QString &query)
+{
+    const auto contains = [&query](const QString &text) {
+        return text.contains(query, Qt::CaseInsensitive);
+    };
+    for (const QString &text : {deviceDisplayName(d, true), d.name, d.sysname,
+            d.path, d.parentPath, d.driver, d.driverModule, d.subsystem,
+            d.category, categoryLabel(d.category)})
+        if (contains(text)) return true;
+    for (auto it = d.properties.cbegin(); it != d.properties.cend(); ++it)
+        if (contains(it.value())) return true;
+    for (auto it = d.attributes.cbegin(); it != d.attributes.cend(); ++it)
+        if (it->state == ReadState::Available && contains(it->value)) return true;
+    return false;
+}
+
 class Properties final : public FDialog {
 public:
     Properties(const Device &device, FWidget *parent) : FDialog(parent), device_(device)
@@ -133,6 +151,9 @@ public:
         viewKey_.addCallback("activate", [this] { connection_ = !connection_; populate(); });
         refreshKey_.addCallback("activate", [this] { refresh_.emitCallback("clicked"); });
         quitKey_.addCallback("activate", [this] { close(); });
+        findKey_.addCallback("activate", [this] { find(); });
+        nextKey_.addCallback("activate", [this] { findNext(false); });
+        previousKey_.addCallback("activate", [this] { findNext(true); });
         populate();
     }
 private:
@@ -151,6 +172,82 @@ private:
         const auto inserted = tree_.insert(FStringList{label}, int(index), position);
         return static_cast<FListViewItem*>(*inserted);
     }
+    void find()
+    {
+        if (modalOpen_) return;
+        modalOpen_ = true;
+        SearchDialog dialog(query_, this);
+        const auto result = dialog.exec();
+        modalOpen_ = false;
+        if (result != FDialog::ResultCode::Accept) return;
+        query_ = dialog.query();
+        if (query_.isEmpty()) {
+            status_.setMessage("Search cleared. Enter: properties; F4: Find");
+            redraw();
+            return;
+        }
+        findNext(false, true);
+    }
+    void findNext(bool previous, bool includeCurrent = false)
+    {
+        if (modalOpen_) return;
+        if (query_.isEmpty()) { find(); return; }
+        // Traverse actual widget order (including collapsed branches), so header
+        // sorting is respected. Category/computer rows never count as matches.
+        QVector<FListViewItem*> items;
+        std::function<void(FListViewItem*)> visit = [&](FListViewItem *item) {
+            items.append(item);
+            for (auto *child : item->getChildren())
+                visit(static_cast<FListViewItem*>(child));
+        };
+        for (auto *item : tree_.getData()) visit(item);
+        QVector<int> hits;
+        int current = -1;
+        for (int i = 0; i < items.size(); ++i) {
+            if (items[i] == tree_.getCurrentItem()) current = i;
+            const int index = items[i]->getData<int>();
+            if (index >= 0 && index < inventory_.devices.size()
+                && matches(inventory_.devices.at(index), query_)) hits.append(i);
+        }
+        if (hits.isEmpty()) {
+            status_.setMessage("No matches in current view. F4: change search");
+            redraw();
+            return;
+        }
+        int hit = previous ? int(hits.size()) - 1 : 0;
+        if (previous) {
+            for (int i = int(hits.size()) - 1; i >= 0; --i)
+                if (hits[i] < current || (includeCurrent && hits[i] == current)) { hit = i; break; }
+        } else {
+            for (int i = 0; i < hits.size(); ++i)
+                if (hits[i] > current || (includeCurrent && hits[i] == current)) { hit = i; break; }
+        }
+        auto *target = items[hits[hit]];
+        // Reset navigation before expansion changes visible row positions.
+        tree_.firstPos();
+        for (auto *ancestor = target->getParent(); ancestor && ancestor != &tree_;
+             ancestor = ancestor->getParent())
+            static_cast<FListViewItem*>(ancestor)->expand();
+        // Refresh FINAL CUT's viewport after expansion, then use its own
+        // navigation to select and scroll to the target. No retained iterators.
+        tree_.redraw();
+        int distance = 0;
+        std::function<bool(FListViewItem*)> locate = [&](FListViewItem *item) {
+            if (item == target) return true;
+            ++distance;
+            if (item->isExpand())
+                for (auto *child : item->getChildren())
+                    if (locate(static_cast<FListViewItem*>(child))) return true;
+            return false;
+        };
+        for (auto *item : tree_.getData()) if (locate(item)) break;
+        tree_.firstPos();
+        tree_.stepForward(distance);
+        tree_.setFocus();
+        status_.setMessage(display(QStringLiteral("Match %1/%2. F3: next; F6: previous")
+            .arg(hit + 1).arg(hits.size())));
+        redraw();
+    }
     void properties()
     {
         const auto *item = tree_.getCurrentItem();
@@ -158,7 +255,9 @@ private:
         const int index = item->getData<int>();
         if (index < 0 || index >= inventory_.devices.size()) return;
         Properties dialog(inventory_.devices.at(index), this);
+        modalOpen_ = true;
         dialog.exec();
+        modalOpen_ = false;
     }
     void populate()
     {
@@ -245,12 +344,17 @@ private:
     void initLayout() override { adjustSize(); FDialog::initLayout(); }
     Inventory inventory_;
     bool connection_ = false;
+    bool modalOpen_ = false;
+    QString query_;
     FListView tree_{this};
     FButton switch_{this};
     FButton refresh_{"&Refresh", this};
     FButton quit_{"&Quit", this};
     FStatusBar status_{this};
     FStatusKey viewKey_{FKey::F2, "View", &status_};
+    FStatusKey findKey_{FKey::F4, "Find", &status_};
+    FStatusKey nextKey_{FKey::F3, "Next", &status_};
+    FStatusKey previousKey_{FKey::F6, "Previous", &status_};
     FStatusKey refreshKey_{FKey::F5, "Refresh", &status_};
     FStatusKey quitKey_{FKey::F10, "Quit", &status_};
 };

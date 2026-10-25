@@ -89,3 +89,29 @@ expected. Inspect unbound and permission-restricted records. Exercise expand,
 collapse, Enter, mouse activation, both property pages and scrolling of long
 values. Resize at 80x25 and larger. Refresh after a hotplug change and confirm
 no automatic change occurs before refresh. Close properties, then quit normally.
+
+## Finding devices
+
+Press F4 to enter a case-insensitive substring. Enter or Find selects the first
+match at or after the current selection; F3 finds the next match and F6 the
+previous match, wrapping at either end. Search expands the selected match's
+ancestors and scrolls it into view. The status bar reports its match number.
+Enter on the selected device still opens properties.
+
+Matching uses names, identifiers, driver/module names, paths, category/subsystem,
+udev property values and available captured attribute values. It performs no
+additional hardware reads. Searches cover device rows in the current projection,
+including collapsed branches and connection-context ancestors. Hidden records
+omitted from that view and category/computer rows are excluded. This is snapshot
+search, without the GUI's hardware-specific deep-property collection.
+
+The query survives refresh and view changes; F3/F6 searches the newly built view.
+F4 followed by an empty query clears it. Cancel leaves the previous query and
+selection intact. With no matches, selection and expansion remain unchanged.
+
+Maintainer checks: search for a known name, PCI/USB identifier, driver and path;
+find a device inside a collapsed branch; cycle forward/backward through multiple
+matches and a single match; check no-match, empty and cancelled queries. Confirm
+Enter opens the selected device's properties. Repeat after header sorting,
+F2 view switching and F5 refresh, and at 80x25. Search shortcuts should not act
+on the tree while its properties or search dialog is open.
