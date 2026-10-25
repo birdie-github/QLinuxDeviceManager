@@ -379,19 +379,22 @@ void MainWindow::acceptInventory(const Inventory &inventory)
 }
 void MainWindow::rememberTree()
 {
-    if (filter_->active()) return; // Preserve the unfiltered expansion and selection.
-    const QString prefix = DeviceModel::viewId(model_->view()) + ':';
-    std::function<void(const QModelIndex &)> visit = [&](const QModelIndex &parent) {
-        for (int row = 0; row < model_->rowCount(parent); ++row) {
-            const QModelIndex i = model_->index(row, 0, parent);
-            const QString id = prefix + i.data(DeviceModel::NodeKeyRole).toString();
-            if (tree_->isExpanded(filter_->mapFromSource(i))) expanded_.insert(id);
-            else expanded_.remove(id);
-            visit(i);
-        }
-    };
-    visit({});
+    // Search expansion is temporary; selection made in search results is not.
+    if (!filter_->active()) {
+        const QString prefix = DeviceModel::viewId(model_->view()) + ':';
+        std::function<void(const QModelIndex &)> visit = [&](const QModelIndex &parent) {
+            for (int row = 0; row < model_->rowCount(parent); ++row) {
+                const QModelIndex i = model_->index(row, 0, parent);
+                const QString id = prefix + i.data(DeviceModel::NodeKeyRole).toString();
+                if (tree_->isExpanded(filter_->mapFromSource(i))) expanded_.insert(id);
+                else expanded_.remove(id);
+                visit(i);
+            }
+        };
+        visit({});
+    }
     const QModelIndex current = tree_->currentIndex();
+    if (!current.isValid()) return; // Keep the last selection if the query has no current result.
     selectedNodeKey_ = current.data(DeviceModel::NodeKeyRole).toString();
     const QModelIndex target = propertyTarget(current);
     selectedPath_ = target.data(DeviceModel::PathRole).toString();
@@ -563,10 +566,12 @@ void MainWindow::applyFilter()
     cancelSearch();
     if (closing_) return;
     const QString query = filterEdit_->text().trimmed();
-    if (!filter_->active() && !query.isEmpty()) rememberTree();
+    const bool leavingSearch = filter_->active() && query.isEmpty();
+    rememberTree(); // Capture the current result before changing the proxy filter.
     filter_->setQuery(query, deepSearch_->isChecked());
     searchDone_ = searchTotal_ = searchUnavailable_ = 0;
     restoreTree();
+    if (leavingSearch && tree_->currentIndex().isValid()) tree_->scrollTo(tree_->currentIndex());
     if (!query.isEmpty() && deepSearch_->isChecked()) {
         searchTotal_ = model_->visibleCount();
         searchPending_ = true;
