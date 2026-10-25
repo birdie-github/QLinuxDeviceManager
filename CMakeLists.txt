@@ -87,6 +87,7 @@ add_executable(qlinuxdevicemanager
     src/ui/icontheme.h src/ui/icontheme.cpp
     src/ui/mainwindow.h src/ui/mainwindow.cpp
     src/ui/aboutdialog.h src/ui/aboutdialog.cpp
+    src/ui/treeexport.h src/ui/treeexport.cpp
     src/devices/pcielinktext.h
     src/ui/gpulinktest.h src/ui/gpulinktest.cpp
     src/ui/propertiesdialog.h src/ui/propertiesdialog.cpp
@@ -229,6 +230,10 @@ if(TARGET Qt6::lrelease)
 endif()
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(tree-export-test tests/tree-export.cpp src/ui/treeexport.h src/ui/treeexport.cpp)
+    target_include_directories(tree-export-test PRIVATE src/ui)
+    target_link_libraries(tree-export-test PRIVATE Qt6::Widgets)
+    add_test(NAME tree-export COMMAND tree-export-test)
     add_executable(pcie-link-text-test tests/pcie-link-text.cpp src/devices/pcielinktext.h)
     target_include_directories(pcie-link-text-test PRIVATE src/devices)
     target_link_libraries(pcie-link-text-test PRIVATE Qt6::Core)
@@ -331,7 +336,7 @@ endif()
 # Apply the declared Qt baseline's API checks to project executables and fixture targets.
 foreach(qldm_target IN ITEMS qlinuxdevicemanager monitor-state-test device-events-test
         device-rules-test device-resources-test device-search-test system-properties-test
-        directory-scan-test display-identity-test gpu-link-sample-test pcie-link-text-test)
+        directory-scan-test display-identity-test gpu-link-sample-test pcie-link-text-test tree-export-test)
     if(TARGET ${qldm_target})
         target_compile_definitions(${qldm_target} PRIVATE QT_ENABLE_STRICT_MODE_UP_TO=${APP_QT_STRICT_VERSION})
     endif()
