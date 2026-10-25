@@ -6,7 +6,7 @@
 #include <QGridLayout>
 #include <QLabel>
 #include <QLocale>
-#include <QTabWidget>
+#include <QTabBar>
 #include <QVBoxLayout>
 #include <QFont>
 #include <limits>
@@ -156,15 +156,33 @@ void SystemRamPage::rebuildMemory()
         memoryForm_->addWidget(message, 1, 0);
         return;
     }
-    auto *tabs = new QTabWidget(memoryForm_->parentWidget());
+    auto *chips = new QWidget(memoryForm_->parentWidget());
+    auto *layout = new QVBoxLayout(chips);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+    auto *tabs = new QTabBar(chips);
+    tabs->setExpanding(false);
     tabs->setUsesScrollButtons(true);
-    memoryForm_->addWidget(tabs, 1, 0);
+    layout->addWidget(tabs);
+    // Use one table: hidden chip tables otherwise retain heights calculated at
+    // obsolete widths, which QTabWidget includes in the whole stack's minimum.
+    auto *table = new ReportTable(chips);
+    table->setColumnCount(2);
+    table->setHorizontalHeaderLabels({tr("Property"), tr("Value")});
+    table->setRowCount(memoryFields().size());
+    layout->addWidget(table);
+    memoryForm_->addWidget(chips, 1, 0);
     for (const FirmwareMemoryDevice &device : memory.devices) {
-        auto *table = new ReportTable(tabs);
-        table->setColumnCount(2);
-        table->setHorizontalHeaderLabels({tr("Property"), tr("Value")});
+        const int tab = tabs->addTab(tr("Chip %1").arg(device.index + 1));
+        tabs->setTabToolTip(tab, tr("Memory device %1 (firmware record %2)")
+            .arg(device.index + 1).arg(device.index) + '\n' + memoryScope());
+    }
+    const auto showChip = [this, table](int index) {
+        const auto &devices = snapshot_.memoryDevices.devices;
+        if (index < 0 || index >= devices.size()) return;
+        const auto &device = devices.at(index);
+        table->clearContents();
         const auto fields = memoryFields();
-        table->setRowCount(fields.size());
         const QString prefix = QStringLiteral("MEMORY_DEVICE_%1_").arg(device.index);
         for (int row = 0; row < fields.size(); ++row) {
             const auto &field = fields[row];
@@ -176,8 +194,7 @@ void SystemRamPage::rebuildMemory()
             table->setItem(row, 1, value);
         }
         table->fitContents();
-        const int tab = tabs->addTab(table, tr("Chip %1").arg(device.index + 1));
-        tabs->setTabToolTip(tab, tr("Memory device %1 (firmware record %2)")
-            .arg(device.index + 1).arg(device.index) + '\n' + memoryScope());
-    }
+    };
+    connect(tabs, &QTabBar::currentChanged, table, showChip);
+    showChip(tabs->currentIndex());
 }
