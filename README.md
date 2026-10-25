@@ -26,8 +26,12 @@ including the `--acpi-ids PATH` override.
 - **System information:** processor models, cores, caches and supported CPU
   features; RAM capacity and memory-device details; motherboard and BIOS/UEFI
   information; Linux version, uptime, Secure Boot and MOK certificates.
-- **Network adapters:** IP addresses, MAC addresses, MTU and available Ethernet
+- **LAN adapters:** IP addresses, MAC addresses, MTU and available Ethernet
   link speed, duplex and supported link modes.
+- **Wi-Fi adapters**: the connected network name, operating mode, channels, channel
+  widths, signal strength, transmit power, link rates, and security information.
+- **Bluetooth adapters**: controller identity, version, address, capabilities,
+  radio blocking, and supported services.
 - **Monitors and graphics:** monitor identity and capabilities, display resolution,
   refresh rate, rotation and scale; PCIe link speed and lane width; GPU Resizable
   BAR capabilities and allocated sizes where available. An optional GPU link test
@@ -53,9 +57,12 @@ field in specialized hardware tabs.
   cores and low-power efficiency cores.
 - **Shows full RAM information**, including manufacturer, performance (speed in MT/s),
   number of modules, whether they are soldered or replaceable.
-- **Shows PCI-express devices** link speed, link width, PCIe version standard.
+- **Shows PCI-express devices** link speed, link width, PCIe version standard. Offers
+  a GPU PCIe link test to make the GPU reach its maximum PCIe link state and speed.
 - **Shows USB devices** USB version, bandwidth, voltage, power source, remote wakeup
   capability.
+- **Shows audio devices** extended information including the PulseAudio server version,
+  audio codec, audio profiles, ports, playback and recording sinks.
 - **Shows full battery status** including presence, status, charge percentage, voltage,
   current, power, number of charge cycles, factory (design) and remaining capacities,
   manufacturer and serial number.
