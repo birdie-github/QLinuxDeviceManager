@@ -32,6 +32,7 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     tabs->addTab(driverPage_, tr("Driver"));
     networkPage_ = new NetworkPage(tabs);
     bluetoothPage_ = new BluetoothPage(tabs);
+    audioPage_ = new AudioPage(tabs);
     cameraPage_ = new CameraPage(tabs);
     displayPage_ = new DisplayPage(tabs);
     usbPage_ = new UsbPage(tabs);
@@ -104,6 +105,7 @@ void PropertiesDialog::rebuild()
     rebuildStorage();
     rebuildNetwork();
     rebuildBluetooth();
+    rebuildAudio();
     rebuildDisplay();
     rebuildCamera();
     rebuildUsb();
@@ -131,6 +133,14 @@ void PropertiesDialog::rebuildResources()
     const DeviceResources &data = snapshot_.resources;
     setPageVisible(resourcesPage_, data.hasInformation(), tr("Resources"));
     resourcesPage_->setSnapshot(data);
+}
+
+void PropertiesDialog::rebuildAudio()
+{
+    const bool applicable = device().category == "audio" || device().subsystem == "sound";
+    setPageVisible(audioPage_, applicable, tr("Audio"), 2);
+    if (applicable) audioPage_->setSnapshot(snapshot_.audio, device().path);
+    else audioPage_->clear();
 }
 
 void PropertiesDialog::rebuildBluetooth()

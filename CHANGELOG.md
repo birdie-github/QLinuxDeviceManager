@@ -1,18 +1,16 @@
-### Upcoming changes:
+### v1.4.0 (25 October 2026)
 
-- **Much richer CPU information**: Core groups (including performance vs. efficiency cores where applicable), how caches are shared between cores, maximum frequencies, and SMT (hyper-threading) status. This gives a clearer picture of how your processor is organized.
-- Much improved ATA drives health reporting - more sensible presentation, LBAs read/written are properly read and presented.
-- A ton of Bluetooth information, including version, MAC address, capabilities, previously paired devices and their statuses.
-- A ton of previously not shown Wi-Fi related information: connected SSID (router/access point/hotspot) name, channel, bandwidth, signal strength/transmit power in dBm, mode (client/server), security (WPA1/WPA2/WPA3-Personal (SAE)) - requires running under `root`/`sudo` - can't do anything about that as it is a silly Linux network API limitation.
-- A ton of previously unidentified devices are now shown properly. They were shown before, they just lacked proper names.
-- Fixed sorting across the application.
-- Implemented theming support (icon images can be overridden).
-- Now calculating and showing display PPI.
-- Memory modules from the firmware are shown in their own individual sections/tabs so each stick is easier to read.
-- Optional GPU PCIe link test: You can run a short graphics load on a selected GPU to see whether the PCIe connection actually speeds up or uses more lanes under load. Useful for checking if a graphics card is running at its full possible speed. The test only appears when the link readings look usable.
-- Better matching of display outputs on X11 systems by using the monitor’s unique EDID identity when the connector names don’t match perfectly.
-- More reliable collection of properties for storage, network, cameras, and displays (better error handling and timeouts so the app is less likely to hang or miss data).
-- Easier ways to copy the information from the current System Information tab (or everything) to the clipboard.
+- **Richer processor information:** View core groups, maximum frequencies, performance and efficiency cores where reported, SMT/Hyper-Threading status, and how caches are shared. A dedicated Copy button copies the supported instruction sets and CPU features.
+- **Wi-Fi connection details:** The Network tab now shows the connected network name, operating mode, channels, channel widths, signal strength, transmit power, link rates, and security information. Availability depends on your driver, network service, and permissions; some details require administrator access.
+- **Bluetooth information:** Inspect controller identity, version, address, capabilities, radio blocking, and supported services. See devices currently known to the system and their connection, pairing, trust, and blocking status. This is a read-only snapshot, not a complete pairing history.
+- **Clearer drive health reports:** ATA SMART attributes now have more readable names, durations, and units. Read/write totals can use smartmontools when installed and permitted, with clearer warnings when values are uncertain or access is restricted.
+- **Optional GPU PCIe link test:** Run a short graphics workload to observe whether a selected GPU's PCIe speed or lane width increases under load. The test is offered when usable link readings are available; it is not a graphics performance benchmark.
+- **Easier-to-read RAM information:** Firmware-reported memory devices now have individual chip tabs, making long reports easier to browse.
+- **Improved information tables:** Resize columns manually and read full tables using the page's scrollbars, without separate scrollbars inside each table.
+- **Volume details on demand:** Open a selected storage volume's details with a button or by double-clicking its row.
+- **More useful device names:** Many previously generic system devices now have recognizable names, including firmware-controlled functions and the PC speaker. Device and storage lists also sort numbered names naturally, so item 2 comes before item 10.
+- **Display improvements:** Monitor information now includes an estimated pixel density (PPI). Display outputs are matched more reliably on X11 when connector names differ, and unresponsive display queries have time limits.
+- **More convenient copying:** Copy the current System Information tab or the entire report to the clipboard.
 
 ### v1.3.0 (12 October 2026)
 - Much more complete drive health (SMART) reports for both traditional hard drives and NVMe SSDs—temperature, power-on time, endurance, spare capacity, error counts, and more (previously only a couple of attributes were shown).

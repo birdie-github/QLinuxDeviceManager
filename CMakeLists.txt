@@ -35,6 +35,10 @@ endif()
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(UDEV REQUIRED IMPORTED_TARGET libudev)
 pkg_check_modules(V4L2 REQUIRED IMPORTED_TARGET libv4l2)
+option(AUDIO "Use optional libpulse for local audio session information" ON)
+if(AUDIO)
+    pkg_check_modules(PULSE QUIET IMPORTED_TARGET libpulse>=5.0)
+endif()
 # Headers only: session libraries are opened on demand with QLibrary (dlopen).
 # Do not link PkgConfig targets for these backends into the executable.
 pkg_check_modules(DISPLAY_X11 REQUIRED xcb-randr)
@@ -61,6 +65,7 @@ add_executable(qlinuxdevicemanager
     src/devices/monitorproperties.h src/devices/monitorproperties.cpp
     src/devices/cameraproperties.h src/devices/cameraproperties.cpp
     src/devices/bluetoothproperties.h src/devices/bluetoothproperties.cpp
+    src/devices/audioproperties.h src/devices/audioproperties.cpp
     src/devices/displaybackend.h src/devices/displayx11.cpp src/devices/displaywayland.cpp
     src/devices/displayidentity.h src/devices/displayidentity.cpp
     src/devices/storageproperties.h src/devices/storageproperties.cpp
@@ -91,6 +96,7 @@ add_executable(qlinuxdevicemanager
     src/ui/devicepages/propertyfieldspage.h src/ui/devicepages/propertyfieldspage.cpp
     src/ui/propertypage.h src/ui/propertypage.cpp
     src/ui/devicepages/bluetoothpage.h src/ui/devicepages/bluetoothpage.cpp
+    src/ui/devicepages/audiopage.h src/ui/devicepages/audiopage.cpp
     src/ui/devicepages/networkpage.h src/ui/devicepages/networkpage.cpp
     src/ui/devicepages/camerapage.h src/ui/devicepages/camerapage.cpp
     src/ui/devicepages/displaypage.h src/ui/devicepages/displaypage.cpp
@@ -130,6 +136,13 @@ target_include_directories(qlinuxdevicemanager PRIVATE
     src/devices src/ui "${CMAKE_CURRENT_BINARY_DIR}/generated"
     ${DISPLAY_X11_INCLUDE_DIRS} ${DISPLAY_WAYLAND_INCLUDE_DIRS})
 target_link_libraries(qlinuxdevicemanager PRIVATE Qt6::Widgets Qt6::Network PkgConfig::UDEV PkgConfig::V4L2)
+if(AUDIO AND TARGET PkgConfig::PULSE)
+    target_link_libraries(qlinuxdevicemanager PRIVATE PkgConfig::PULSE)
+    target_compile_definitions(qlinuxdevicemanager PRIVATE QLDM_HAVE_PULSE)
+    message(STATUS "Audio session information: enabled (libpulse)")
+else()
+    message(STATUS "Audio session information: unavailable (libpulse disabled or not found)")
+endif()
 if(DISPLAY_INFO AND TARGET PkgConfig::DISPLAY_INFO)
     target_link_libraries(qlinuxdevicemanager PRIVATE PkgConfig::DISPLAY_INFO)
     target_compile_definitions(qlinuxdevicemanager PRIVATE QLDM_HAVE_DISPLAY_INFO)
@@ -270,6 +283,7 @@ if(BUILD_TESTING)
         src/devices/monitorproperties.cpp src/devices/monitorproperties.h
         src/devices/cameraproperties.cpp src/devices/cameraproperties.h
         src/devices/bluetoothproperties.cpp src/devices/bluetoothproperties.h
+        src/devices/audioproperties.h src/devices/audioproperties.cpp
         src/devices/displaybackend.h src/devices/displayx11.cpp src/devices/displaywayland.cpp
         src/devices/displayidentity.h src/devices/displayidentity.cpp
         src/devices/storageproperties.cpp src/devices/storageproperties.h

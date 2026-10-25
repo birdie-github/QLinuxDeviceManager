@@ -165,6 +165,31 @@ No scanning, pairing, connection changes, radio changes or remote GATT reads are
 performed. Reload properties to refresh the snapshot; known devices are not a
 complete history, and signal/advertising metadata may be stale.
 
+### Audio details
+
+Audio devices have an Audio tab with a read-only snapshot from the current local
+PulseAudio or PipeWire-Pulse session. Associated cards show their driver, reported
+mixer/codec, active and available profiles, and port availability. Playback and
+recording tables include the default endpoint, state, selected port, configured
+sample format/rate, channel layout, mute status, and reported resolution when
+available. Output-monitor sources are omitted from the recording list.
+
+Cards are associated through canonical local sysfs paths, not display names.
+Selecting a controller or a child sound device shows the entire associated card;
+individual codecs or other records without a matching card may have no session
+information. USB sound cards can be matched through their sound-card records;
+Bluetooth or virtual cards without a matching local sysfs path are not guessed.
+Configured formats and resolution metadata are not hardware capability limits or
+measurements of audio quality. Port availability may be unknown, and suspended
+endpoints still have a configured format.
+
+Run as the desktop user with access to the audio session; root does not inherit
+another user's session access. Reload properties for a new snapshot. Collection
+does not open audio streams, start an audio server, or change profiles, ports,
+volume or mute state. Deep search does not query the audio server. Native PipeWire
+sessions without the PulseAudio compatibility service are not queried in this
+version. Audio server support is optional at build time.
+
 ## Understanding the results
 
 QLinuxDeviceManager is **read-only**: it does not install drivers, change device

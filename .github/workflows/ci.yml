@@ -18,9 +18,10 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build pkg-config python3 wget file \
             libudev-dev libkmod-dev libssl-dev libgl-dev libegl-dev \
-            libxkbcommon-dev libxcb-cursor0 libxcb-randr0-dev libwayland-dev libdisplay-info-dev libv4l-dev
+            libxkbcommon-dev libxcb-cursor0 libxcb-randr0-dev libwayland-dev libdisplay-info-dev libv4l-dev libpulse-dev
           pkg-config --atleast-version=30 libkmod
           pkg-config --atleast-version=0.1.1 libdisplay-info
+          pkg-config --atleast-version=5.0 libpulse
 
       # Ubuntu 24.04's packaged Qt is older than our required Qt 6.8.
       - name: Install Qt
@@ -39,7 +40,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX=/usr \
             -DCMAKE_INSTALL_LIBDIR=lib \
-            -DBUILD_TESTING=OFF -DKMOD=ON -DUDISKS2=ON -DDISPLAY_INFO=ON
+            -DBUILD_TESTING=OFF -DKMOD=ON -DUDISKS2=ON -DDISPLAY_INFO=ON -DAUDIO=ON
           cmake --build _build --parallel "$(nproc)"
           DESTDIR="$PWD/_build/AppDir" cmake --install _build
           install -Dm644 LICENSE _build/AppDir/usr/share/licenses/QLinuxDeviceManager/LICENSE
@@ -79,6 +80,7 @@ jobs:
             --library /usr/lib/x86_64-linux-gnu/libxcb.so.1 \
             --library /usr/lib/x86_64-linux-gnu/libxcb-randr.so.0 \
             --library /usr/lib/x86_64-linux-gnu/libwayland-client.so.0 \
+            --library /usr/lib/x86_64-linux-gnu/libpulse.so.0 \
             --plugin qt \
             --output appimage
           test -f "$LDAI_OUTPUT"

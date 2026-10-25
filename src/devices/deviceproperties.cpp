@@ -618,6 +618,9 @@ DeviceProperties collectDeviceProperties(const Device &device, bool cachedStorag
         if (cachedStorageService && d.subsystem == "bluetooth" && bluetoothControllerName(d.sysname)
             && !QThread::currentThread()->isInterruptionRequested())
             result.bluetooth = collectBluetoothProperties(d);
+        if (cachedStorageService && (d.category == "audio" || d.subsystem == "sound")
+            && !QThread::currentThread()->isInterruptionRequested())
+            result.audio = collectAudioProperties(d);
         // Binding can change during a read even if the device instance remains.
         const Attribute afterLink = linkTarget(deviceFd.fd, "driver");
         if (afterLink.state != driverLink.state || afterLink.value != driverLink.value || afterLink.error != driverLink.error) {
@@ -638,6 +641,10 @@ DeviceProperties collectDeviceProperties(const Device &device, bool cachedStorag
     if (QThread::currentThread()->isInterruptionRequested()) { result.state = ReadState::Error; result.error = ECANCELED; }
     if (result.state != ReadState::Available && result.bluetooth.applicable)
         result.bluetooth.invalidate({result.state, {}, result.error});
+    if (result.state != ReadState::Available && result.audio.applicable) {
+        result.audio.cards.clear();
+        result.audio.status = {result.state, {}, result.error};
+    }
     return result;
 }
 

@@ -15,6 +15,7 @@ class UsbPage;
 class DisplayPage;
 class CameraPage;
 class BluetoothPage;
+class AudioPage;
 class NetworkPage;
 class PropertyFieldsPage;
 class QLabel;
@@ -41,6 +42,7 @@ private:
     void rebuildStorage();
     void rebuildNetwork();
     void rebuildBluetooth();
+    void rebuildAudio();
     void rebuildDisplay();
     void rebuildCamera();
     void rebuildUsb();
@@ -57,6 +59,7 @@ private:
     HealthPage *healthPage_ = nullptr;
     NetworkPage *networkPage_ = nullptr;
     BluetoothPage *bluetoothPage_ = nullptr;
+    AudioPage *audioPage_ = nullptr;
     CameraPage *cameraPage_ = nullptr;
     DisplayPage *displayPage_ = nullptr;
     UsbPage *usbPage_ = nullptr;

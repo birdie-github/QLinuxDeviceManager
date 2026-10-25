@@ -765,7 +765,7 @@ Fedora packages:
 # Optional monitor EDID decoding: libdisplay-info-devel
 sudo dnf install gcc-c++ cmake make pkgconf-pkg-config qt6-qtbase-devel systemd-devel libv4l-devel libxcb-devel wayland-devel
 # Optional:
-sudo dnf install qt6-qttools-devel kmod-devel libdisplay-info-devel
+sudo dnf install qt6-qttools-devel kmod-devel libdisplay-info-devel pulseaudio-libs-devel
 # Optional GPU link test:
 sudo dnf install vulkan-headers glslang
 ```
@@ -776,7 +776,7 @@ Debian/Ubuntu packages:
 # Optional monitor EDID decoding: libdisplay-info-dev (>= 0.1.1)
 sudo apt install g++ cmake make pkg-config qt6-base-dev libudev-dev libv4l-dev libxcb-randr0-dev libwayland-dev
 # Optional:
-sudo apt install qt6-tools-dev qt6-tools-dev-tools libkmod-dev libdisplay-info-dev
+sudo apt install qt6-tools-dev qt6-tools-dev-tools libkmod-dev libdisplay-info-dev libpulse-dev
 # Optional GPU link test:
 sudo apt install libvulkan-dev glslang-tools
 ```
@@ -802,6 +802,14 @@ Use `-DENABLE_DONATION_BUTTON=OFF` to exclude the donation button, acknowledgmen
 and related Options preference (enabled by default).
 
 Use `-DKMOD=OFF` to omit libkmod or `-DUDISKS2=OFF` for a native-only storage build.
+Use `-DAUDIO=OFF` to omit optional libpulse audio session queries. With the option
+on (default), libpulse >= 5.0 is detected automatically; missing development files
+leave the Audio tab available with an explanatory status. CMake reports whether
+the backend is enabled. No native PipeWire development package is required.
+Collection runs in the properties worker with a shared two-second reply-wait
+budget and bounded card, endpoint, profile, port and string counts. The connection
+uses `PA_CONTEXT_NOAUTOSPAWN`; callbacks copy data before returning, and incomplete
+reports are discarded. Deep-search targets use the disabled-backend stub.
 Use `-DBLUETOOTH=OFF` to omit the optional BlueZ D-Bus backend. Native controller
 association, rfkill reads and the permission-dependent read-only management query
 remain available. No libbluetooth development package is required; the optional
