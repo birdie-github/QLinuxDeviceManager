@@ -5,8 +5,8 @@
     "bundle_namespace": "io.github.birdie-github"
   },
   "release": {
-    "version": "1.3.0",
-    "date": "2026-10-12"
+    "version": "1.4.0",
+    "date": "2026-10-25"
   },
   "project": {
     "repository": "https://github.com/birdie-github/QLinuxDeviceManager",
