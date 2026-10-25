@@ -1,6 +1,9 @@
+#pragma once
+
 #include "batterypage.h"
 #include "bluetoothpage.h"
 #include "camerapage.h"
+#include "detailspage.h"
 #include "displaypage.h"
 #include "eventspage.h"
 #include "healthpage.h"

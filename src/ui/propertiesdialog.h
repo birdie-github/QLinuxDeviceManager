@@ -5,6 +5,7 @@
 #include <QDialog>
 #include <QVector>
 
+class DetailsPage;
 class ResourcesPage;
 class EventsPage;
 class StoragePage;
@@ -42,7 +43,6 @@ signals:
     void reloadRequested();
 private:
     void rebuild();
-    void rebuildDetails();
     void rebuildResources();
     void rebuildStorage();
     void rebuildNetwork();
@@ -52,8 +52,6 @@ private:
     void rebuildUsb();
     void rebuildPcie();
     void rebuildBattery();
-    void showDetail();
-    void copyAll();
     DeviceProperties snapshot_;
     QVector<PropertyEntry> entries_;
     QLabel *banner_ = nullptr;
@@ -71,11 +69,8 @@ private:
     UsbPage *usbPage_ = nullptr;
     PciePage *pciePage_ = nullptr;
     BatteryPage *batteryPage_ = nullptr;
-    QComboBox *property_ = nullptr;
-    QPlainTextEdit *value_ = nullptr;
-    QLabel *source_ = nullptr;
-    QCheckBox *advanced_ = nullptr;
     QPushButton *reload_ = nullptr;
     EventsPage *eventsPage_ = nullptr;
+    DetailsPage *detailsPage_ = nullptr;
     bool removed_ = false;
 };

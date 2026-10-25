@@ -83,35 +83,8 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     volumesPage_ = new VolumesPage(tabs);
 
     healthPage_ = new HealthPage(tabs);
-    auto *details = new QWidget(tabs);
-    auto *detailsLayout = new QVBoxLayout(details);
-    auto *propertyLabel = new QLabel(tr("&Property:"), details);
-    property_ = new QComboBox(details);
-    property_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
-    property_->setMinimumContentsLength(24);
-    propertyLabel->setBuddy(property_);
-    detailsLayout->addWidget(propertyLabel);
-    detailsLayout->addWidget(property_);
-    value_ = new QPlainTextEdit(details);
-    value_->setReadOnly(true);
-    detailsLayout->addWidget(value_, 1);
-    source_ = plainLabel(QString(), details);
-    detailsLayout->addWidget(source_);
-    advanced_ = new QCheckBox(tr("Show &advanced properties"), details);
-    detailsLayout->addWidget(advanced_);
-    auto *copyLayout = new QHBoxLayout;
-    auto *copySelected = new QPushButton(tr("Copy selection"), details);
-    auto *copyValue = new QPushButton(tr("Copy value"), details);
-    auto *copyEverything = new QPushButton(tr("Copy all values"), details);
-    copySelected->setEnabled(false);
-    connect(value_, &QPlainTextEdit::copyAvailable, copySelected, &QPushButton::setEnabled);
-    connect(copySelected, &QPushButton::clicked, value_, &QPlainTextEdit::copy);
-    connect(copyValue, &QPushButton::clicked, this, [this] { QApplication::clipboard()->setText(value_->toPlainText()); });
-    connect(copyEverything, &QPushButton::clicked, this, &PropertiesDialog::copyAll);
-    for (auto *button : {copySelected, copyValue, copyEverything}) copyLayout->addWidget(button);
-    copyLayout->addStretch();
-    detailsLayout->addLayout(copyLayout);
-    tabs->addTab(details, tr("Details"));
+    detailsPage_ = new DetailsPage(tabs);
+    tabs->addTab(detailsPage_, tr("Details"));
     resourcesPage_ = new ResourcesPage(tabs);
     eventsPage_ = new EventsPage(tabs);
     tabs->addTab(eventsPage_, tr("Events"));
@@ -119,8 +92,6 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     reload_ = buttons->addButton(tr("Reload properties"), QDialogButtonBox::ActionRole);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(reload_, &QPushButton::clicked, this, &PropertiesDialog::reloadRequested);
-    connect(property_, &QComboBox::currentIndexChanged, this, &PropertiesDialog::showDetail);
-    connect(advanced_, &QCheckBox::toggled, this, &PropertiesDialog::rebuildDetails);
     layout->addWidget(buttons);
     rebuild();
 }
@@ -190,53 +161,8 @@ void PropertiesDialog::rebuild()
         label->setToolTip(entry.source.toHtmlEscaped());
         form->addRow(entry.label + ':', label);
     }
-    rebuildDetails();
+    detailsPage_->setSnapshot(entries_, device());
 }
-void PropertiesDialog::rebuildDetails()
-{
-    const QString previous = property_->currentData().toString();
-    const QSignalBlocker blocker(property_);
-    property_->clear();
-    QVector<const PropertyEntry *> available, other;
-    for (const PropertyEntry &entry : entries_) {
-        if (!isDetailsProperty(entry, device()) || (entry.advanced && !advanced_->isChecked())) continue;
-        if (detailsPropertyStatus(entry).isEmpty()) available.append(&entry);
-        else other.append(&entry);
-    }
-    for (const PropertyEntry *entry : available) property_->addItem(entry->label, entry->id);
-    if (!available.isEmpty() && !other.isEmpty()) property_->insertSeparator(property_->count());
-    for (const PropertyEntry *entry : other)
-        property_->addItem(tr("%1 (%2)").arg(entry->label, detailsPropertyStatus(*entry)), entry->id);
-    const int index = property_->findData(previous);
-    property_->setCurrentIndex(index < 0 ? 0 : index);
-    showDetail();
-}
-void PropertiesDialog::showDetail()
-{
-    const QString id = property_->currentData().toString();
-    for (const PropertyEntry &entry : entries_) {
-        if (entry.id != id) continue;
-        value_->setFont(id == "efi/hex" ? QFontDatabase::systemFont(QFontDatabase::FixedFont) : QApplication::font());
-        value_->setLineWrapMode(id == "efi/hex" ? QPlainTextEdit::NoWrap : QPlainTextEdit::WidgetWidth);
-        value_->setPlainText(entry.value);
-        source_->setText(entry.source.isEmpty() ? QString() : tr("Source: %1").arg(entry.source));
-        return;
-    }
-    value_->clear();
-    source_->clear();
-}
-void PropertiesDialog::copyAll()
-{
-    QStringList values;
-    for (const PropertyEntry &entry : entries_) {
-        if (!isDetailsProperty(entry, device()) || (entry.advanced && !advanced_->isChecked())) continue;
-        QString text = entry.label + ":\n" + entry.value;
-        if (!entry.source.isEmpty()) text += '\n' + tr("Source: %1").arg(entry.source);
-        values.append(text);
-    }
-    QApplication::clipboard()->setText(values.join("\n\n"));
-}
-
 void PropertiesDialog::rebuildResources()
 {
     const DeviceResources &data = snapshot_.resources;
