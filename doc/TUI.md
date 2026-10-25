@@ -204,3 +204,14 @@ pages, including wraparound. Repeat after clicking a page or Close button, and
 confirm scroll keys act on the content immediately after a page change. Check
 Alt+G/D/T, Escape and mouse Close. Tab must reach Close; Shift+Tab must traverse
 controls in reverse. Main-window Tab behavior must remain unchanged.
+
+While Properties is open, the bottom bar shows F7 Previous and F8 Next, matching
+the keyboard bindings. Clicking either hint also switches pages. The browser's
+status keys and message return when the dialog closes; browser accelerators are
+removed from the bar while Properties is active. `propertiesstatus.cpp` owns this
+scoped change, reusing the existing bar rather than replacing its widget.
+
+Maintainer checks: open Properties, use F7/F8 and click both hints, then close
+using Escape and the Close button. Confirm the main F2/F4/F3/F6/F5/F10 hints
+return and their actions execute once. Repeat opening and closing several times,
+and resize with Properties open to check the bottom bar placement.

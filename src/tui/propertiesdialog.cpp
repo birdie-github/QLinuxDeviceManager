@@ -1,6 +1,7 @@
 #include "propertiesdialog.h"
 #include "propertypages.h"
 #include "propertypagecontrol.h"
+#include "propertiesstatus.h"
 #include "terminaltext.h"
 #include "devicelabel.h"
 #include <algorithm>
@@ -95,6 +96,9 @@ private:
     PropertyPageControl<FButton> driver_{"&Driver", this};
     PropertyPageControl<FButton> details_{"De&tails", this};
     PropertyPageControl<FButton> close_{"&Close", this};
+    PropertiesStatus status_{FWidget::getStatusBar(), [this](int step) {
+        setPage((page_ + step + 3) % 3);
+    }};
 };
 }
 

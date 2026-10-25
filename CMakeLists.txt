@@ -246,6 +246,7 @@ if(TUI)
             src/tui/terminaltext.h src/tui/terminaltext.cpp
             src/tui/propertiesdialog.h src/tui/propertiesdialog.cpp
             src/tui/propertypagecontrol.h
+            src/tui/propertiesstatus.h src/tui/propertiesstatus.cpp
             src/tui/propertypages.h src/tui/propertypages.cpp
             src/tui/devicetree.h src/tui/devicetree.cpp)
         target_link_libraries(qlinuxdevicemanager-tui PRIVATE
