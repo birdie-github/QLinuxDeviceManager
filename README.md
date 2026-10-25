@@ -273,4 +273,5 @@ No Icons8 artwork is included until authorized downloads are added.
 
 A snapshot-only FINAL CUT proof of concept can be enabled with `-DTUI=ON`.
 It shares device discovery with the GUI and provides type/connection trees and
-basic General/Driver properties. See [TUI build and usage](doc/TUI.md).
+General/Driver/Details properties, on-demand filtering, All Devices visibility,
+and System Information. See [TUI build and usage](doc/TUI.md).

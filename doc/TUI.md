@@ -260,3 +260,51 @@ explanations in documentation and reserve visible notes for necessary context.
 Maintainer checks: open all three Properties pages and confirm the banner is
 absent. On Details, confirm attribute rows remain, the redundant heading is
 absent and alternating bands still follow the correct logical fields.
+
+
+## System Information
+
+Open System Information with Alt+I or the F9 menu. Its Operating System,
+Motherboard, Processor and RAM pages follow the GUI's order and use the same
+field captions, units, interpretation and read-state formatting. F7/F8 cycle
+pages; the four page buttons support mouse activation. Tab/Shift+Tab retain
+normal focus traversal, including the RAM chip selector and Close. Escape
+closes the dialog. The contextual bottom bar shows Previous/Next while open.
+
+Tables are plain aligned text with headers and alternating row shading. RAM
+shows one firmware record at a time, selected by Chip in the bottom selector;
+CPU core groups and cache hierarchy are separate tables. There are no nested
+boxes, Copy/Copy All controls or dialog Refresh controls. The dialog is centered,
+bounded to 110x32 and shrinks for shorter pages and terminals. Long content
+remains available through native scrolling. Firmware memory records do not
+establish physical slots, channels, upgradeability or active ECC; the existing
+collector's evidence and read errors are preserved.
+
+The first opening collects system information in one QThread worker. Native
+FINAL CUT timers check completion without a Qt event loop; polling stops once
+the result is consumed. Reopening uses the cached result. The application's
+existing F5/Refresh action also invalidates that cache and starts fresh system
+collection after a successful inventory refresh. A newer request supersedes
+an older collection; only one system worker runs at a time. Closing the dialog
+does not cancel or lose the cache, and application shutdown interrupts and joins
+the worker. No worker accesses widgets or retains a dialog pointer.
+
+`systemdialog.cpp` owns page selection and layout. Each TUI page has its own
+source under `src/tui/systempages/`; `report.cpp` only aligns and shades text.
+`systemsnapshot.cpp` owns collection/cache lifetime. Shared presentation lives in
+`src/core/systemreport{platform,processor,memory}.cpp`, used by both frontends;
+the Qt page widgets retain their layouts, tooltips, copying and refresh behavior.
+The shared collector uses QtNetwork for existing MOK certificate parsing, so the
+TUI now also links QtNetwork through the core. It still uses no Qt Widgets or
+Qt event loop at runtime.
+
+Maintainer checks: build both frontends and run `ctest --test-dir build -R
+'system-(properties|report)' --output-on-failure`. Open via both entry points,
+cycle all pages, check Tab reaches Close, and switch RAM records with keyboard
+and mouse. Compare values and headers with the GUI, including unavailable or
+permission-denied firmware data. Inspect instruction sets, SMT cache sharing,
+long identifiers and certificate dates. Repeat at 80x25 and 211x60, resize and
+cycle short/long pages to check for stale borders. Verify stripes follow wrapped
+rows and scrolling. Close during collection, reopen, refresh from the browser
+and reopen again, then quit while a collection is active. Confirm no dialog
+Copy or Refresh controls appear and browser status keys return on close.

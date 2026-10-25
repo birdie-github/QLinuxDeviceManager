@@ -1,4 +1,5 @@
 #include "systemdialog.h"
+#include "systemreport.h"
 #include "systempages/rampage.h"
 #include "systempages/motherboardpage.h"
 #include "systempages/processorpage.h"
@@ -14,7 +15,7 @@
 
 SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
 {
-    setWindowTitle(tr("System Information"));
+    setWindowTitle(systemInformationTitle());
     resize(680, 650);
     auto *layout = new QVBoxLayout(this);
     tabs_ = new QTabWidget(this);
@@ -22,16 +23,16 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
     tabs->setUsesScrollButtons(true);
     layout->addWidget(tabs, 1);
     osPage_ = new SystemOperatingSystemPage(tabs);
-    tabs->addTab(osPage_, tr("Operating System"));
+    tabs->addTab(osPage_, systemPageTitles().at(0));
 
     motherboardPage_ = new SystemMotherboardPage(tabs);
-    tabs->addTab(motherboardPage_, tr("Motherboard"));
+    tabs->addTab(motherboardPage_, systemPageTitles().at(1));
 
     processorPage_ = new SystemProcessorPage(tabs);
-    tabs->addTab(processorPage_, tr("Processor"));
+    tabs->addTab(processorPage_, systemPageTitles().at(2));
 
     ramPage_ = new SystemRamPage(tabs);
-    tabs->addTab(ramPage_, tr("RAM"));
+    tabs->addTab(ramPage_, systemPageTitles().at(3));
     // Use one font-derived caption width for every section, so values align.
     int captionWidth = 0;
     captionWidth = qMax(captionWidth, osPage_->captionWidthHint());

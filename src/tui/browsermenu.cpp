@@ -1,12 +1,17 @@
 #include "browsermenu.h"
+#include "systemreport.h"
+#include "terminaltext.h"
 #include <utility>
 
 using namespace finalcut;
 
 BrowserMenu::BrowserMenu(FWidget *parent, std::function<void(bool)> selectView,
-    std::function<void(bool)> showAll) : FMenu("View", parent)
+    std::function<void(bool)> showAll, std::function<void()> systemInformation) : FMenu("View", parent)
 {
     separator_.setSeparator();
+    systemSeparator_.setSeparator();
+    system_.setText(display(systemInformationTitle()));
+    system_.addCallback("clicked", std::move(systemInformation));
     type_.addCallback("clicked", [selectView] { selectView(false); });
     connection_.addCallback("clicked", [selectView] { selectView(true); });
     all_.addCallback("clicked", [this, showAll = std::move(showAll)] {

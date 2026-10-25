@@ -1,7 +1,7 @@
 #pragma once
 #include <final/final.h>
 
-// Reserve F7/F8 for page cycling within Properties.
+// Reserve F7/F8 for page cycling within tabbed read-only dialogs.
 // All other input keeps the native text-view/button behavior.
 template<typename Widget>
 class PropertyPageControl final : public Widget {

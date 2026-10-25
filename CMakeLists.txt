@@ -103,8 +103,6 @@ add_executable(qlinuxdevicemanager
     src/ui/devicepages/storagepage.h src/ui/devicepages/storagepage.cpp
     src/ui/devicepages/eventspage.h src/ui/devicepages/eventspage.cpp
     src/ui/devicepages/resourcespage.h src/ui/devicepages/resourcespage.cpp
-    src/devices/secureboot.h src/devices/secureboot.cpp
-    src/devices/systemproperties.h src/devices/systemproperties.cpp src/devices/cputopology.h
     src/ui/systempages/rampage.h src/ui/systempages/rampage.cpp
     src/ui/systempages/motherboardpage.h src/ui/systempages/motherboardpage.cpp
     src/ui/systempages/processorpage.h src/ui/systempages/processorpage.cpp
@@ -209,6 +207,10 @@ target_compile_definitions(qlinuxdevicemanager PRIVATE
 add_library(qldm-core STATIC
     src/core/inventory.h src/core/inventory.cpp src/core/connectionparents.cpp
     src/core/commonproperties.h src/core/commonproperties.cpp
+    src/core/systemreport.h src/core/systemreportplatform.cpp
+    src/core/systemreportprocessor.cpp src/core/systemreportmemory.cpp
+    src/devices/secureboot.h src/devices/secureboot.cpp
+    src/devices/systemproperties.h src/devices/systemproperties.cpp src/devices/cputopology.h
     src/devices/device.h src/devices/device.cpp
     src/devices/deviceevents.h src/devices/deviceevents.cpp
     src/devices/cpumetadata.h src/devices/cpumetadata.cpp
@@ -221,7 +223,7 @@ add_library(qldm-core STATIC
     src/devices/deviceresources.h src/devices/deviceresources.cpp
 )
 target_include_directories(qldm-core PUBLIC src/core src/devices)
-target_link_libraries(qldm-core PUBLIC Qt6::Core PRIVATE PkgConfig::UDEV)
+target_link_libraries(qldm-core PUBLIC Qt6::Core PRIVATE Qt6::Network PkgConfig::UDEV)
 target_compile_definitions(qldm-core PRIVATE
     QLDM_INSTALLED_ACPI_IDS="${CMAKE_INSTALL_FULL_DATADIR}/${APP_NAME}/acpi-pnp.ids"
     QT_ENABLE_STRICT_MODE_UP_TO=${APP_QT_STRICT_VERSION})
@@ -242,6 +244,14 @@ if(TUI)
         add_executable(qlinuxdevicemanager-tui src/tui/main.cpp
             src/tui/browser.h src/tui/browser.cpp
             src/tui/browsermenu.h src/tui/browsermenu.cpp
+            src/tui/systemdialog.h src/tui/systemdialog.cpp
+            src/tui/systemsnapshot.h src/tui/systemsnapshot.cpp
+            src/tui/systempages/pages.h
+            src/tui/systempages/report.h src/tui/systempages/report.cpp
+            src/tui/systempages/operatingsystempage.cpp
+            src/tui/systempages/motherboardpage.cpp
+            src/tui/systempages/processorpage.cpp
+            src/tui/systempages/rampage.cpp
             src/tui/treeprojection.h src/tui/treeprojection.cpp
             src/tui/inventoryfilter.h src/tui/inventoryfilter.cpp
             src/tui/terminaltext.h src/tui/terminaltext.cpp
@@ -250,6 +260,7 @@ if(TUI)
             src/tui/propertiesstatus.h src/tui/propertiesstatus.cpp
             src/tui/propertypages.h src/tui/propertypages.cpp
             src/tui/devicetree.h src/tui/devicetree.cpp)
+        target_include_directories(qlinuxdevicemanager-tui PRIVATE src/tui)
         target_link_libraries(qlinuxdevicemanager-tui PRIVATE
             qldm-core PkgConfig::FINALCUT ${TUI_FINALCUT_EXTRA_LIBRARIES})
         target_compile_options(qlinuxdevicemanager-tui PRIVATE -Wall -Wextra -Wpedantic)
@@ -381,11 +392,14 @@ if(BUILD_TESTING)
     target_include_directories(system-properties-test PRIVATE src/devices)
     target_link_libraries(system-properties-test PRIVATE Qt6::Core Qt6::Network PkgConfig::UDEV)
     add_test(NAME system-properties COMMAND system-properties-test)
+    add_executable(system-report-test tests/system-report.cpp)
+    target_link_libraries(system-report-test PRIVATE qldm-core)
+    add_test(NAME system-report COMMAND system-report-test)
 endif()
 
 # Apply the declared Qt baseline's API checks to project executables and fixture targets.
 foreach(qldm_target IN ITEMS qlinuxdevicemanager monitor-state-test device-events-test
-        device-rules-test device-resources-test device-search-test system-properties-test
+        device-rules-test device-resources-test device-search-test system-properties-test system-report-test
         directory-scan-test display-identity-test gpu-link-sample-test pcie-link-text-test tree-export-test)
     if(TARGET ${qldm_target})
         target_compile_definitions(${qldm_target} PRIVATE QT_ENABLE_STRICT_MODE_UP_TO=${APP_QT_STRICT_VERSION})

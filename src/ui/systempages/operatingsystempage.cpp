@@ -1,14 +1,12 @@
 #include "operatingsystempage.h"
+#include "systemreport.h"
 #include "propertypage.h"
 #include "propertytext.h"
 #include "propertyreport.h"
 #include <QFrame>
 #include <QGridLayout>
 #include <QLabel>
-#include <QLocale>
 #include <QVBoxLayout>
-#include <algorithm>
-#include <limits>
 
 SystemOperatingSystemPage::SystemOperatingSystemPage(QWidget *parent) : QWidget(parent)
 {
@@ -35,20 +33,20 @@ SystemOperatingSystemPage::SystemOperatingSystemPage(QWidget *parent) : QWidget(
     };
 
     auto *os = form_;
-    field(os, "hostname", tr("Hostname"));
-    field(os, "os", tr("Linux distribution"));
+    field(os, "hostname", systemFieldCaption(SystemPage::OperatingSystem, "hostname"));
+    field(os, "os", systemFieldCaption(SystemPage::OperatingSystem, "os"));
     auto *separator = new QFrame(os->parentWidget());
     separator->setFrameShape(QFrame::HLine);
     separator->setFrameShadow(QFrame::Sunken);
     os->addWidget(separator, os->rowCount(), 0, 1, 2);
-    field(os, "architecture", tr("Kernel architecture"));
-    field(os, "kernel", tr("Kernel version"));
-    field(os, "build", tr("Kernel build"));
-    field(os, "boot", tr("Boot mode"));
-    field(os, "secure_boot", tr("Secure Boot"));
-    field(os, "virtualization", tr("Virtualization environment"));
-    field(os, "uptime", tr("Uptime"));
-    field(os, "gpu_rebar", tr("Resizable BAR (GPU)"));
+    field(os, "architecture", systemFieldCaption(SystemPage::OperatingSystem, "architecture"));
+    field(os, "kernel", systemFieldCaption(SystemPage::OperatingSystem, "kernel"));
+    field(os, "build", systemFieldCaption(SystemPage::OperatingSystem, "build"));
+    field(os, "boot", systemFieldCaption(SystemPage::OperatingSystem, "boot"));
+    field(os, "secure_boot", systemFieldCaption(SystemPage::OperatingSystem, "secure_boot"));
+    field(os, "virtualization", systemFieldCaption(SystemPage::OperatingSystem, "virtualization"));
+    field(os, "uptime", systemFieldCaption(SystemPage::OperatingSystem, "uptime"));
+    field(os, "gpu_rebar", systemFieldCaption(SystemPage::OperatingSystem, "gpu_rebar"));
 
 }
 int SystemOperatingSystemPage::captionWidthHint() const
@@ -63,59 +61,7 @@ void SystemOperatingSystemPage::setCaptionWidth(int width)
 }
 QString SystemOperatingSystemPage::displayValue(const QString &key, const Attribute &value) const
 {
-    if (key == "virtualization" && value.state == ReadState::Unavailable)
-        return tr("Unknown (no hypervisor identity reported)");
-    if (key == "gpu_rebar") {
-        if (snapshot_.gpuRebarStatus.state != ReadState::Available)
-            return propertyReadValue(snapshot_.gpuRebarStatus);
-        if (snapshot_.gpuRebar.isEmpty()) return tr("No PCI display controller reported");
-        const auto size = [this](const Attribute &value) {
-            if (value.state != ReadState::Available) return propertyReadValue(value);
-            const qulonglong bytes = value.value.toULongLong();
-            if (bytes <= static_cast<qulonglong>(std::numeric_limits<qlonglong>::max()))
-                return QLocale().formattedDataSize(static_cast<qlonglong>(bytes), 0, QLocale::DataSizeIecFormat);
-            return tr("%1 bytes").arg(QLocale().toString(bytes));
-        };
-        QStringList devices;
-        for (const GpuResizableBar &gpu : snapshot_.gpuRebar) {
-            QStringList lines {tr("GPU [%1]").arg(gpu.pciAddress)};
-            if (gpu.status.state == ReadState::Unavailable) lines.append(tr("Capability: Not exposed by kernel"));
-            else if (gpu.status.state != ReadState::Available) lines.append(propertyReadValue(gpu.status));
-            else {
-                lines.append(tr("Capability: Supported"));
-                QList<int> bars = gpu.supportedSizes.keys();
-                std::sort(bars.begin(), bars.end());
-                for (int bar : bars) {
-                    const Attribute bitmap = gpu.supportedSizes.value(bar);
-                    QString supported = propertyReadValue(bitmap);
-                    if (bitmap.state == ReadState::Available) {
-                        const qulonglong bits = bitmap.value.toULongLong(nullptr, 16);
-                        QStringList sizes;
-                        for (int bit = 0; bit < 44; ++bit)
-                            if (bits & (1ULL << bit)) sizes.append(size({ReadState::Available, QString::number(1ULL << (bit + 20)), 0}));
-                        supported = sizes.join(", ");
-                    }
-                    lines.append(tr("BAR %1 — Current allocation: %2; supported sizes: %3")
-                        .arg(bar).arg(size(gpu.currentSizes.value(bar)), supported));
-                }
-            }
-            lines.append(tr("BIOS setting: Unknown"));
-            devices.append(lines.join('\n'));
-        }
-        return devices.join("\n\n");
-    }
-
-    if (value.state != ReadState::Available) return propertyReadValue(value);
-    if (key == "secure_boot") return value.value == "enabled" ? tr("Enabled") : tr("Disabled");
-    if (key == "boot")
-        return value.value == "uefi" ? tr("UEFI")
-            : tr("UEFI not exposed (legacy boot or restricted environment)");
-    if (key == "virtualization") return tr("Reported hypervisor: %1").arg(value.value);
-    if (key == "uptime") {
-        const qulonglong seconds = value.value.toULongLong();
-        return tr("%1 days, %2 hours, %3 minutes").arg(seconds / 86400).arg(seconds / 3600 % 24).arg(seconds / 60 % 60);
-    }
-    return value.value;
+    return systemOsValue(snapshot_, key, value);
 }
 void SystemOperatingSystemPage::setSnapshot(const SystemProperties &snapshot)
 {

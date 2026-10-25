@@ -1,5 +1,7 @@
 #include "browser.h"
 #include "browsermenu.h"
+#include "systemdialog.h"
+#include "systemsnapshot.h"
 #include "treeprojection.h"
 #include "inventoryfilter.h"
 #include "terminaltext.h"
@@ -14,7 +16,8 @@ class Browser final : public FDialog {
 public:
     Browser(Inventory inventory, FWidget *parent) : FDialog(parent), inventory_(std::move(inventory)),
         menu_(this, [this](bool connection) { setView(connection); },
-            [this](bool show) { showAll_ = show; populate(); })
+            [this](bool show) { showAll_ = show; populate(); },
+            [this] { systemInformation(); })
     {
         // The dialog supplies the only frame and its caption. An unnamed
         // column keeps FINAL CUT from drawing a separate tree headline.
@@ -43,6 +46,8 @@ public:
                 return;
             }
             inventory_ = std::move(next);
+            systemSnapshot_.refresh();
+            if (!systemTimer_) systemTimer_ = addTimer(200);
             populate();
         });
         quit_.addCallback("clicked", [this] { close(); });
@@ -57,7 +62,29 @@ public:
         previousKey_.addCallback("activate", [this] { findNext(true); });
         populate();
     }
+    ~Browser() override { delTimer(systemTimer_); }
 private:
+    void onTimer(FTimerEvent *event) override
+    {
+        // The System Information dialog polls while modal; do not consume its
+        // completion notification here. Other dialogs can defer publication.
+        if (!modalOpen_) {
+            systemSnapshot_.poll();
+            if (!systemSnapshot_.collecting() && systemTimer_) {
+                delTimer(systemTimer_);
+                systemTimer_ = 0;
+            }
+        }
+        FDialog::onTimer(event);
+    }
+    void systemInformation()
+    {
+        if (modalOpen_) return;
+        modalOpen_ = true;
+        showSystemInformation(systemSnapshot_, this);
+        modalOpen_ = false;
+        if (systemSnapshot_.collecting() && !systemTimer_) systemTimer_ = addTimer(200);
+    }
     void setView(bool connection)
     {
         if (connection_ == connection) return;
@@ -105,6 +132,11 @@ private:
     }
     void onKeyPress(FKeyEvent *event) override
     {
+        if (event->key() == FKey::Meta_i && !modalOpen_) {
+            systemInformation();
+            event->accept();
+            return;
+        }
         if (event->key() == FKey::Ctrl_f && !modalOpen_) {
             find();
             event->accept();
@@ -206,6 +238,7 @@ private:
     Inventory inventory_;
     bool connection_ = false;
     bool showAll_ = false;
+    int systemTimer_ = 0;
     bool modalOpen_ = false;
     bool filterVisible_ = false;
     QString query_;
@@ -213,6 +246,7 @@ private:
     DeviceTree tree_{this};
     FLabel treeCaption_{" Device (Enter: expand/collapse branch; properties for leaves) ", this};
     TreeProjection projection_{tree_};
+    SystemSnapshot systemSnapshot_;
     BrowserMenu menu_;
     FButton switch_{this};
     FButton refresh_{"&Refresh", this};
