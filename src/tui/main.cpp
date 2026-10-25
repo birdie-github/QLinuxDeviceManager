@@ -6,6 +6,7 @@
 #include <QStringList>
 #include <algorithm>
 #include <iostream>
+#include <stdexcept>
 
 namespace {
 using namespace finalcut;
@@ -135,7 +136,21 @@ public:
         populate();
     }
 private:
-    using Iter = FListView::iterator;
+    // FINAL CUT returns vector iterators. Retain only item addresses between
+    // insertions: adding siblings may reallocate the containing vector.
+    FListViewItem *insertItem(const FString &label, int index, FListViewItem *parent = nullptr)
+    {
+        if (!parent) {
+            const auto inserted = tree_.insert(FStringList{label}, int(index));
+            return static_cast<FListViewItem*>(*inserted);
+        }
+        auto &siblings = parent->getParent()->getChildren();
+        const auto position = std::find(siblings.begin(), siblings.end(), parent);
+        if (position == siblings.end())
+            throw std::logic_error("Device tree parent is not attached");
+        const auto inserted = tree_.insert(FStringList{label}, int(index), position);
+        return static_cast<FListViewItem*>(*inserted);
+    }
     void properties()
     {
         const auto *item = tree_.getCurrentItem();
@@ -147,11 +162,14 @@ private:
     }
     void populate()
     {
+        // Rebuild in projection order, even after a header-click sort. FINAL
+        // CUT sorts on insertion; disable it before consuming returned positions.
+        tree_.setColumnSort(-1);
         tree_.clear();
         setText(connection_ ? "Devices by connection" : "Devices by type");
         switch_.setText(connection_ ? "By &type" : "By &connection");
         const QString hostname = QSysInfo::machineHostName();
-        const auto root = tree_.insert(FStringList{display(hostname.isEmpty() ? "This computer" : hostname)}, -1);
+        auto *root = insertItem(display(hostname.isEmpty() ? "This computer" : hostname), -1);
         const auto &devices = inventory_.devices;
         QHash<QString, int> lookup;
         QVector<int> order;
@@ -162,16 +180,16 @@ private:
         });
         if (!connection_) {
             for (const Category &category : categories()) {
-                Iter group{};
+                FListViewItem *group = nullptr;
                 bool created = false;
                 for (int i : order) {
                     const Device &d = devices[i];
                     if (d.hidden || d.category != QLatin1String(category.id)) continue;
                     if (!created) {
-                        group = tree_.insert(FStringList{display(categoryLabel(d.category))}, -1, root);
+                        group = insertItem(display(categoryLabel(d.category)), -1, root);
                         created = true;
                     }
-                    tree_.insert(FStringList{display(deviceDisplayName(d, true))}, int(i), group);
+                    insertItem(display(deviceDisplayName(d, true)), i, group);
                 }
             }
         } else {
@@ -185,11 +203,11 @@ private:
                     visited.insert(path); included.insert(path); path = parents.value(path);
                 }
             }
-            QHash<QString, Iter> nodes;
+            QHash<QString, FListViewItem*> nodes;
             QSet<QString> building;
-            Iter efi{};
+            FListViewItem *efi = nullptr;
             bool haveEfi = false;
-            std::function<Iter(int)> ensure = [&](int i) -> Iter {
+            std::function<FListViewItem*(int)> ensure = [&](int i) -> FListViewItem* {
                 const Device &d = devices[i];
                 if (nodes.contains(d.path)) return nodes.value(d.path);
                 building.insert(d.path);
@@ -197,18 +215,18 @@ private:
                 const QString path = parents.value(d.path);
                 if (d.subsystem == "efivarfs") {
                     if (!haveEfi) {
-                        efi = tree_.insert(FStringList{"UEFI variables (firmware records)"}, -1, root);
+                        efi = insertItem("UEFI variables (firmware records)", -1, root);
                         haveEfi = true;
                     }
                     parent = efi;
                 } else if (included.contains(path) && !building.contains(path)) parent = ensure(lookup.value(path));
-                auto item = tree_.insert(FStringList{display(deviceDisplayName(d, true))}, int(i), parent);
+                auto *item = insertItem(display(deviceDisplayName(d, true)), i, parent);
                 nodes.insert(d.path, item); building.remove(d.path);
                 return item;
             };
             for (int i : order) if (included.contains(devices[i].path)) ensure(i);
         }
-        static_cast<FListViewItem*>(*root)->expand();
+        root->expand();
         status_.setMessage(display(QStringLiteral("%1 records; %2 skipped. Arrows navigate/expand; Enter properties.")
             .arg(devices.size()).arg(inventory_.skipped)));
         redraw();
