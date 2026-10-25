@@ -12,7 +12,8 @@ PropertiesStatus::PropertiesStatus(FStatusBar *bar, std::function<void(int)> ste
         bar_->delAccelerator(key);
         // insert() installs a bar-owned callback; remove it before reinserting
         // later, retaining the browser's own callback without duplication.
-        key->delCallback(bar_);
+        // FINAL CUT 0.9.1's pointer constraint does not decay references.
+        key->delCallback("activate", static_cast<FStatusBar*>(bar_));
     }
     // clear() leaves the key objects and their connected-bar pointers intact.
     bar_->clear();
