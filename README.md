@@ -268,3 +268,9 @@ with the directory name used as the theme name. See the
 for HiDPI sizes, optional device-specific icons, fallbacks and installation.
 Packagers can omit the separately licensed set with `-DICONS8_ICONS=OFF`.
 No Icons8 artwork is included until authorized downloads are added.
+
+### Optional terminal frontend
+
+A snapshot-only FINAL CUT proof of concept can be enabled with `-DTUI=ON`.
+It shares device discovery with the GUI and provides type/connection trees and
+basic General/Driver properties. See [TUI build and usage](doc/TUI.md).

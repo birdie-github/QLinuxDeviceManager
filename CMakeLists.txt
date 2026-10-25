@@ -52,11 +52,10 @@ if(KMOD)
     pkg_check_modules(KMOD QUIET IMPORTED_TARGET libkmod>=30)
 endif()
 add_executable(qlinuxdevicemanager
-    src/main.cpp src/devices/device.h src/devices/device.cpp
+    src/main.cpp
     src/ui/reporttable.h src/ui/reporttable.cpp
     src/devices/enumerator.h src/devices/enumerator.cpp
     src/devices/monitorstate.h src/devices/monitorstate.cpp
-    src/devices/deviceevents.h src/devices/deviceevents.cpp
     src/devices/deviceproperties.h src/devices/deviceproperties.cpp
     src/devices/networkproperties.h src/devices/networkproperties.cpp
     src/devices/ethernetproperties.h src/devices/ethernetproperties.cpp
@@ -71,15 +70,10 @@ add_executable(qlinuxdevicemanager
     src/devices/storageproperties.h src/devices/storageproperties.cpp
     src/devices/directoryscan.h src/devices/naturalsort.h
     src/devices/storagepresentation.h src/devices/storagepresentation.cpp
-    src/devices/deviceresources.h src/devices/deviceresources.cpp
     src/devices/resourceformat.h src/devices/resourceformat.cpp
-    src/devices/cpumetadata.h src/devices/cpumetadata.cpp
-    src/devices/functionnames.h src/devices/functionnames.cpp
-    src/devices/acpivendors.h src/devices/acpivendors.cpp
-    src/devices/devicelabel.h src/devices/devicelabel.cpp
-    src/devices/efivariables.h src/devices/efivariables.cpp
-    src/devices/modulenames.h src/devices/modulenames.cpp
-    src/devices/devicepresentation.h src/devices/devicepresentation.cpp
+
+
+
     src/devices/devicesearch.h src/devices/devicesearch.cpp
     src/devices/propertytext.h src/devices/propertytext.cpp
     src/ui/devicefilter.h src/ui/devicefilter.cpp
@@ -211,6 +205,44 @@ target_compile_definitions(qlinuxdevicemanager PRIVATE
     QLDM_INSTALLED_BLUETOOTH_SERVICES="${CMAKE_INSTALL_FULL_DATADIR}/${APP_NAME}/bluetooth-services.ids")
 target_compile_definitions(qlinuxdevicemanager PRIVATE
     QLDM_INSTALLED_ACPI_IDS="${CMAKE_INSTALL_FULL_DATADIR}/${APP_NAME}/acpi-pnp.ids")
+# Shared synchronous discovery and naming; neither frontend toolkit belongs here.
+add_library(qldm-core STATIC
+    src/core/inventory.h src/core/inventory.cpp src/core/connectionparents.cpp
+    src/devices/device.h src/devices/device.cpp
+    src/devices/deviceevents.h src/devices/deviceevents.cpp
+    src/devices/cpumetadata.h src/devices/cpumetadata.cpp
+    src/devices/functionnames.h src/devices/functionnames.cpp
+    src/devices/acpivendors.h src/devices/acpivendors.cpp
+    src/devices/devicelabel.h src/devices/devicelabel.cpp
+    src/devices/efivariables.h src/devices/efivariables.cpp
+    src/devices/modulenames.h src/devices/modulenames.cpp
+    src/devices/devicepresentation.h src/devices/devicepresentation.cpp
+    src/devices/deviceresources.h src/devices/deviceresources.cpp
+)
+target_include_directories(qldm-core PUBLIC src/core src/devices)
+target_link_libraries(qldm-core PUBLIC Qt6::Core PRIVATE PkgConfig::UDEV)
+target_compile_definitions(qldm-core PRIVATE
+    QLDM_INSTALLED_ACPI_IDS="${CMAKE_INSTALL_FULL_DATADIR}/${APP_NAME}/acpi-pnp.ids"
+    QT_ENABLE_STRICT_MODE_UP_TO=${APP_QT_STRICT_VERSION})
+if(KMOD AND TARGET PkgConfig::KMOD)
+    target_link_libraries(qldm-core PRIVATE PkgConfig::KMOD)
+    target_compile_definitions(qldm-core PRIVATE QLDM_HAVE_KMOD)
+endif()
+target_link_libraries(qlinuxdevicemanager PRIVATE qldm-core)
+
+option(TUI "Build the optional FINAL CUT terminal frontend" OFF)
+if(TUI)
+    pkg_check_modules(FINALCUT QUIET IMPORTED_TARGET finalcut>=0.9.0)
+    if(TARGET PkgConfig::FINALCUT)
+        add_executable(qlinuxdevicemanager-tui src/tui/main.cpp)
+        target_link_libraries(qlinuxdevicemanager-tui PRIVATE qldm-core PkgConfig::FINALCUT)
+        target_compile_options(qlinuxdevicemanager-tui PRIVATE -Wall -Wextra -Wpedantic)
+        install(TARGETS qlinuxdevicemanager-tui RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    else()
+        message(WARNING "FINAL CUT >= 0.9.0 not found; skipping terminal frontend")
+    endif()
+endif()
+
 # Optional tools: basic viewing never requires Linguist.
 find_package(Qt6 ${APP_MINIMUM_QT} QUIET COMPONENTS LinguistTools)
 if(TARGET Qt6::lupdate)
@@ -302,9 +334,10 @@ if(BUILD_TESTING)
         src/devices/functionnames.cpp src/devices/functionnames.h
         src/devices/acpivendors.cpp src/devices/acpivendors.h
         src/ui/devicemodel.cpp src/ui/devicemodel.h
+        src/core/connectionparents.cpp src/core/inventory.h
         src/ui/icontheme.cpp src/ui/icontheme.h
         src/ui/devicefilter.cpp src/ui/devicefilter.h)
-    target_include_directories(device-search-test PRIVATE src/devices src/ui
+    target_include_directories(device-search-test PRIVATE src/core src/devices src/ui
         ${DISPLAY_X11_INCLUDE_DIRS} ${DISPLAY_WAYLAND_INCLUDE_DIRS})
     target_link_libraries(device-search-test PRIVATE Qt6::Widgets PkgConfig::UDEV PkgConfig::V4L2)
     if(DISPLAY_INFO AND TARGET PkgConfig::DISPLAY_INFO)
