@@ -7,6 +7,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QGroupBox>
+#include <QLabel>
 #include <QLocale>
 #include <QPushButton>
 #include <QVBoxLayout>
