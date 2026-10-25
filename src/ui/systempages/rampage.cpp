@@ -4,6 +4,9 @@
 #include "propertyreport.h"
 #include "reporttable.h"
 #include <QGridLayout>
+#include <QGraphicsOpacityEffect>
+#include <QPropertyAnimation>
+#include <QStyle>
 #include <QLabel>
 #include <QLocale>
 #include <QTabBar>
@@ -197,4 +200,24 @@ void SystemRamPage::rebuildMemory()
     };
     connect(tabs, &QTabBar::currentChanged, table, showChip);
     showChip(tabs->currentIndex());
+    // Keep the effect disabled between transitions so normal table painting
+    // does not need an offscreen rendering pass.
+    auto *opacity = new QGraphicsOpacityEffect(table);
+    opacity->setOpacity(1.0);
+    opacity->setEnabled(false);
+    table->setGraphicsEffect(opacity);
+    auto *fade = new QPropertyAnimation(opacity, "opacity", table);
+    fade->setStartValue(0.35);
+    fade->setEndValue(1.0);
+    connect(fade, &QPropertyAnimation::finished, opacity, [opacity] { opacity->setEnabled(false); });
+    connect(tabs, &QTabBar::currentChanged, table, [table, opacity, fade] {
+        fade->stop();
+        opacity->setEnabled(false);
+        const int duration = table->style()->styleHint(QStyle::SH_Widget_Animation_Duration, nullptr, table);
+        if (!table->isVisible() || duration <= 0) return;
+        fade->setDuration(qMin(150, duration));
+        opacity->setOpacity(0.35);
+        opacity->setEnabled(true);
+        fade->start();
+    });
 }
