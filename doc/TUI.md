@@ -164,7 +164,7 @@ continues to supply its data.
 The TUI does not run those additional collectors. Missing module files, versions
 or metadata remain unavailable; an absent module link never proves a built-in
 driver. A description used only as a naming candidate is not promoted to driver
-metadata. The title and page text identify snapshot scope. Raw values remain in
+metadata. Device status identifies snapshot scope. Raw values remain in
 Details, with the shared read-error/permission wording. `propertypages.cpp` owns
 the TUI snapshot adaptation and text rendering; `propertiesdialog.cpp` owns only
 page selection and layout. Long values remain accessible by scrolling.
@@ -215,3 +215,13 @@ Maintainer checks: open Properties, use F7/F8 and click both hints, then close
 using Escape and the Close button. Confirm the main F2/F4/F3/F6/F5/F10 hints
 return and their actions execute once. Repeat opening and closing several times,
 and resize with Properties open to check the bottom bar placement.
+
+Properties omits the repeated inventory-snapshot banner and the Captured
+attributes heading. Raw attribute rows remain present, aligned and shaded with
+the rest of Details. Snapshot behavior is documented here and in Device status;
+there is no startup confirmation. Future dialogs should keep routine scope
+explanations in documentation and reserve visible notes for necessary context.
+
+Maintainer checks: open all three Properties pages and confirm the banner is
+absent. On Details, confirm attribute rows remain, the redundant heading is
+absent and alternating bands still follow the correct logical fields.

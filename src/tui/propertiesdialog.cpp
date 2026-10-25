@@ -32,9 +32,8 @@ private:
         page_ = page;
         const std::array<const char*, 3> titles {"General", "Driver", "Details"};
         setText(display(deviceDisplayName(device_) + " - " + titles.at(page)));
-        QString text = "Inventory snapshot; no additional property reads.\n";
         const PropertyPage content = page == 2 ? inventoryDetailsPage(device_) : commonPropertyPage(entries_, page);
-        text += content.text;
+        const QString &text = content.text;
         preferredHeight_ = std::clamp<std::size_t>(static_cast<std::size_t>(text.count('\n')) + 9, 12, 28);
         text_.setText(display(text));
         // FINAL CUT 0.9.1 supports native line highlights: no custom drawing.
@@ -43,7 +42,7 @@ private:
                 ? FColor::LightGray : FColor::White;
             const FColorPair stripe{FColor::Black, background};
             for (int line : content.shadedLines)
-                text_.addHighlight(static_cast<std::size_t>(line + 1), FTextView::FTextHighlight{0, stripe});
+                text_.addHighlight(static_cast<std::size_t>(line), FTextView::FTextHighlight{0, stripe});
         }
         text_.scrollToBegin();
         general_.setEnable(page != 0);

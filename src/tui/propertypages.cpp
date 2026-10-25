@@ -87,7 +87,6 @@ PropertyPage inventoryDetailsPage(const Device &device)
     auto keys = device.properties.keys();
     std::sort(keys.begin(), keys.end());
     for (const QString &key : keys) rows.append({key, device.properties.value(key)});
-    rows.append({"Captured attributes", {}, true});
     keys = device.attributes.keys();
     std::sort(keys.begin(), keys.end());
     for (const QString &key : keys) rows.append({key, propertyReadValue(device.attributes.value(key))});
