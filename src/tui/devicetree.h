@@ -9,5 +9,8 @@ public:
 protected:
     void onKeyPress(finalcut::FKeyEvent *event) override;
 private:
+    // The browser provides the surrounding frame. Keep native item and
+    // scrollbar rendering; suppress only the redundant inner border.
+    void drawBorder() override {}
     void navigate(finalcut::FKey key);
 };

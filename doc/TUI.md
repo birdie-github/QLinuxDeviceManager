@@ -124,6 +124,18 @@ means no filter. The query remains active across F2 and F5. Each view retains
 its own unfiltered state; paths absent after a refresh are skipped on restore.
 Header sorting resets when the tree is rebuilt.
 
+The browser uses one outer frame, carrying the Device/Enter caption; the native
+tree's separate border and headline are suppressed. With the filter hidden,
+device rows begin immediately below that frame. The tree's scrollbar ends
+immediately above the buttons, reclaiming the former blank rows at both ends.
+Native tree item drawing, scrolling and activation remain unchanged.
+
+Maintainer checks: at 80x25 and 211x60, verify a single frame, its caption, the
+first device row directly below it, and no blank row before the buttons.
+Open/close the filter, switch views and refresh; scroll in both directions and
+resize. Confirm the caption stays on the outer frame, buttons and their shadows
+remain intact, and Properties restores the browser without stale borders.
+
 The TUI source is separated by responsibility:
 
 - `main.cpp`: QtCore context, initial enumeration and FINAL CUT startup.

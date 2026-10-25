@@ -13,7 +13,11 @@ class Browser final : public FDialog {
 public:
     Browser(Inventory inventory, FWidget *parent) : FDialog(parent), inventory_(std::move(inventory))
     {
-        tree_.addColumn("Device (Enter: expand/collapse branch; properties for leaves)");
+        // The dialog supplies the only frame and its caption. An unnamed
+        // column keeps FINAL CUT from drawing a separate tree headline.
+        tree_.addColumn("");
+        tree_.ignorePadding();
+        treeCaption_.ignorePadding();
         tree_.setTreeView();
         filter_.setLabelText("&Filter");
         // Keep the field and its separate label out of initial layout/focus.
@@ -172,8 +176,12 @@ private:
         const auto h = std::max<std::size_t>(12, getDesktopHeight() > 1 ? getDesktopHeight() - 1 : 12);
         setGeometry(FPoint{1, 1}, FSize{w, h}, false);
         filter_.setGeometry(FPoint{10, 2}, FSize{w - 13, 1});
-        tree_.setGeometry(FPoint{2, filterVisible_ ? 4 : 2},
-            FSize{w - 4, h - (filterVisible_ ? 8 : 6)});
+        // Place the tree's unused header on the outer frame when unfiltered.
+        // Its native bottom scrollbar sits immediately above the buttons.
+        tree_.setGeometry(FPoint{2, filterVisible_ ? 5 : 2},
+            FSize{w - 2, h - (filterVisible_ ? 6 : 3)});
+        treeCaption_.setGeometry(FPoint{3, 2},
+            FSize{std::min<std::size_t>(w - 5, treeCaption_.getText().getLength()), 1});
         switch_.setGeometry(FPoint{2, int(h) - 3}, FSize{20, 1});
         refresh_.setGeometry(FPoint{25, int(h) - 3}, FSize{12, 1});
         quit_.setGeometry(FPoint{int(w) - 13, int(h) - 3}, FSize{10, 1});
@@ -187,6 +195,7 @@ private:
     QString query_;
     FLineEdit filter_{this};
     DeviceTree tree_{this};
+    FLabel treeCaption_{" Device (Enter: expand/collapse branch; properties for leaves) ", this};
     TreeProjection projection_{tree_};
     FButton switch_{this};
     FButton refresh_{"&Refresh", this};
