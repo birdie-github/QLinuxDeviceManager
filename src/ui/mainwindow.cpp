@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "aboutdialog.h"
 #ifdef QLDM_ENABLE_DONATION_BUTTON
 #include "donatebutton.h"
 #include <QDesktopServices>
@@ -9,7 +10,6 @@
 #include "devicefilter.h"
 #include "propertiesdialog.h"
 #include "systemdialog.h"
-#include "projectmetadata.h"
 
 #include <QAction>
 #include <QActionGroup>
@@ -233,26 +233,19 @@ MainWindow::MainWindow()
         QSettings().setValue("icons/theme", theme.theme());
         updateIcons();
     });
+    QAction *donationLink = nullptr;
+#ifdef QLDM_ENABLE_DONATION_BUTTON
+    donationLink = new QAction(this);
+    connect(donationLink, &QAction::triggered, this, [this] {
+        if (!QDesktopServices::openUrl(QUrl(QStringLiteral("https://paypal.me/ArtemTashkinov"))))
+            QMessageBox::warning(this, tr("Open donation page"),
+                tr("Could not open the donation page in your web browser."));
+    });
+#endif
     auto *help = menuBar()->addMenu(tr("&Help"));
     auto *about = help->addAction(tr("&About"));
-    connect(about, &QAction::triggered, this, [this] {
-        QMessageBox box(this);
-        box.setWindowTitle(tr("About QLinuxDeviceManager"));
-        box.setTextFormat(Qt::RichText);
-        box.setTextInteractionFlags(Qt::TextBrowserInteraction);
-        box.setIconPixmap(QApplication::windowIcon().pixmap(QSize(96, 96), box.devicePixelRatioF()));
-        const QString description = QStringLiteral("%1 %2\n").arg(QCoreApplication::applicationName(), QCoreApplication::applicationVersion())
-                    + tr("A read-only Linux hardware viewer.\n"
-                       "Categories are application groupings, not native Linux device classes.\n"
-                       "Device presence does not establish hardware health.\n"
-                       "Application code is licensed under GNU GPL version 3; see LICENSE.");
-        box.setText(description.toHtmlEscaped().replace('\n', "<br>")
-            + QStringLiteral("<br><br>")
-            + tr("Optional Windows 11 Color icons by %1. Copyright Icons8. "
-                 "Icons8 assets are excluded from GPLv3. They may be included in this project and downstream builds; "
-                 "independent extraction, redistribution or reuse requires a license from Icons8.")
-                .toHtmlEscaped().arg(QStringLiteral("<a href=\"https://icons8.com/\">Icons8</a>")));
-        box.exec();
+    connect(about, &QAction::triggered, this, [this, donationLink] {
+        showAboutDialog(this, donationLink);
     });
     auto *toolbar = addToolBar(tr("Main toolbar"));
     toolbar->setObjectName("mainToolbar");
@@ -283,11 +276,7 @@ MainWindow::MainWindow()
         updateDonation(hidden);
         QSettings().setValue("ui/hideDonateButton", hidden);
     });
-    connect(donate, &QPushButton::clicked, this, [this] {
-        if (!QDesktopServices::openUrl(QUrl(QStringLiteral("https://paypal.me/ArtemTashkinov"))))
-            QMessageBox::warning(this, tr("Open donation page"),
-                tr("Could not open the donation page in your web browser."));
-    });
+    connect(donate, &QPushButton::clicked, donationLink, &QAction::trigger);
 #endif
     initializationProgress_ = new QProgressBar(this);
     initializationProgress_->setRange(0, 0); // The initial scan has no reliable total.
