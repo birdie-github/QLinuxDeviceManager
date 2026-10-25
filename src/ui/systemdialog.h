@@ -7,7 +7,7 @@
 class SystemRamPage;
 class SystemMotherboardPage;
 class QLabel;
-class ReportTable;
+class SystemProcessorPage;
 class QTabWidget;
 class QPushButton;
 
@@ -20,13 +20,13 @@ public:
 signals:
     void refreshRequested();
 private:
-    QString displayValue(const QString &key, const Attribute &value, bool compact = false) const;
+    QString displayValue(const QString &key, const Attribute &value) const;
     void copyAll();
     void copyInformation(int tab);
     SystemRamPage *ramPage_ = nullptr;
     SystemMotherboardPage *motherboardPage_ = nullptr;
     QHash<QString, QVector<QLabel *>> fields_;
-    QHash<QString, ReportTable *> tables_;
+    SystemProcessorPage *processorPage_ = nullptr;
     QStringList order_;
     QHash<QString, int> keyTabs_;
     QTabWidget *tabs_ = nullptr;
@@ -35,5 +35,4 @@ private:
     QPushButton *refresh_ = nullptr;
     QPushButton *copy_ = nullptr;
     QPushButton *copyTab_ = nullptr;
-    QPushButton *featuresCopy_ = nullptr;
 };
