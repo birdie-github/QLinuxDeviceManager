@@ -43,9 +43,11 @@ the GUI retains its existing installation conventions.
 
 F2 switches devices by type / connection. Arrow keys navigate, Right/Left
 expand/collapse, Enter (or the native mouse activation) opens properties.
-General shows inventory fields, udev properties and captured kernel attributes;
-Driver shows the direct binding and observed module ownership. Alt+D / Alt+G
-switch the property page; Close or Escape returns. Text views scroll vertically
+General and Driver use the GUI's shared common-property formatter, including
+manufacturer, hardware identifiers, binding and module ownership when captured.
+Details retains raw inventory properties and attributes separately.
+Alt+G / Alt+D / Alt+T select General / Driver / Details; the title identifies
+the current page. Close or Escape returns. Text views scroll vertically
 and horizontally, so long values remain accessible. F5 takes a new synchronous
 snapshot; F10 quits. Category nodes start collapsed. Start at 80x25 or larger.
 Resizing adjusts tree and property view geometry.
@@ -141,3 +143,30 @@ stay visible while results are active. Escape should clear/hide both field and
 label, restore prior tree state and reclaim the space. Repeat show/hide after
 F2, F5 and terminal resizing at 80x25 and larger. Escape inside Properties should
 close only that dialog, leaving the active tree filter intact.
+
+## Common properties
+
+The TUI adapts the captured inventory into `CommonProperties`, a small shared
+record with values, sources and read state. Both frontends use
+`commonPropertyEntries()` for General/Driver labels, manufacturer precedence,
+hardware identifiers, EFI applicability, status wording and module interpretation.
+The GUI's common-field formatter keeps its field order and interpretation.
+Shared captions are shortened for both frontends (for example, Kernel driver,
+Kernel module, Module type and Module file). Status and metadata notes are also
+shortened while retaining their qualifications. GUI on-demand collection
+continues to supply its data.
+
+The TUI does not run those additional collectors. Missing module files, versions
+or metadata remain unavailable; an absent module link never proves a built-in
+driver. A description used only as a naming candidate is not promoted to driver
+metadata. The title and page text identify snapshot scope. Raw values remain in
+Details, with the shared read-error/permission wording. `propertypages.cpp` owns
+the TUI snapshot adaptation and text rendering; `propertiesdialog.cpp` owns only
+page selection and layout. Long values remain accessible by scrolling.
+
+Maintainer checks: compare General/Driver field names with the GUI, opening a
+USB device, PCI device, unbound record and UEFI variable. Check manufacturer and
+identifier values against Details and confirm absent fields are not reported
+as healthy or built-in. Switch all three pages using buttons and mnemonics,
+scroll long identifiers and raw attributes, resize, and close with Escape.
+Rebuild the GUI and compare its General/Driver output before/after extraction.

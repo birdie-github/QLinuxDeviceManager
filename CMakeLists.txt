@@ -208,6 +208,7 @@ target_compile_definitions(qlinuxdevicemanager PRIVATE
 # Shared synchronous discovery and naming; neither frontend toolkit belongs here.
 add_library(qldm-core STATIC
     src/core/inventory.h src/core/inventory.cpp src/core/connectionparents.cpp
+    src/core/commonproperties.h src/core/commonproperties.cpp
     src/devices/device.h src/devices/device.cpp
     src/devices/deviceevents.h src/devices/deviceevents.cpp
     src/devices/cpumetadata.h src/devices/cpumetadata.cpp
@@ -244,6 +245,7 @@ if(TUI)
             src/tui/inventoryfilter.h src/tui/inventoryfilter.cpp
             src/tui/terminaltext.h src/tui/terminaltext.cpp
             src/tui/propertiesdialog.h src/tui/propertiesdialog.cpp
+            src/tui/propertypages.h src/tui/propertypages.cpp
             src/tui/devicetree.h src/tui/devicetree.cpp)
         target_link_libraries(qlinuxdevicemanager-tui PRIVATE
             qldm-core PkgConfig::FINALCUT ${TUI_FINALCUT_EXTRA_LIBRARIES})
@@ -346,6 +348,7 @@ if(BUILD_TESTING)
         src/devices/acpivendors.cpp src/devices/acpivendors.h
         src/ui/devicemodel.cpp src/ui/devicemodel.h
         src/core/connectionparents.cpp src/core/inventory.h
+        src/core/commonproperties.h src/core/commonproperties.cpp
         src/ui/icontheme.cpp src/ui/icontheme.h
         src/ui/devicefilter.cpp src/ui/devicefilter.h)
     target_include_directories(device-search-test PRIVATE src/core src/devices src/ui
