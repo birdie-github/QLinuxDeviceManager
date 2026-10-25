@@ -1,39 +1,18 @@
 #include "propertiesdialog.h"
 #include "storagepresentation.h"
-#include "reporttable.h"
+#include "propertytext.h"
 #include "propertyreport.h"
 #include "devicelabel.h"
 #include "devicepages/all.h"
 
-#include <QDateTime>
-#include <QApplication>
-#include <QThread>
-#include <QCoreApplication>
-#include <QCheckBox>
-#include <QClipboard>
-#include <QComboBox>
 #include <QDialogButtonBox>
-#include <QFontDatabase>
-#include <QFileInfo>
 #include <QFormLayout>
-#include <QHBoxLayout>
-#include <QHeaderView>
-#include <QGridLayout>
-#include <QGroupBox>
-#include <QSizePolicy>
-#include <QItemSelectionModel>
 #include <QLabel>
-#include <QLocale>
-#include <QPlainTextEdit>
-#include <QStyle>
+#include <QPair>
 #include <QPushButton>
-#include <QMessageBox>
 #include <QScrollArea>
-#include <QSignalBlocker>
-#include <QStringList>
 #include <QTabWidget>
-#include <QTableWidget>
-#include <algorithm>
+#include <QThread>
 #include <QVBoxLayout>
 #include <utility>
 
@@ -79,9 +58,7 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     batteryPage_ = new BatteryPage(tabs);
     pciePage_ = new PciePage(tabs);
     storagePage_ = new StoragePage(tabs);
-
     volumesPage_ = new VolumesPage(tabs);
-
     healthPage_ = new HealthPage(tabs);
     detailsPage_ = new DetailsPage(tabs);
     tabs->addTab(detailsPage_, tr("Details"));
@@ -143,7 +120,7 @@ void PropertiesDialog::markRemoved()
 void PropertiesDialog::rebuild()
 {
     rebuildResources();
-    entries_ = propertyEntries(snapshot_, removed_);
+    const auto entries = propertyEntries(snapshot_, removed_);
     clearForm(general_);
     clearForm(driver_);
     rebuildStorage();
@@ -154,36 +131,39 @@ void PropertiesDialog::rebuild()
     rebuildUsb();
     rebuildPcie();
     rebuildBattery();
-    for (const PropertyEntry &entry : entries_) {
+    for (const PropertyEntry &entry : entries) {
         if (entry.tab > 1) continue;
         QFormLayout *form = entry.tab == 0 ? general_ : driver_;
         auto *label = plainLabel(entry.value, this);
         label->setToolTip(entry.source.toHtmlEscaped());
         form->addRow(entry.label + ':', label);
     }
-    detailsPage_->setSnapshot(entries_, device());
+    detailsPage_->setSnapshot(entries, device());
 }
+// Existing tabs keep their position and selection. A negative index appends.
+void PropertiesDialog::setPageVisible(QWidget *page, bool visible, const QString &title, int index)
+{
+    const int existing = tabs_->indexOf(page);
+    if (visible && existing < 0) {
+        if (index < 0) tabs_->addTab(page, title);
+        else tabs_->insertTab(index, page, title);
+    } else if (!visible && existing >= 0) {
+        tabs_->removeTab(existing);
+        page->hide();
+    }
+}
+
 void PropertiesDialog::rebuildResources()
 {
     const DeviceResources &data = snapshot_.resources;
-    const int existing = tabs_->indexOf(resourcesPage_);
-    if (data.hasInformation() && existing < 0) tabs_->addTab(resourcesPage_, tr("Resources"));
-    else if (!data.hasInformation() && existing >= 0) {
-        tabs_->removeTab(existing);
-        resourcesPage_->hide();
-    }
+    setPageVisible(resourcesPage_, data.hasInformation(), tr("Resources"));
     resourcesPage_->setSnapshot(data);
 }
 
 void PropertiesDialog::rebuildBluetooth()
 {
     const bool applicable = device().subsystem == "bluetooth" && bluetoothControllerName(device().sysname);
-    const int existing = tabs_->indexOf(bluetoothPage_);
-    if (applicable && existing < 0) tabs_->insertTab(2, bluetoothPage_, tr("Bluetooth"));
-    else if (!applicable && existing >= 0) {
-        tabs_->removeTab(existing);
-        bluetoothPage_->hide();
-    }
+    setPageVisible(bluetoothPage_, applicable, tr("Bluetooth"), 2);
     if (applicable) bluetoothPage_->setSnapshot(snapshot_.bluetooth, device().path);
     else bluetoothPage_->clear();
 }
@@ -191,12 +171,7 @@ void PropertiesDialog::rebuildBluetooth()
 void PropertiesDialog::rebuildNetwork()
 {
     const bool applicable = device().subsystem == "net" || device().category == "network";
-    const int existing = tabs_->indexOf(networkPage_);
-    if (applicable && existing < 0) tabs_->insertTab(2, networkPage_, tr("Network"));
-    else if (!applicable && existing >= 0) {
-        tabs_->removeTab(existing);
-        networkPage_->hide();
-    }
+    setPageVisible(networkPage_, applicable, tr("Network"), 2);
     if (applicable) networkPage_->setSnapshot(snapshot_.network, snapshot_.networkState, device().path);
     else networkPage_->clear();
 }
@@ -204,9 +179,7 @@ void PropertiesDialog::rebuildNetwork()
 void PropertiesDialog::rebuildCamera()
 {
     const CameraProperties &data = snapshot_.camera;
-    const int existing = tabs_->indexOf(cameraPage_);
-    if (data.applicable && existing < 0) tabs_->insertTab(2, cameraPage_, tr("Camera"));
-    else if (!data.applicable && existing >= 0) { tabs_->removeTab(existing); cameraPage_->hide(); }
+    setPageVisible(cameraPage_, data.applicable, tr("Camera"), 2);
     if (data.applicable) cameraPage_->setSnapshot(data, device().path);
     else cameraPage_->clear();
 }
@@ -214,12 +187,7 @@ void PropertiesDialog::rebuildCamera()
 void PropertiesDialog::rebuildDisplay()
 {
     const bool applicable = device().subsystem == "drm" && device().sysname.contains('-');
-    const int existing = tabs_->indexOf(displayPage_);
-    if (applicable && existing < 0) tabs_->insertTab(2, displayPage_, tr("Display"));
-    else if (!applicable && existing >= 0) {
-        tabs_->removeTab(existing);
-        displayPage_->hide();
-    }
+    setPageVisible(displayPage_, applicable, tr("Display"), 2);
     if (applicable) displayPage_->setSnapshot(snapshot_.display, snapshot_.monitor, device().path);
     else displayPage_->clear();
 }
@@ -227,12 +195,7 @@ void PropertiesDialog::rebuildDisplay()
 void PropertiesDialog::rebuildUsb()
 {
     const bool applicable = device().subsystem == "usb" && device().devtype == "usb_device";
-    const int existing = tabs_->indexOf(usbPage_);
-    if (applicable && existing < 0) tabs_->insertTab(2, usbPage_, tr("USB"));
-    else if (!applicable && existing >= 0) {
-        tabs_->removeTab(existing);
-        usbPage_->hide();
-    }
+    setPageVisible(usbPage_, applicable, tr("USB"), 2);
     if (applicable) usbPage_->setSnapshot(snapshot_.usb, snapshot_.values.value("sysfs/version"),
                                         snapshot_.values.value("sysfs/speed"), device().path);
     else usbPage_->clear();
@@ -241,12 +204,7 @@ void PropertiesDialog::rebuildUsb()
 void PropertiesDialog::rebuildPcie()
 {
     const bool applicable = device().subsystem == "pci" && snapshot_.pcieApplicable;
-    const int existing = tabs_->indexOf(pciePage_);
-    if (applicable && existing < 0) tabs_->insertTab(2, pciePage_, tr("PCIe"));
-    else if (!applicable && existing >= 0) {
-        tabs_->removeTab(existing);
-        pciePage_->hide();
-    }
+    setPageVisible(pciePage_, applicable, tr("PCIe"), 2);
     PciePageSnapshot page;
     page.device = device();
     page.pcieApplicable = applicable;
@@ -265,12 +223,7 @@ void PropertiesDialog::rebuildBattery()
 {
     const BatteryProperties &data = snapshot_.battery;
     const bool applicable = device().subsystem == "power_supply" && data.applicable;
-    const int existing = tabs_->indexOf(batteryPage_);
-    if (applicable && existing < 0) tabs_->insertTab(2, batteryPage_, tr("Battery"));
-    else if (!applicable && existing >= 0) {
-        tabs_->removeTab(existing);
-        batteryPage_->hide();
-    }
+    setPageVisible(batteryPage_, applicable, tr("Battery"), 2);
     if (applicable) batteryPage_->setSnapshot(data, device().path);
     else batteryPage_->clear();
 }
@@ -279,12 +232,7 @@ void PropertiesDialog::rebuildStorage()
 {
     for (const auto &page : {qMakePair(static_cast<QWidget *>(storagePage_), tr("Storage")),
                              qMakePair(static_cast<QWidget *>(volumesPage_), tr("Volumes")), qMakePair(static_cast<QWidget *>(healthPage_), tr("Health"))}) {
-        const int existing = tabs_->indexOf(page.first);
-        if (snapshot_.storage.applicable && existing < 0) tabs_->addTab(page.first, page.second);
-        else if (!snapshot_.storage.applicable && existing >= 0) {
-            tabs_->removeTab(existing);
-            page.first->hide();
-        }
+        setPageVisible(page.first, snapshot_.storage.applicable, page.second);
     }
     const StoragePresentation presentation = storagePresentation(snapshot_.storage, device().path);
     const QString scope = tr("Read-only metadata snapshot. Each entity is a separate layer; capacities are not added. "

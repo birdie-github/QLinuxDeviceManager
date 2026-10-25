@@ -16,19 +16,12 @@ struct PropertyPageOptions {
 };
 
 struct PropertyPageWidgets {
-    QWidget *page;
     QVBoxLayout *groups;
     QPushButton *copyButton;
 };
 
-// Widgets are owned by the returned page, which is parented to parent and
-// initially hidden. The caller controls tab insertion and clipboard content.
-PropertyPageWidgets createPropertyPage(QWidget *parent, const QString &heading,
-    const QString &tooltip, const QString &copyCaption,
-    const PropertyPageOptions &options = {});
-
-// Same layout for a page subclass. Call once on a widget without a layout.
-// The caller owns page; its children are owned by page as usual.
+// Call once on a widget without a layout. Children are owned by page.
+// The page starts hidden; the caller controls tab insertion and clipboard content.
 PropertyPageWidgets setupPropertyPage(QWidget *page, const QString &heading,
     const QString &tooltip, const QString &copyCaption,
     const PropertyPageOptions &options = {});

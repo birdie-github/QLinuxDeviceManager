@@ -1,9 +1,7 @@
 #pragma once
 
 #include "deviceproperties.h"
-#include "propertytext.h"
 #include <QDialog>
-#include <QVector>
 
 class DetailsPage;
 class ResourcesPage;
@@ -18,15 +16,10 @@ class DisplayPage;
 class CameraPage;
 class BluetoothPage;
 class NetworkPage;
-class QCheckBox;
-class QComboBox;
 class QFormLayout;
 class QLabel;
-class QPlainTextEdit;
 class QPushButton;
 class QTabWidget;
-class QTableWidget;
-class QVBoxLayout;
 
 class PropertiesDialog final : public QDialog {
     Q_OBJECT
@@ -43,6 +36,7 @@ signals:
     void reloadRequested();
 private:
     void rebuild();
+    void setPageVisible(QWidget *page, bool visible, const QString &title, int index = -1);
     void rebuildResources();
     void rebuildStorage();
     void rebuildNetwork();
@@ -53,7 +47,6 @@ private:
     void rebuildPcie();
     void rebuildBattery();
     DeviceProperties snapshot_;
-    QVector<PropertyEntry> entries_;
     QLabel *banner_ = nullptr;
     QTabWidget *tabs_ = nullptr;
     ResourcesPage *resourcesPage_ = nullptr;

@@ -9,7 +9,6 @@
 #include "healthpage.h"
 #include "networkpage.h"
 #include "pciepage.h"
-#include "propertypage.h"
 #include "resourcespage.h"
 #include "storagepage.h"
 #include "usbpage.h"

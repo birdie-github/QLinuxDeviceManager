@@ -5,12 +5,6 @@
 #include <QScrollArea>
 #include <QVBoxLayout>
 
-PropertyPageWidgets createPropertyPage(QWidget *parent, const QString &heading,
-    const QString &tooltip, const QString &copyCaption, const PropertyPageOptions &options)
-{
-    return setupPropertyPage(new QWidget(parent), heading, tooltip, copyCaption, options);
-}
-
 PropertyPageWidgets setupPropertyPage(QWidget *page, const QString &heading,
     const QString &tooltip, const QString &copyCaption, const PropertyPageOptions &options)
 {
@@ -39,7 +33,7 @@ PropertyPageWidgets setupPropertyPage(QWidget *page, const QString &heading,
 
     auto *copyButton = new QPushButton(copyCaption, page);
     layout->addWidget(copyButton);
-    return {page, groups, copyButton};
+    return {groups, copyButton};
 }
 
 // Only report content scrolls; tab actions stay above the dialog-wide footer.
