@@ -47,9 +47,10 @@ Native mouse activation is unchanged, including properties for device branches.
 General and Driver use the GUI's shared common-property formatter, including
 manufacturer, hardware identifiers, binding and module ownership when captured.
 Details retains raw inventory properties and attributes separately.
-Tab / Shift+Tab cycle General / Driver / Details with wraparound. These keys
-replace focus traversal only within Properties. Page changes focus the content
-so arrows and Page Up/Down scroll immediately. Alt+G / Alt+D / Alt+T still select
+F7 / F8 select the previous / next General, Driver or Details page, wrapping
+at either end. Tab / Shift+Tab retain normal control focus traversal, including
+Close. Page changes focus the content so arrows and Page Up/Down scroll
+immediately. Alt+G / Alt+D / Alt+T still select
 pages directly; the title identifies the current page. Close, Alt+C or Escape
 returns. Text views scroll vertically
 and horizontally, so long values remain accessible. F5 takes a new synchronous
@@ -198,8 +199,8 @@ branches: repeated Enter must expand/collapse without opening Properties. Enter
 on a leaf device must still open Properties. Repeat after filtering and while
 horizontally scrolled, and confirm Left/Right and mouse activation still work.
 
-For Properties page navigation, cycle forward and backward through all pages,
-including wraparound. Repeat after clicking a page or Close button, and confirm
-scroll keys act on the content immediately after a page change. Check the
-Alt+G/D/T shortcuts, Escape and mouse Close. Tab traversal in the main window
-must remain unchanged. Verify Shift+Tab with the terminal sending Back-tab.
+For Properties page navigation, use F7/F8 to cycle backward/forward through all
+pages, including wraparound. Repeat after clicking a page or Close button, and
+confirm scroll keys act on the content immediately after a page change. Check
+Alt+G/D/T, Escape and mouse Close. Tab must reach Close; Shift+Tab must traverse
+controls in reverse. Main-window Tab behavior must remain unchanged.
