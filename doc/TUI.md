@@ -94,8 +94,9 @@ no automatic change occurs before refresh. Close properties, then quit normally.
 
 ## Filtering devices
 
-F4 focuses a persistent Filter field above the tree. Typing a case-insensitive
-substring immediately filters the current projection. Matching devices and
+The Filter field is hidden initially, giving its space to the tree. F4 or Ctrl+F
+reveals and focuses it. Typing a case-insensitive substring immediately filters
+the current projection. Matching devices and
 their ancestors remain; all retained branches expand so results are visible.
 The status bar reports the number of matching devices, excluding context-only
 ancestors. With no matches, only the computer row remains.
@@ -107,9 +108,11 @@ excluded; retained connection-context ancestors are eligible for matching.
 This does not include the GUI's hardware-specific deep-property collection.
 
 Enter in the field selects a match and focuses the tree; Enter on a device opens
-properties. F3/F6 cycle matches forward/backward with wraparound. Escape clears
-the filter and focuses the tree. Backspacing to an empty query also restores the
-full projection and its pre-filter selection and expansion. Whitespace alone
+properties, keeping the filter visible and active. F3/F6 cycle matches
+forward/backward with wraparound. Escape clears and hides the field, restores
+the full tree's height and focuses it. Backspacing to an empty query also restores
+the full projection and its pre-filter selection and expansion, but keeps the
+field open for further input until Escape. Whitespace alone
 means no filter. The query remains active across F2 and F5. Each view retains
 its own unfiltered state; paths absent after a refresh are skipped on restore.
 Header sorting resets when the tree is rebuilt.
@@ -131,3 +134,10 @@ filtering, select a nested device and expand several branches; clear the filter
 and verify that state returns. Repeat in both views, after sorting, after a
 refresh that removes the selected device, and at 80x25. Confirm the Qt GUI builds
 and its search behavior is unchanged.
+
+For filter visibility, check startup and Tab traversal with the field hidden;
+open with both F4 and Ctrl+F, then type, erase, and press Enter. The field must
+stay visible while results are active. Escape should clear/hide both field and
+label, restore prior tree state and reclaim the space. Repeat show/hide after
+F2, F5 and terminal resizing at 80x25 and larger. Escape inside Properties should
+close only that dialog, leaving the active tree filter intact.

@@ -16,6 +16,11 @@ public:
         tree_.addColumn("Device (Enter: properties; Left/Right: collapse/expand)");
         tree_.setTreeView();
         filter_.setLabelText("&Filter");
+        // Keep the field and its separate label out of initial layout/focus.
+        filter_.setVisible(false);
+        filter_.setEnable(false);
+        filter_.setFocusable(false);
+        filter_.getLabelObject()->setVisible(false);
         filter_.addCallback("changed", [this] { filterChanged(); });
         filter_.addCallback("activate", [this] {
             if (query_.isEmpty()) tree_.setFocus();
@@ -46,6 +51,16 @@ private:
     void find()
     {
         if (modalOpen_) return;
+        if (!filterVisible_) {
+            filterVisible_ = true;
+            filter_.setEnable(true);
+            filter_.setFocusable(true);
+            filter_.setVisible(true);
+            filter_.getLabelObject()->setVisible(true);
+            adjustSize();
+            filter_.show();
+            filter_.getLabelObject()->show();
+        }
         filter_.setFocus();
         redraw();
     }
@@ -61,10 +76,24 @@ private:
         filter_.setText("");
         filterChanged(); // Also covers toolkit versions where setText emits no change.
         tree_.setFocus();
+        if (filterVisible_) {
+            filterVisible_ = false;
+            filter_.hide(); // FINAL CUT also hides the field's separate label.
+            filter_.setVisible(false);
+            filter_.setEnable(false);
+            filter_.setFocusable(false);
+            filter_.getLabelObject()->setVisible(false);
+            adjustSize();
+        }
         redraw();
     }
     void onKeyPress(FKeyEvent *event) override
     {
+        if (event->key() == FKey::Ctrl_f && !modalOpen_) {
+            find();
+            event->accept();
+            return;
+        }
         if (event->key() == FKey::Escape && !modalOpen_) {
             clearFilter();
             event->accept();
@@ -143,7 +172,8 @@ private:
         const auto h = std::max<std::size_t>(12, getDesktopHeight() > 1 ? getDesktopHeight() - 1 : 12);
         setGeometry(FPoint{1, 1}, FSize{w, h}, false);
         filter_.setGeometry(FPoint{10, 2}, FSize{w - 13, 1});
-        tree_.setGeometry(FPoint{2, 4}, FSize{w - 4, h - 8});
+        tree_.setGeometry(FPoint{2, filterVisible_ ? 4 : 2},
+            FSize{w - 4, h - (filterVisible_ ? 8 : 6)});
         switch_.setGeometry(FPoint{2, int(h) - 3}, FSize{20, 1});
         refresh_.setGeometry(FPoint{25, int(h) - 3}, FSize{12, 1});
         quit_.setGeometry(FPoint{int(w) - 13, int(h) - 3}, FSize{10, 1});
@@ -153,6 +183,7 @@ private:
     Inventory inventory_;
     bool connection_ = false;
     bool modalOpen_ = false;
+    bool filterVisible_ = false;
     QString query_;
     FLineEdit filter_{this};
     DeviceTree tree_{this};
