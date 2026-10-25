@@ -5,6 +5,7 @@ using namespace finalcut;
 
 SearchDialog::SearchDialog(const QString &query, FWidget *parent) : FDialog(parent)
 {
+    setModal();
     setText("Find device (current view)");
     input_.setLabelText("&Text");
     input_.setText(FString(query.toStdWString()));

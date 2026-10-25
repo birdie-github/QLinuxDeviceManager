@@ -97,6 +97,7 @@ class Properties final : public FDialog {
 public:
     Properties(const Device &device, FWidget *parent) : FDialog(parent), device_(device)
     {
+        setModal();
         setText("Device properties");
         toggle_.addCallback("clicked", [this] {
             driver_ = !driver_;
