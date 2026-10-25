@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "donatebutton.h"
 #include "icontheme.h"
 #include "devicemodel.h"
 #include "devicefilter.h"
@@ -13,6 +14,7 @@
 #include <QThread>
 #include <QCloseEvent>
 #include <QCheckBox>
+#include <QDesktopServices>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
@@ -33,6 +35,7 @@
 #include <QTimer>
 #include <QToolBar>
 #include <QTreeView>
+#include <QUrl>
 #include <utility>
 #include <unistd.h>
 
@@ -256,6 +259,32 @@ MainWindow::MainWindow()
     toolbar->addAction(refreshAction_);
     toolbar->addAction(propertiesAction_);
     view->addAction(toolbar->toggleViewAction());
+    auto *spacer = new QWidget(toolbar);
+    spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    toolbar->addWidget(spacer);
+    auto *donate = new DonateButton(toolbar);
+    auto *donateAction = toolbar->addWidget(donate);
+    auto *thanks = new QLabel(tr("Thank you! ♡"), toolbar);
+    thanks->setContentsMargins(6, 0, 6, 0);
+    auto *thanksAction = toolbar->addWidget(thanks);
+    options->addSeparator();
+    auto *hideDonate = options->addAction(tr("Hide the donate button"));
+    hideDonate->setCheckable(true);
+    const auto updateDonation = [donateAction, thanksAction](bool hidden) {
+        donateAction->setVisible(!hidden);
+        thanksAction->setVisible(hidden);
+    };
+    hideDonate->setChecked(QSettings().value("ui/hideDonateButton", false).toBool());
+    updateDonation(hideDonate->isChecked());
+    connect(hideDonate, &QAction::toggled, this, [updateDonation](bool hidden) {
+        updateDonation(hidden);
+        QSettings().setValue("ui/hideDonateButton", hidden);
+    });
+    connect(donate, &QPushButton::clicked, this, [this] {
+        if (!QDesktopServices::openUrl(QUrl(QStringLiteral("https://paypal.me/ArtemTashkinov"))))
+            QMessageBox::warning(this, tr("Open donation page"),
+                tr("Could not open the donation page in your web browser."));
+    });
     initializationProgress_ = new QProgressBar(this);
     initializationProgress_->setRange(0, 0); // The initial scan has no reliable total.
     initializationProgress_->setTextVisible(false);

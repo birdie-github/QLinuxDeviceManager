@@ -80,6 +80,7 @@ add_executable(qlinuxdevicemanager
     src/ui/devicemodel.h src/ui/devicemodel.cpp
     src/ui/icontheme.h src/ui/icontheme.cpp
     src/ui/mainwindow.h src/ui/mainwindow.cpp
+    src/ui/donatebutton.h src/ui/donatebutton.cpp
     src/devices/pcielinktext.h
     src/ui/gpulinktest.h src/ui/gpulinktest.cpp
     src/ui/propertiesdialog.h src/ui/propertiesdialog.cpp

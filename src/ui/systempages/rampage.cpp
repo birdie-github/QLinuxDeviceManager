@@ -215,7 +215,7 @@ void SystemRamPage::rebuildMemory()
         opacity->setEnabled(false);
         const int duration = table->style()->styleHint(QStyle::SH_Widget_Animation_Duration, nullptr, table);
         if (!table->isVisible() || duration <= 0) return;
-        fade->setDuration(qMin(150, duration));
+        fade->setDuration(qMin(300, duration));
         opacity->setOpacity(0.35);
         opacity->setEnabled(true);
         fade->start();
