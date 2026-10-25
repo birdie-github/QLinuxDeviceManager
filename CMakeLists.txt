@@ -231,11 +231,16 @@ endif()
 target_link_libraries(qlinuxdevicemanager PRIVATE qldm-core)
 
 option(TUI "Build the optional FINAL CUT terminal frontend" OFF)
+# Some static FINAL CUT installations omit transitive dependencies from finalcut.pc.
+# Keep these configurable: GPM and the terminal-capability provider vary by build.
+set(TUI_FINALCUT_EXTRA_LIBRARIES "" CACHE STRING
+    "Additional FINAL CUT link dependencies (semicolon-separated, e.g. gpm;tinfo)")
 if(TUI)
     pkg_check_modules(FINALCUT QUIET IMPORTED_TARGET finalcut>=0.9.0)
     if(TARGET PkgConfig::FINALCUT)
         add_executable(qlinuxdevicemanager-tui src/tui/main.cpp)
-        target_link_libraries(qlinuxdevicemanager-tui PRIVATE qldm-core PkgConfig::FINALCUT)
+        target_link_libraries(qlinuxdevicemanager-tui PRIVATE
+            qldm-core PkgConfig::FINALCUT ${TUI_FINALCUT_EXTRA_LIBRARIES})
         target_compile_options(qlinuxdevicemanager-tui PRIVATE -Wall -Wextra -Wpedantic)
         install(TARGETS qlinuxdevicemanager-tui RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     else()

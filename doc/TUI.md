@@ -15,6 +15,29 @@ cmake --build build --target qlinuxdevicemanager qlinuxdevicemanager-tui
 ./build/qlinuxdevicemanager-tui
 ```
 
+## Static FINAL CUT builds
+
+A static `libfinal.a` is supported; its dependencies must also appear on the
+executable's link line. Some FINAL CUT installations supply a `finalcut.pc`
+containing only `-lfinal`, without the private dependencies needed for static
+linking. For a build using GPM and a separate libtinfo, configure with:
+
+```sh
+cmake -S . -B build -DTUI=ON -DTUI_FINALCUT_EXTRA_LIBRARIES="gpm;tinfo"
+cmake --build build --target qlinuxdevicemanager-tui
+```
+
+The list is added after FINAL CUT to preserve static-library link ordering.
+Install the development/linker files for these dependency libraries as needed.
+If FINAL CUT was configured with another terminal-capability provider, supply
+that library instead of `tinfo`. Omit `gpm` when FINAL CUT was built without GPM.
+Library names or absolute library paths are accepted as a CMake list.
+This option supplies dependencies; it does not force archive selection when
+both shared and static FINAL CUT libraries are installed. With only
+`libfinal.a` installed, the existing discovery selects that archive.
+Embedding FINAL CUT removes its runtime library dependency, while Qt and any
+GPM/terminal libraries linked dynamically remain runtime dependencies.
+
 TUI defaults to OFF. Missing FINAL CUT skips only the TUI target with a warning;
 the GUI retains its existing installation conventions.
 
