@@ -6,23 +6,13 @@
 #include "devicepages/all.h"
 
 #include <QDialogButtonBox>
-#include <QFormLayout>
 #include <QLabel>
 #include <QPair>
 #include <QPushButton>
-#include <QScrollArea>
 #include <QTabWidget>
 #include <QThread>
 #include <QVBoxLayout>
 #include <utility>
-
-namespace {
-void clearForm(QFormLayout *form)
-{
-    while (form->rowCount()) form->removeRow(0);
-}
-
-}
 
 PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDialog(parent)
 {
@@ -36,20 +26,10 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     tabs_ = new QTabWidget(this);
     auto *tabs = tabs_;
     layout->addWidget(tabs, 1);
-    const auto addForm = [tabs](const QString &title) {
-        auto *scroll = new QScrollArea(tabs);
-        scroll->setWidgetResizable(true);
-        scroll->setFrameShape(QFrame::NoFrame);
-        auto *page = new QWidget(scroll);
-        auto *form = new QFormLayout(page);
-        form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
-        form->setRowWrapPolicy(QFormLayout::WrapLongRows);
-        scroll->setWidget(page);
-        tabs->addTab(scroll, title);
-        return form;
-    };
-    general_ = addForm(tr("General"));
-    driver_ = addForm(tr("Driver"));
+    generalPage_ = new PropertyFieldsPage(PropertyFieldsPage::Section::General, tabs);
+    tabs->addTab(generalPage_, tr("General"));
+    driverPage_ = new PropertyFieldsPage(PropertyFieldsPage::Section::Driver, tabs);
+    tabs->addTab(driverPage_, tr("Driver"));
     networkPage_ = new NetworkPage(tabs);
     bluetoothPage_ = new BluetoothPage(tabs);
     cameraPage_ = new CameraPage(tabs);
@@ -121,8 +101,6 @@ void PropertiesDialog::rebuild()
 {
     rebuildResources();
     const auto entries = propertyEntries(snapshot_, removed_);
-    clearForm(general_);
-    clearForm(driver_);
     rebuildStorage();
     rebuildNetwork();
     rebuildBluetooth();
@@ -131,13 +109,8 @@ void PropertiesDialog::rebuild()
     rebuildUsb();
     rebuildPcie();
     rebuildBattery();
-    for (const PropertyEntry &entry : entries) {
-        if (entry.tab > 1) continue;
-        QFormLayout *form = entry.tab == 0 ? general_ : driver_;
-        auto *label = plainLabel(entry.value, this);
-        label->setToolTip(entry.source.toHtmlEscaped());
-        form->addRow(entry.label + ':', label);
-    }
+    generalPage_->setSnapshot(entries);
+    driverPage_->setSnapshot(entries);
     detailsPage_->setSnapshot(entries, device());
 }
 // Existing tabs keep their position and selection. A negative index appends.

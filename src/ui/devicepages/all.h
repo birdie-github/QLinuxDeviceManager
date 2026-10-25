@@ -10,6 +10,7 @@
 #include "networkpage.h"
 #include "pciepage.h"
 #include "resourcespage.h"
+#include "propertyfieldspage.h"
 #include "storagepage.h"
 #include "usbpage.h"
 #include "volumespage.h"
