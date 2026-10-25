@@ -1,6 +1,7 @@
 #include "processorpage.h"
-#include "devicepages/propertypage.h"
+#include "propertypage.h"
 #include "propertytext.h"
+#include "propertyreport.h"
 #include "reporttable.h"
 #include <QApplication>
 #include <QClipboard>
@@ -10,7 +11,6 @@
 #include <QLabel>
 #include <QLocale>
 #include <QPushButton>
-#include <QSizePolicy>
 #include <QVBoxLayout>
 #include <algorithm>
 #include <limits>
@@ -29,15 +29,7 @@ SystemProcessorPage::SystemProcessorPage(QWidget *parent) : QWidget(parent)
         name->setTextFormat(Qt::PlainText);
         const bool table = key == "core_groups" || key == "cache_topology";
         if (!table) captionsWidgets_.append(name);
-        auto *value = new QLabel(tr("Not collected"), form->parentWidget());
-        value->setTextFormat(Qt::PlainText);
-        value->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
-        QSizePolicy policy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        policy.setHeightForWidth(true);
-        value->setSizePolicy(policy);
-        value->setWordWrap(true);
-        value->setAlignment(Qt::AlignLeading | Qt::AlignTop);
-        value->setMinimumWidth(120);
+        auto *value = propertyValueLabel(tr("Not collected"), form->parentWidget());
         const int row = form->count() ? form->rowCount() : 0;
         if (table) {
             QFont font = name->font(); font.setBold(true); name->setFont(font);

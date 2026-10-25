@@ -14,13 +14,30 @@ QString propertyToolTip(const QString &source)
     return "<qt>" + source.toHtmlEscaped().replace('\n', "<br>") + "</qt>";
 }
 
-QLabel *plainLabel(const QString &text, QWidget *parent)
+namespace {
+QLabel *selectableLabel(const QString &text, QWidget *parent)
 {
     auto *label = new QLabel(text, parent);
     label->setTextFormat(Qt::PlainText);
     label->setWordWrap(true);
     label->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
+    return label;
+}
+}
+QLabel *plainLabel(const QString &text, QWidget *parent)
+{
+    auto *label = selectableLabel(text, parent);
     label->setFocusPolicy(Qt::StrongFocus);
+    return label;
+}
+QLabel *propertyValueLabel(const QString &text, QWidget *parent)
+{
+    auto *label = selectableLabel(text, parent);
+    QSizePolicy policy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    policy.setHeightForWidth(true);
+    label->setSizePolicy(policy);
+    label->setAlignment(Qt::AlignLeading | Qt::AlignTop);
+    label->setMinimumWidth(120);
     return label;
 }
 
@@ -47,12 +64,8 @@ void PropertyReport::field(QGridLayout *form, const QString &caption,
     auto *name = new QLabel(caption, form->parentWidget());
     name->setTextFormat(Qt::PlainText);
     captions_.append(name);
-    auto *value = plainLabel(text, form->parentWidget());
-    QSizePolicy policy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    policy.setHeightForWidth(true);
-    value->setSizePolicy(policy);
-    value->setAlignment(Qt::AlignLeading | Qt::AlignTop);
-    value->setMinimumWidth(120);
+    auto *value = propertyValueLabel(text, form->parentWidget());
+    value->setFocusPolicy(Qt::StrongFocus);
     const QString hint = propertyToolTip(source);
     name->setToolTip(hint);
     value->setToolTip(hint);

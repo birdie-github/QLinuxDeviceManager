@@ -1,5 +1,5 @@
 #include "rampage.h"
-#include "devicepages/propertypage.h"
+#include "propertypage.h"
 #include "propertytext.h"
 #include "propertyreport.h"
 #include "reporttable.h"
@@ -9,7 +9,6 @@
 #include <QTabWidget>
 #include <QVBoxLayout>
 #include <QFont>
-#include <QSizePolicy>
 #include <limits>
 
 namespace {
@@ -41,15 +40,7 @@ SystemRamPage::SystemRamPage(QWidget *parent) : QWidget(parent)
     const auto field = [&](int row, const QString &caption) {
         auto *name = new QLabel(caption, fields);
         name->setTextFormat(Qt::PlainText);
-        auto *value = new QLabel(tr("Not collected"), fields);
-        value->setTextFormat(Qt::PlainText);
-        value->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
-        QSizePolicy policy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        policy.setHeightForWidth(true);
-        value->setSizePolicy(policy);
-        value->setWordWrap(true);
-        value->setAlignment(Qt::AlignLeading | Qt::AlignTop);
-        value->setMinimumWidth(120);
+        auto *value = propertyValueLabel(tr("Not collected"), fields);
         summary_->addWidget(name, row, 0, Qt::AlignLeading | Qt::AlignTop);
         summary_->addWidget(value, row, 1);
         return value;

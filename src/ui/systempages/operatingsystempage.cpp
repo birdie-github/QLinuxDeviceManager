@@ -1,11 +1,11 @@
 #include "operatingsystempage.h"
-#include "devicepages/propertypage.h"
+#include "propertypage.h"
 #include "propertytext.h"
+#include "propertyreport.h"
 #include <QFrame>
 #include <QGridLayout>
 #include <QLabel>
 #include <QLocale>
-#include <QSizePolicy>
 #include <QVBoxLayout>
 #include <algorithm>
 #include <limits>
@@ -23,15 +23,7 @@ SystemOperatingSystemPage::SystemOperatingSystemPage(QWidget *parent) : QWidget(
         auto *name = new QLabel(caption, form->parentWidget());
         name->setTextFormat(Qt::PlainText);
         captionWidgets_.append(name);
-        auto *value = new QLabel(tr("Not collected"), form->parentWidget());
-        value->setTextFormat(Qt::PlainText);
-        value->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
-        QSizePolicy policy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        policy.setHeightForWidth(true);
-        value->setSizePolicy(policy);
-        value->setWordWrap(true);
-        value->setAlignment(Qt::AlignLeading | Qt::AlignTop);
-        value->setMinimumWidth(120);
+        auto *value = propertyValueLabel(tr("Not collected"), form->parentWidget());
         const int row = form->count() ? form->rowCount() : 0;
         form->addWidget(name, row, 0, Qt::AlignLeading | Qt::AlignTop);
         form->addWidget(value, row, 1);

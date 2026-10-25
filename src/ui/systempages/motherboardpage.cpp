@@ -1,5 +1,5 @@
 #include "motherboardpage.h"
-#include "devicepages/propertypage.h"
+#include "propertypage.h"
 #include "propertytext.h"
 #include "propertyreport.h"
 #include <QDateTime>
@@ -7,7 +7,6 @@
 #include <QGroupBox>
 #include <QLabel>
 #include <QLocale>
-#include <QSizePolicy>
 #include <QVBoxLayout>
 
 namespace {
@@ -38,15 +37,7 @@ SystemMotherboardPage::SystemMotherboardPage(QWidget *parent) : QWidget(parent)
     for (const auto &field : motherboardFields()) {
         auto *name = new QLabel(field.second, fields);
         name->setTextFormat(Qt::PlainText);
-        auto *value = new QLabel(tr("Not collected"), fields);
-        value->setTextFormat(Qt::PlainText);
-        value->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
-        QSizePolicy policy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        policy.setHeightForWidth(true);
-        value->setSizePolicy(policy);
-        value->setWordWrap(true);
-        value->setAlignment(Qt::AlignLeading | Qt::AlignTop);
-        value->setMinimumWidth(120);
+        auto *value = propertyValueLabel(tr("Not collected"), fields);
         summary_->addWidget(name, row, 0, Qt::AlignLeading | Qt::AlignTop);
         summary_->addWidget(value, row++, 1);
         fields_.insert(field.first, value);
@@ -116,23 +107,11 @@ void SystemMotherboardPage::rebuildMok()
              "not verification of the signer or proof that this key signed the running kernel. Dates are UTC. "
              "Firmware db certificates and pending enrollments are not included.");
     int row = 0;
-    const auto label = [](const QString &text, QWidget *parent) {
-        auto *value = new QLabel(text, parent);
-        value->setTextFormat(Qt::PlainText);
-        value->setWordWrap(true);
-        value->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
-        value->setAlignment(Qt::AlignLeading | Qt::AlignTop);
-        QSizePolicy policy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        policy.setHeightForWidth(true);
-        value->setSizePolicy(policy);
-        value->setMinimumWidth(120);
-        return value;
-    };
     const auto hint = [&scope](QLabel *value, const QString &details) {
         value->setToolTip("<qt>" + (scope + "\n\n" + details).toHtmlEscaped().replace('\n', "<br>") + "</qt>");
     };
     const auto message = [&](const QString &text) {
-        auto *value = label(text, mokForm_->parentWidget());
+        auto *value = propertyValueLabel(text, mokForm_->parentWidget());
         hint(value, {});
         mokForm_->addWidget(value, row++, 0, 1, 2);
     };
@@ -154,7 +133,7 @@ void SystemMotherboardPage::rebuildMok()
         const auto field = [&](const QString &caption, const QString &text, const QString &details) {
             auto *name = new QLabel(caption, box);
             name->setTextFormat(Qt::PlainText);
-            auto *value = label(text, box);
+            auto *value = propertyValueLabel(text, box);
             hint(name, details);
             hint(value, details);
             form->addWidget(name, certificateRow, 0, Qt::AlignLeading | Qt::AlignTop);

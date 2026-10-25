@@ -10,6 +10,10 @@ class QWidget;
 
 // Plain, selectable wrapped values and escaped source tooltips shared by pages.
 QLabel *plainLabel(const QString &text, QWidget *parent);
+// Wrapped, selectable summary value with an expanding column and a 120px minimum.
+// Focus policy follows QLabel's text-interaction behavior unless supplied explicitly.
+QLabel *propertyValueLabel(const QString &text, QWidget *parent);
+
 QString propertyToolTip(const QString &source);
 
 // A short-lived renderer for one rebuild. Layouts own the widgets; copy receives

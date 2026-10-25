@@ -1,4 +1,5 @@
 #include "propertypage.h"
+#include "propertyreport.h"
 
 #include <QLabel>
 #include <QPushButton>
@@ -10,11 +11,7 @@ PropertyPageWidgets setupPropertyPage(QWidget *page, const QString &heading,
 {
     page->hide();
     auto *layout = new QVBoxLayout(page);
-    auto *notice = new QLabel(heading, page);
-    notice->setTextFormat(Qt::PlainText);
-    notice->setWordWrap(true);
-    notice->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
-    notice->setFocusPolicy(Qt::StrongFocus);
+    auto *notice = plainLabel(heading, page);
     // Preserve QLabel's height-for-width flag when changing vertical sizing.
     auto policy = notice->sizePolicy();
     policy.setVerticalPolicy(options.headingPolicy);
