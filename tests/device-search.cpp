@@ -374,6 +374,47 @@ int main(int argc, char **argv)
     check(formatted.size() == 2 && formatted.at(0).setting == "121"
           && formatted.at(0).details.contains("MSI-X") && formatted.at(1).details.contains("BAR 0")
           && formatted.at(1).details.contains("Prefetchable"), "Shared resource formatter preserves vectors/BAR flags");
+    {
+        // Real SATA shape with non-enumerated ata and block directories.
+        Device controller = pci;
+        controller.path = "/sys/devices/pci0000:00/0000:08:00.0";
+        controller.parentPath.clear();
+        controller.hidden = true;
+        controller.resources.reset();
+        Device host = controller;
+        host.path = controller.path + "/ata5/host4";
+        host.parentPath = controller.path + "/ata5";
+        Device disk = child;
+        disk.path = host.path + "/target4:0:0/4:0:0:0/block/sda";
+        disk.parentPath = host.path + "/target4:0:0/4:0:0:0";
+        disk.hidden = false;
+        disk.resources = resources;
+        DeviceModel topology;
+        const auto findDisk = [&] {
+            for (const auto &record : topology.searchRecords())
+                if (record.device.path == disk.path)
+                    return topology.findDevice(disk.path, record.device.generation);
+            return QModelIndex();
+        };
+        for (auto mode : {DeviceModel::View::Connection, DeviceModel::View::ResourcesByConnection}) {
+            topology.setView(mode);
+            topology.setInventory({controller, host, disk});
+            auto index = findDisk();
+            check(index.isValid() && topology.visibleCount() == 3
+                  && index.parent().data(DeviceModel::PathRole).toString() == host.path
+                  && index.parent().parent().data(DeviceModel::PathRole).toString() == controller.path,
+                  "Connection views bridge missing directories and retain hidden controller context");
+            topology.setShowInternal(true);
+            bool originalParent = false;
+            for (const auto &record : topology.searchRecords())
+                if (record.device.path == host.path) originalParent = record.device.parentPath == host.parentPath;
+            check(originalParent, "Connection projection preserves recorded parent metadata");
+            topology.setShowInternal(false);
+            topology.setInventory({host, disk});
+            check(findDisk().parent().parent().data(DeviceModel::NodeKeyRole).toString() == "computer",
+                  "Missing controllers fall back to the computer without creating devices");
+        }
+    }
     Device bus = pci;
     bus.path = "/sys/devices/pci-root";
     bus.name = "Real parent context";

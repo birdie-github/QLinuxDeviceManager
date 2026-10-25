@@ -334,7 +334,21 @@ void DeviceModel::rebuild()
             }
         }
     } else if (view_ == View::Connection || resourcesByConnection) {
-        // Only real inventory parent links; hidden ancestors provide context.
+        // Some real sysfs parents (e.g. ata5) have no enumerated device record.
+        // Bridge those gaps to the nearest inventoried directory ancestor. This
+        // changes only the projection; keep recorded parentPath metadata intact.
+        QHash<QString, QString> parents;
+        for (const Device &d : devices_) {
+            QString path = d.parentPath;
+            if (!lookup_.contains(path) && path.startsWith("/sys/devices/")
+                && d.path.startsWith(path + '/')) {
+                while (path.startsWith("/sys/devices/") && !lookup_.contains(path))
+                    path.truncate(path.lastIndexOf('/'));
+                if (!lookup_.contains(path)) path.clear();
+            }
+            parents.insert(d.path, path);
+        }
+        // Hidden inventory ancestors still provide connection context.
         QSet<QString> included;
         for (const Device *d : members) {
             if ((!showInternal_ && d->hidden) || (resourcesByConnection && !hasResources(*d))) continue;
@@ -343,7 +357,7 @@ void DeviceModel::rebuild()
             while (lookup_.contains(path) && !chain.contains(path)) {
                 chain.insert(path);
                 included.insert(path);
-                path = devices_.at(lookup_.value(path)).parentPath;
+                path = parents.value(path);
             }
         }
         QHash<QString, Node *> nodes;
@@ -352,8 +366,9 @@ void DeviceModel::rebuild()
             if (nodes.contains(d.path)) return nodes.value(d.path);
             building.insert(d.path);
             Node *parent = computer;
-            if (included.contains(d.parentPath) && !building.contains(d.parentPath))
-                parent = ensure(devices_.at(lookup_.value(d.parentPath)));
+            const QString parentPath = parents.value(d.path);
+            if (included.contains(parentPath) && !building.contains(parentPath))
+                parent = ensure(devices_.at(lookup_.value(parentPath)));
             Node *item = deviceNode(parent, d);
             item->context = !showInternal_ && d.hidden;
             nodes.insert(d.path, item);
