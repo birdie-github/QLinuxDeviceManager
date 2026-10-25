@@ -280,6 +280,10 @@ remains available through native scrolling. Firmware memory records do not
 establish physical slots, channels, upgradeability or active ECC; the existing
 collector's evidence and read errors are preserved.
 
+The instruction-set/CPU-feature field displays a short hint to run
+`cat /proc/cpuinfo` instead of the full list. The GUI's instruction-set Copy
+action remains available. The hint is plain text; the TUI executes no command.
+
 The first opening collects system information in one QThread worker. Native
 FINAL CUT timers check completion without a Qt event loop; polling stops once
 the result is consumed. Reopening uses the cached result. The application's
@@ -302,7 +306,8 @@ Maintainer checks: build both frontends and run `ctest --test-dir build -R
 'system-(properties|report)' --output-on-failure`. Open via both entry points,
 cycle all pages, check Tab reaches Close, and switch RAM records with keyboard
 and mouse. Compare values and headers with the GUI, including unavailable or
-permission-denied firmware data. Inspect instruction sets, SMT cache sharing,
+permission-denied firmware data. Confirm the CPU feature field shows the command
+hint in the TUI and the full list remains available in the GUI. Inspect SMT cache sharing,
 long identifiers and certificate dates. Repeat at 80x25 and 211x60, resize and
 cycle short/long pages to check for stale borders. Verify stripes follow wrapped
 rows and scrolling. Close during collection, reopen, refresh from the browser
