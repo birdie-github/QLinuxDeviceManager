@@ -239,7 +239,11 @@ if(TUI)
     pkg_check_modules(FINALCUT QUIET IMPORTED_TARGET finalcut>=0.9.0)
     if(TARGET PkgConfig::FINALCUT)
         add_executable(qlinuxdevicemanager-tui src/tui/main.cpp
-            src/tui/searchdialog.h src/tui/searchdialog.cpp
+            src/tui/browser.h src/tui/browser.cpp
+            src/tui/treeprojection.h src/tui/treeprojection.cpp
+            src/tui/inventoryfilter.h src/tui/inventoryfilter.cpp
+            src/tui/terminaltext.h src/tui/terminaltext.cpp
+            src/tui/propertiesdialog.h src/tui/propertiesdialog.cpp
             src/tui/devicetree.h src/tui/devicetree.cpp)
         target_link_libraries(qlinuxdevicemanager-tui PRIVATE
             qldm-core PkgConfig::FINALCUT ${TUI_FINALCUT_EXTRA_LIBRARIES})

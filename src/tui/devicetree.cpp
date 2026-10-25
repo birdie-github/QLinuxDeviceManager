@@ -10,14 +10,14 @@ void DeviceTree::navigate(FKey key)
     FListView::onKeyPress(&event);
 }
 
-bool DeviceTree::selectItem(FListViewItem *item)
+bool DeviceTree::selectItem(FListViewItem *item, bool focus)
 {
     if (!item) return false;
     FObject *owner = item->getParent();
     while (owner && owner != this) owner = owner->getParent();
     if (!owner) return false;
 
-    setFocus();
+    if (focus) setFocus();
     // Reset before expanding branches changes the visible row positions.
     navigate(FKey::Home);
     for (auto *ancestor = item->getParent(); ancestor != this;

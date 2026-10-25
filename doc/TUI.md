@@ -53,7 +53,9 @@ Resizing adjusts tree and property view geometry.
 This is a read-only snapshot utility. It creates no monitor, daemon or hotplug
 subscription. Startup and manual refresh enumerate synchronously; refresh can
 briefly block navigation. Properties describe that snapshot, including devices
-that may since have disappeared. Refresh resets selection and expansion.
+that may since have disappeared. Unfiltered selection and expansion are
+remembered separately for each view, using device paths and group identities.
+Removed selections fall back to the computer row.
 No absent binding/module/status value is treated as proof of good health or
 built-in driver status. Raw property/attribute source keys are retained.
 
@@ -90,28 +92,42 @@ collapse, Enter, mouse activation, both property pages and scrolling of long
 values. Resize at 80x25 and larger. Refresh after a hotplug change and confirm
 no automatic change occurs before refresh. Close properties, then quit normally.
 
-## Finding devices
+## Filtering devices
 
-Press F4 to enter a case-insensitive substring. Enter or Find selects the first
-match at or after the current selection; F3 finds the next match and F6 the
-previous match, wrapping at either end. Search expands the selected match's
-ancestors and scrolls it into view. The status bar reports its match number.
-Enter on the selected device still opens properties.
+F4 focuses a persistent Filter field above the tree. Typing a case-insensitive
+substring immediately filters the current projection. Matching devices and
+their ancestors remain; all retained branches expand so results are visible.
+The status bar reports the number of matching devices, excluding context-only
+ancestors. With no matches, only the computer row remains.
 
 Matching uses names, identifiers, driver/module names, paths, category/subsystem,
 udev property values and available captured attribute values. It performs no
-additional hardware reads. Searches cover device rows in the current projection,
-including collapsed branches and connection-context ancestors. Hidden records
-omitted from that view and category/computer rows are excluded. This is snapshot
-search, without the GUI's hardware-specific deep-property collection.
+additional hardware reads. Hidden records omitted from the normal view remain
+excluded; retained connection-context ancestors are eligible for matching.
+This does not include the GUI's hardware-specific deep-property collection.
 
-The query survives refresh and view changes; F3/F6 searches the newly built view.
-F4 followed by an empty query clears it. Cancel leaves the previous query and
-selection intact. With no matches, selection and expansion remain unchanged.
+Enter in the field selects a match and focuses the tree; Enter on a device opens
+properties. F3/F6 cycle matches forward/backward with wraparound. Escape clears
+the filter and focuses the tree. Backspacing to an empty query also restores the
+full projection and its pre-filter selection and expansion. Whitespace alone
+means no filter. The query remains active across F2 and F5. Each view retains
+its own unfiltered state; paths absent after a refresh are skipped on restore.
+Header sorting resets when the tree is rebuilt.
 
-Maintainer checks: search for a known name, PCI/USB identifier, driver and path;
-find a device inside a collapsed branch; cycle forward/backward through multiple
-matches and a single match; check no-match, empty and cancelled queries. Confirm
-Enter opens the selected device's properties. Repeat after header sorting,
-F2 view switching and F5 refresh, and at 80x25. Search shortcuts should not act
-on the tree while its properties or search dialog is open.
+The TUI source is separated by responsibility:
+
+- `main.cpp`: QtCore context, initial enumeration and FINAL CUT startup.
+- `browser.cpp`: controls, callbacks and match navigation.
+- `treeprojection.cpp`: type/connection construction, ancestor retention and state.
+- `inventoryfilter.cpp`: snapshot-only matching.
+- `devicetree.cpp`: FINAL CUT 0.9.1-compatible selection and scrolling.
+- `propertiesdialog.cpp`: modal General/Driver presentation.
+- `terminaltext.cpp`: conversion and control-character sanitization.
+
+Maintainer checks: type and erase queries while focus stays in the field; verify
+unrelated branches disappear and matching ancestors remain. Check no-match and
+whitespace queries, F3/F6 wraparound, Enter-to-properties and Escape. Before
+filtering, select a nested device and expand several branches; clear the filter
+and verify that state returns. Repeat in both views, after sorting, after a
+refresh that removes the selected device, and at 80x25. Confirm the Qt GUI builds
+and its search behavior is unchanged.

@@ -5,7 +5,7 @@
 class DeviceTree final : public finalcut::FListView {
 public:
     explicit DeviceTree(finalcut::FWidget *parent) : FListView(parent) {}
-    bool selectItem(finalcut::FListViewItem *item);
+    bool selectItem(finalcut::FListViewItem *item, bool focus = true);
 private:
     void navigate(finalcut::FKey key);
 };
