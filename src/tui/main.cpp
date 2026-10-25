@@ -1,5 +1,6 @@
 #include "inventory.h"
 #include "searchdialog.h"
+#include "devicetree.h"
 #include "devicelabel.h"
 #include <final/final.h>
 #include <QCoreApplication>
@@ -223,27 +224,11 @@ private:
                 if (hits[i] > current || (includeCurrent && hits[i] == current)) { hit = i; break; }
         }
         auto *target = items[hits[hit]];
-        // Reset navigation before expansion changes visible row positions.
-        tree_.firstPos();
-        for (auto *ancestor = target->getParent(); ancestor && ancestor != &tree_;
-             ancestor = ancestor->getParent())
-            static_cast<FListViewItem*>(ancestor)->expand();
-        // Refresh FINAL CUT's viewport after expansion, then use its own
-        // navigation to select and scroll to the target. No retained iterators.
-        tree_.redraw();
-        int distance = 0;
-        std::function<bool(FListViewItem*)> locate = [&](FListViewItem *item) {
-            if (item == target) return true;
-            ++distance;
-            if (item->isExpand())
-                for (auto *child : item->getChildren())
-                    if (locate(static_cast<FListViewItem*>(child))) return true;
-            return false;
-        };
-        for (auto *item : tree_.getData()) if (locate(item)) break;
-        tree_.firstPos();
-        tree_.stepForward(distance);
-        tree_.setFocus();
+        if (!tree_.selectItem(target)) {
+            status_.setMessage("Could not select match. F4: change search");
+            redraw();
+            return;
+        }
         status_.setMessage(display(QStringLiteral("Match %1/%2. F3: next; F6: previous")
             .arg(hit + 1).arg(hits.size())));
         redraw();
@@ -346,7 +331,7 @@ private:
     bool connection_ = false;
     bool modalOpen_ = false;
     QString query_;
-    FListView tree_{this};
+    DeviceTree tree_{this};
     FButton switch_{this};
     FButton refresh_{"&Refresh", this};
     FButton quit_{"&Quit", this};
