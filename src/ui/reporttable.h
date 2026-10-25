@@ -11,11 +11,13 @@ public:
     void fitContents();
     void scrollTo(const QModelIndex &index, ScrollHint hint = EnsureVisible) override;
 protected:
+    void showEvent(QShowEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     void changeEvent(QEvent *event) override;
 private:
     bool fitQueued_ = false;
     bool fitting_ = false;
+    bool refitAfterResize_ = false;
     int initializedColumns_ = -1;
     QVector<int> preferredWidths_;
 };

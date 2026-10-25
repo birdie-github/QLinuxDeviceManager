@@ -3,6 +3,7 @@
 #include <QPainter>
 #include <QResizeEvent>
 #include <QScrollArea>
+#include <QShowEvent>
 #include <QStyle>
 #include <QStyleOptionHeader>
 #include <QTimer>
@@ -132,13 +133,27 @@ void ReportTable::fitContents()
             preferredTotal + 2 * frameWidth()));
         if (minimumWidth() != width) setMinimumWidth(width);
         fitting_ = false;
+        // Changing our fixed/minimum size can resize the viewport synchronously.
+        // Such a resize could not queue another fit while fitting_ was set.
+        if (refitAfterResize_) {
+            refitAfterResize_ = false;
+            fitContents();
+        }
     });
 }
 
+void ReportTable::showEvent(QShowEvent *event)
+{
+    QTableWidget::showEvent(event);
+    // Hidden tabs may have been fitted before style polishing and their final
+    // layout geometry. Recompute after becoming visible, including chip switches.
+    fitContents();
+}
 void ReportTable::resizeEvent(QResizeEvent *event)
 {
     QTableWidget::resizeEvent(event);
-    fitContents();
+    if (fitting_) refitAfterResize_ = true;
+    else fitContents();
 }
 void ReportTable::changeEvent(QEvent *event)
 {
