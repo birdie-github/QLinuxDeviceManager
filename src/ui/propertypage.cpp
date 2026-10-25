@@ -6,6 +6,17 @@
 #include <QScrollArea>
 #include <QVBoxLayout>
 
+void setReportScrollContent(QScrollArea *scroll, QWidget *content)
+{
+    scroll->setWidget(content);
+    // QScrollArea::setWidget enables autoFillBackground on content. A tab's
+    // style-drawn surface may differ from the palette's Window brush; allow
+    // parent-background propagation through these plain container layers.
+    scroll->setAutoFillBackground(false);
+    scroll->viewport()->setAutoFillBackground(false);
+    content->setAutoFillBackground(false);
+}
+
 PropertyPageWidgets setupPropertyPage(QWidget *page, const QString &heading,
     const QString &tooltip, const QString &copyCaption, const PropertyPageOptions &options)
 {
@@ -25,7 +36,7 @@ PropertyPageWidgets setupPropertyPage(QWidget *page, const QString &heading,
     auto *content = new QWidget(scroll);
     auto *groups = new QVBoxLayout(content);
     groups->setSizeConstraint(options.contentConstraint);
-    scroll->setWidget(content);
+    setReportScrollContent(scroll, content);
     layout->addWidget(scroll, 1);
 
     auto *copyButton = new QPushButton(copyCaption, page);
@@ -44,7 +55,7 @@ ReportPageLayout reportPageLayout(QWidget *parent)
     auto *contents = new QVBoxLayout(page);
     contents->setContentsMargins(0, 0, 0, 0);
     contents->setAlignment(Qt::AlignTop);
-    scroll->setWidget(page);
+    setReportScrollContent(scroll, page);
     layout->addWidget(scroll, 1);
     auto *actions = new QHBoxLayout;
     layout->addLayout(actions);

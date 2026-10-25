@@ -1,5 +1,6 @@
 #include "propertyfieldspage.h"
 #include "propertyreport.h"
+#include "propertypage.h"
 #include "propertytext.h"
 #include <QFormLayout>
 #include <QLabel>
@@ -13,7 +14,7 @@ PropertyFieldsPage::PropertyFieldsPage(Section section, QWidget *parent)
     form_ = new QFormLayout(content);
     form_->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     form_->setRowWrapPolicy(QFormLayout::WrapLongRows);
-    setWidget(content);
+    setReportScrollContent(this, content);
 }
 void PropertyFieldsPage::setSnapshot(const QVector<PropertyEntry> &entries)
 {

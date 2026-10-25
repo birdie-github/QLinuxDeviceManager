@@ -1,5 +1,6 @@
 #include "storagepage.h"
 #include "propertyreport.h"
+#include "propertypage.h"
 #include <QApplication>
 #include <QClipboard>
 #include <QFormLayout>
@@ -21,7 +22,7 @@ StoragePage::StoragePage(QWidget *parent) : QWidget(parent)
     storage_ = new QFormLayout(storageFormPage);
     storage_->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     storage_->setRowWrapPolicy(QFormLayout::WrapLongRows);
-    storageScroll->setWidget(storageFormPage);
+    setReportScrollContent(storageScroll, storageFormPage);
     storageLayout->addWidget(storageScroll, 1);
     auto *copyStorage = new QPushButton(tr("Copy storage overview"), this);
     storageLayout->addWidget(copyStorage);

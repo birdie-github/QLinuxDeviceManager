@@ -119,7 +119,7 @@ void VolumesPage::showVolumeDetails()
     auto *contents = new QVBoxLayout(page);
     showStorageFields(storageDetailsForm(contents, page), entry.fields);
     contents->addStretch();
-    scroll->setWidget(page);
+    setReportScrollContent(scroll, page);
     layout->addWidget(scroll, 1);
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, &details);
     auto *copy = buttons->addButton(tr("Copy volume details"), QDialogButtonBox::ActionRole);

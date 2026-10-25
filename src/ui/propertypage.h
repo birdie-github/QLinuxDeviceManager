@@ -32,3 +32,8 @@ struct ReportPageLayout {
     QHBoxLayout *actions;
 };
 ReportPageLayout reportPageLayout(QWidget *parent);
+
+class QScrollArea;
+// Install plain report content without painting a separate palette background.
+// Call after constructing the content layout. Child controls retain their paint.
+void setReportScrollContent(QScrollArea *scroll, QWidget *content);

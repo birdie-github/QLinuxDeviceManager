@@ -1,5 +1,6 @@
 #include "healthpage.h"
 #include "propertyreport.h"
+#include "propertypage.h"
 #include "reporttable.h"
 #include <QApplication>
 #include <QClipboard>
@@ -40,7 +41,7 @@ HealthPage::HealthPage(QWidget *parent) : QWidget(parent)
     healthScroll->setFrameShape(QFrame::NoFrame);
     auto *healthReport = new QWidget(healthScroll);
     healthGroups_ = new QVBoxLayout(healthReport);
-    healthScroll->setWidget(healthReport);
+    setReportScrollContent(healthScroll, healthReport);
     healthLayout->addWidget(healthScroll, 1);
     auto *healthButtons = new QHBoxLayout;
     auto *copyHealth = new QPushButton(tr("Copy selected drive health"), this);
