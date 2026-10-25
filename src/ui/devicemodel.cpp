@@ -367,7 +367,11 @@ void DeviceModel::rebuild()
             building.insert(d.path);
             Node *parent = computer;
             const QString parentPath = parents.value(d.path);
-            if (included.contains(parentPath) && !building.contains(parentPath))
+            if (d.subsystem == "efivarfs") {
+                parent = group(computer, "firmware:efivars", tr("UEFI variables"), "efi");
+                parent->description = tr("Firmware variable records from /sys/firmware/efi/efivars. "
+                    "This is a presentation group, not a hardware controller.");
+            } else if (included.contains(parentPath) && !building.contains(parentPath))
                 parent = ensure(devices_.at(lookup_.value(parentPath)));
             Node *item = deviceNode(parent, d);
             item->context = !showInternal_ && d.hidden;
