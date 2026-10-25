@@ -4,6 +4,7 @@
 #include <QHash>
 #include <QStringList>
 #include <QVector>
+class SystemRamPage;
 class QGridLayout;
 class QLabel;
 class ReportTable;
@@ -21,11 +22,9 @@ signals:
 private:
     QString displayValue(const QString &key, const Attribute &value, bool compact = false) const;
     void rebuildMok();
-    void rebuildMemory();
-    QString memoryValue(const QString &key, const Attribute &value) const;
     void copyAll();
     void copyInformation(int tab);
-    QGridLayout *memoryForm_ = nullptr;
+    SystemRamPage *ramPage_ = nullptr;
     QGridLayout *mokForm_ = nullptr;
     QHash<QString, QVector<QLabel *>> fields_;
     QHash<QString, ReportTable *> tables_;

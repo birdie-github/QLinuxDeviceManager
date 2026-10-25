@@ -1,4 +1,5 @@
 #include "systemdialog.h"
+#include "systempages/rampage.h"
 #include "reporttable.h"
 #include "propertytext.h"
 #include <QApplication>
@@ -23,24 +24,6 @@
 #include <utility>
 #include <limits>
 #include <algorithm>
-
-namespace {
-QVector<QPair<QString, QString>> memoryFields()
-{
-    using D = SystemDialog;
-    return {{"PRESENT", D::tr("Presence")}, {"SIZE", D::tr("Capacity (total)")},
-        {"VOLATILE_SIZE", D::tr("Volatile capacity")}, {"NON_VOLATILE_SIZE", D::tr("Nonvolatile capacity")},
-        {"LOCATOR", D::tr("Device locator")}, {"BANK_LOCATOR", D::tr("Bank locator")},
-        {"TYPE", D::tr("Memory type")}, {"FORM_FACTOR", D::tr("Form factor")},
-        {"SPEED_MTS", D::tr("Rated transfer rate")}, {"CONFIGURED_SPEED_MTS", D::tr("Configured transfer rate")},
-        {"MANUFACTURER", D::tr("Manufacturer")}, {"PART_NUMBER", D::tr("Part number")}};
-}
-QString memoryScope()
-{
-    return SystemDialog::tr("Firmware-reported records; these do not establish removable modules, physical slots, "
-        "memory channels, upgradeability or active ECC. Transfer rates are firmware declarations, not live measurements.");
-}
-}
 
 SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
 {
@@ -163,18 +146,8 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
     field(processor, "cache_topology", tr("Cache hierarchy (online CPUs)"));
 
 
-    auto *memory = group(tr("RAM"));
-    field(memory, "physical_memory", tr("Physical RAM"));
-    field(memory, "memory", tr("Usable RAM"));
-    // Keep the summary labels outside the variable-length records rebuilt on refresh.
-    auto *memoryPage = new QWidget(memory->parentWidget());
-    memoryForm_ = new QGridLayout(memoryPage);
-    memoryForm_->setContentsMargins(0, 0, 0, 0);
-    memoryForm_->setColumnStretch(0, 1);
-    memory->addWidget(memoryPage, memory->rowCount(), 0, 1, 2);
-
-    registerKey("memory_devices");
-    captions_.insert("memory_devices", tr("RAM"));
+    ramPage_ = new SystemRamPage(tabs);
+    tabs->addTab(ramPage_, tr("RAM"));
     // Use one font-derived caption width for every section, so values align.
     int captionWidth = 0;
     for (const QLabel *name : names) captionWidth = qMax(captionWidth, name->sizeHint().width());
@@ -182,14 +155,11 @@ SystemDialog::SystemDialog(QWidget *parent) : QDialog(parent)
         const QLabel name(caption);
         captionWidth = qMax(captionWidth, name.sizeHint().width());
     }
-    for (const auto &entry : memoryFields()) {
-        const QLabel name(entry.second);
-        captionWidth = qMax(captionWidth, name.sizeHint().width());
-    }
+    captionWidth = qMax(captionWidth, ramPage_->captionWidthHint());
+    ramPage_->setCaptionWidth(captionWidth);
     for (QGridLayout *form : forms) form->setColumnMinimumWidth(0, captionWidth);
     mokForm_->setColumnMinimumWidth(0, captionWidth);
     rebuildMok();
-    rebuildMemory();
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
     copyTab_ = buttons->addButton(tr("Copy"), QDialogButtonBox::ActionRole);
     copyTab_->setToolTip(tr("Copy information from the current tab"));
@@ -212,18 +182,6 @@ QString SystemDialog::displayValue(const QString &key, const Attribute &value, b
 {
     if (key == "virtualization" && value.state == ReadState::Unavailable)
         return tr("Unknown (no hypervisor identity reported)");
-    if (key == "memory_devices") {
-        QStringList lines {memoryScope()};
-        const auto &memory = snapshot_.memoryDevices;
-        if (memory.status.state != ReadState::Available) lines.append(propertyReadValue(memory.status));
-        else if (memory.devices.isEmpty()) lines.append(tr("No memory-device records reported"));
-        else for (const FirmwareMemoryDevice &device : memory.devices) {
-            lines.append(tr("Memory device %1 (firmware record %2)").arg(device.index + 1).arg(device.index));
-            for (const auto &field : memoryFields())
-                lines.append(field.second + ": " + memoryValue(field.first, device.values.value(field.first)));
-        }
-        return lines.join('\n');
-    }
     if (key == "gpu_rebar") {
         if (snapshot_.gpuRebarStatus.state != ReadState::Available)
             return propertyReadValue(snapshot_.gpuRebarStatus);
@@ -287,21 +245,6 @@ QString SystemDialog::displayValue(const QString &key, const Attribute &value, b
         return value.value == "uefi" ? tr("UEFI")
             : tr("UEFI not exposed (legacy boot or restricted environment)");
     if (key == "virtualization") return tr("Reported hypervisor: %1").arg(value.value);
-    if (key == "memory" || key == "physical_memory") {
-        constexpr qulonglong gib = 1024ULL * 1024 * 1024;
-        constexpr qulonglong mib = 1024ULL * 1024;
-        const qulonglong bytes = value.value.toULongLong();
-        const int precision = key == "physical_memory" && bytes % gib == 0 ? 0 : 2;
-        QString text = tr("%1 GiB").arg(QLocale().toString(bytes / static_cast<double>(gib), 'f', precision));
-        const Attribute physical = snapshot_.values.value("physical_memory");
-        if (key == "memory" && physical.state == ReadState::Available) {
-            const qulonglong installed = physical.value.toULongLong();
-            if (installed >= bytes)
-                text += tr(" (%1 MiB is system reserved)")
-                    .arg(QLocale().toString((installed - bytes) / static_cast<double>(mib), 'f', 0));
-        }
-        return text;
-    }
     if (key == "uptime") {
         const qulonglong seconds = value.value.toULongLong();
         return tr("%1 days, %2 hours, %3 minutes").arg(seconds / 86400).arg(seconds / 3600 % 24).arg(seconds / 60 % 60);
@@ -445,67 +388,6 @@ QString SystemDialog::displayValue(const QString &key, const Attribute &value, b
     }
     return value.value;
 }
-QString SystemDialog::memoryValue(const QString &key, const Attribute &value) const
-{
-    if (key == "PRESENT" && value.state == ReadState::Unavailable)
-        return tr("Unknown (no explicit presence flag)");
-    if (value.state != ReadState::Available) return propertyReadValue(value);
-    if (key == "PRESENT") return value.value == "0" ? tr("No device reported present") : tr("Device reported present");
-    if (key == "SPEED_MTS" || key == "CONFIGURED_SPEED_MTS")
-        return tr("%1 MT/s").arg(QLocale().toString(value.value.toULongLong()));
-    if (key == "SIZE" || key == "VOLATILE_SIZE" || key == "NON_VOLATILE_SIZE") {
-        const qulonglong bytes = value.value.toULongLong();
-        if (bytes <= static_cast<qulonglong>(std::numeric_limits<qlonglong>::max()))
-            return QLocale().formattedDataSize(static_cast<qlonglong>(bytes), 2, QLocale::DataSizeIecFormat);
-        return tr("%1 bytes").arg(QLocale().toString(bytes));
-    }
-    return value.value;
-}
-void SystemDialog::rebuildMemory()
-{
-    while (QLayoutItem *item = memoryForm_->takeAt(0)) {
-        delete item->widget();
-        delete item;
-    }
-    auto *heading = new QLabel(tr("Memory Devices"), memoryForm_->parentWidget());
-    QFont font = heading->font(); font.setBold(true); heading->setFont(font);
-    heading->setToolTip(memoryScope());
-    memoryForm_->addWidget(heading, 0, 0);
-    const FirmwareMemoryInformation &memory = snapshot_.memoryDevices;
-    if (memory.status.state != ReadState::Available || memory.devices.isEmpty()) {
-        auto *message = new QLabel(memory.status.state != ReadState::Available
-            ? propertyReadValue(memory.status) : tr("No memory-device records reported"), memoryForm_->parentWidget());
-        message->setTextFormat(Qt::PlainText);
-        message->setWordWrap(true);
-        message->setToolTip(snapshot_.sources.value("memory_devices") + '\n' + memoryScope());
-        memoryForm_->addWidget(message, 1, 0);
-        return;
-    }
-    auto *tabs = new QTabWidget(memoryForm_->parentWidget());
-    tabs->setUsesScrollButtons(true);
-    memoryForm_->addWidget(tabs, 1, 0);
-    for (const FirmwareMemoryDevice &device : memory.devices) {
-        auto *table = new ReportTable(tabs);
-        table->setColumnCount(2);
-        table->setHorizontalHeaderLabels({tr("Property"), tr("Value")});
-        const auto fields = memoryFields();
-        table->setRowCount(fields.size());
-        const QString prefix = QStringLiteral("MEMORY_DEVICE_%1_").arg(device.index);
-        for (int row = 0; row < fields.size(); ++row) {
-            const auto &field = fields[row];
-            auto *name = new QTableWidgetItem(field.second);
-            auto *value = new QTableWidgetItem(memoryValue(field.first, device.values.value(field.first)));
-            const QString hint = QStringLiteral("libudev: dmi/id ") + prefix + field.first + '\n' + memoryScope();
-            name->setToolTip(hint); value->setToolTip(hint);
-            table->setItem(row, 0, name);
-            table->setItem(row, 1, value);
-        }
-        table->fitContents();
-        const int tab = tabs->addTab(table, tr("Chip %1").arg(device.index + 1));
-        tabs->setTabToolTip(tab, tr("Memory device %1 (firmware record %2)")
-            .arg(device.index + 1).arg(device.index) + '\n' + memoryScope());
-    }
-}
 void SystemDialog::rebuildMok()
 {
     while (QLayoutItem *item = mokForm_->takeAt(0)) {
@@ -581,7 +463,7 @@ void SystemDialog::acceptResult(SystemProperties result)
     Q_ASSERT(QThread::isMainThread());
     snapshot_ = std::move(result);
     for (const QString &key : order_) {
-        if (key == "mok" || key == "memory_devices") continue; // Variable-length sections are rebuilt separately.
+        if (key == "mok") continue; // Variable-length sections are rebuilt separately.
         const QString text = displayValue(key, snapshot_.values.value(key));
         QString source = snapshot_.sources.value(key);
         if (key == "secure_boot")
@@ -602,10 +484,6 @@ void SystemDialog::acceptResult(SystemProperties result)
             source += '\n' + tr("Kernel-exposed instruction-set and CPU-feature flags for processors listed in /proc/cpuinfo. "
                 "These include non-instruction features and may be limited by the kernel, operating system or hypervisor. "
                 "Different reported feature lists remain separate; this is not a complete raw hardware capability inventory.");
-        if (key == "memory")
-            source += '\n' + tr("System reserved is reported physical RAM minus Linux MemTotal. "
-                                 "It includes all memory unavailable to Linux, not just firmware reservations. "
-                                 "It is omitted if physical capacity is unavailable or smaller than usable RAM.");
         const QString hint = "<qt>" + source.toHtmlEscaped().replace('\n', "<br>") + "</qt>";
         if (ReportTable *view = tables_.value(key, nullptr)) {
             view->clear();
@@ -636,7 +514,7 @@ void SystemDialog::acceptResult(SystemProperties result)
         }
     }
     rebuildMok();
-    rebuildMemory();
+    ramPage_->setSnapshot(snapshot_);
     setBusy(false);
     const Attribute features = snapshot_.values.value("instruction_sets");
     featuresCopy_->setEnabled(features.state == ReadState::Available && !features.value.isEmpty());
@@ -658,5 +536,6 @@ void SystemDialog::copyInformation(int tab)
         lines.append(captions_.value(key) + (key == "core_groups" || key == "cache_topology" ? ":\n" : ": ")
                      + displayValue(key, snapshot_.values.value(key)));
     }
+    if (tab < 0 || tabs_->widget(tab) == ramPage_) lines.append(ramPage_->copyText());
     QApplication::clipboard()->setText(lines.join('\n'));
 }
