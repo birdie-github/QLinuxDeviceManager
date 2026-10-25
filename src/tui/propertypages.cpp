@@ -1,4 +1,5 @@
 #include "propertypages.h"
+#include "terminaltext.h"
 #include <QStringList>
 #include <algorithm>
 
@@ -31,38 +32,64 @@ CommonProperties inventoryCommonProperties(const Device &device)
 }
 
 namespace {
-void field(QString &text, const QString &label, QString value)
+struct Row { QString label; QString value; bool section = false; };
+PropertyPage table(const QVector<Row> &rows)
 {
-    if (value.isEmpty()) value = QStringLiteral("Unavailable");
-    value.replace('\n', QStringLiteral("\n  "));
-    text += label + ":\n  " + value + "\n\n";
+    std::size_t width = 0;
+    for (const Row &row : rows)
+        if (!row.section) width = std::max(width, finalcut::getColumnWidth(display(row.label)));
+    PropertyPage result;
+    int lineNumber = 0;
+    int fieldNumber = 0;
+    for (const Row &row : rows) {
+        if (row.section) {
+            result.text += '\n' + row.label + '\n';
+            lineNumber += 2;
+            fieldNumber = 0;
+            continue;
+        }
+        const QString value = row.value.isEmpty() ? QStringLiteral("Unavailable") : row.value;
+        const auto lines = value.split('\n');
+        bool first = true;
+        for (const QString &line : lines) {
+            const QString label = first ? row.label : QString();
+            const auto cells = finalcut::getColumnWidth(display(label));
+            result.text += label + QString(static_cast<qsizetype>(width - cells), QLatin1Char(' '))
+                + "  " + line + '\n';
+            if (fieldNumber % 2) result.shadedLines.append(lineNumber);
+            ++lineNumber;
+            first = false;
+        }
+        ++fieldNumber;
+    }
+    return result;
 }
 }
 
-QString commonPropertyPage(const QVector<PropertyEntry> &entries, int tab)
+PropertyPage commonPropertyPage(const QVector<PropertyEntry> &entries, int tab)
 {
-    QString text;
+    QVector<Row> rows;
     for (const PropertyEntry &entry : entries)
-        if (entry.tab == tab) field(text, entry.label, entry.value);
-    return text;
+        if (entry.tab == tab) rows.append({entry.label, entry.value});
+    return table(rows);
 }
 
-QString inventoryDetailsPage(const Device &device)
+PropertyPage inventoryDetailsPage(const Device &device)
 {
-    QString text;
-    field(text, "Full kernel path", device.path);
-    field(text, "Parent device path", device.parentPath);
-    field(text, "Original name", device.name);
-    field(text, "Name source", device.nameSource);
-    field(text, "Kernel name", device.sysname);
-    field(text, "Device type", device.devtype);
-    text += "Udev properties\n\n";
+    QVector<Row> rows;
+    rows.append({"Full kernel path", device.path});
+    rows.append({"Parent device path", device.parentPath});
+    rows.append({"Original name", device.name});
+    rows.append({"Name source", device.nameSource});
+    rows.append({"Kernel name", device.sysname});
+    rows.append({"Device type", device.devtype});
+    rows.append({"Udev properties", {}, true});
     auto keys = device.properties.keys();
     std::sort(keys.begin(), keys.end());
-    for (const QString &key : keys) field(text, key, device.properties.value(key));
-    text += "Captured attributes\n\n";
+    for (const QString &key : keys) rows.append({key, device.properties.value(key)});
+    rows.append({"Captured attributes", {}, true});
     keys = device.attributes.keys();
     std::sort(keys.begin(), keys.end());
-    for (const QString &key : keys) field(text, key, propertyReadValue(device.attributes.value(key)));
-    return text;
+    for (const QString &key : keys) rows.append({key, propertyReadValue(device.attributes.value(key))});
+    return table(rows);
 }

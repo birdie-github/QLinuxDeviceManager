@@ -170,3 +170,21 @@ identifier values against Details and confirm absent fields are not reported
 as healthy or built-in. Switch all three pages using buttons and mnemonics,
 scroll long identifiers and raw attributes, resize, and close with Escape.
 Rebuild the GUI and compare its General/Driver output before/after extraction.
+
+## Compact properties layout
+
+Properties is centered and limited to 100 columns and 28 rows. Short pages use
+less height; terminal resizing reduces the dialog to the available space.
+Fields use aligned label/value columns with no blank rows between fields.
+Padding uses terminal column widths, so values and multiline continuations
+start at the same column. Every other logical field receives native FINAL CUT
+line highlighting with a contrasting light background; continuation lines keep
+the same band. Monochrome terminals retain the aligned table without color.
+Details keeps a single separating line before each raw-data section. Horizontal and
+vertical scrolling preserve access to long values and large snapshots.
+
+Maintainer checks: at 211x60, verify the dialog is centered and no larger than
+100x28. At 80x25, verify all page buttons and Close fit. Switch General, Driver
+and Details, check aligned columns and alternating field backgrounds, including
+multiline identifiers. Scroll long values and resize while each page is open.
+Check a monochrome terminal if available; alignment must remain readable.

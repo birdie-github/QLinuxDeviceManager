@@ -24,20 +24,37 @@ private:
     {
         const std::array<const char*, 3> titles {"General", "Driver", "Details"};
         setText(display(deviceDisplayName(device_) + " - " + titles.at(page)));
-        QString text = "Inventory snapshot; no additional property reads.\n\n";
-        text += page == 2 ? inventoryDetailsPage(device_) : commonPropertyPage(entries_, page);
+        QString text = "Inventory snapshot; no additional property reads.\n";
+        const PropertyPage content = page == 2 ? inventoryDetailsPage(device_) : commonPropertyPage(entries_, page);
+        text += content.text;
+        preferredHeight_ = std::clamp<std::size_t>(static_cast<std::size_t>(text.count('\n')) + 9, 12, 28);
         text_.setText(display(text));
+        // FINAL CUT 0.9.1 supports native line highlights: no custom drawing.
+        if (!FTerm::isMonochron()) {
+            const auto background = text_.getBackgroundColor() == FColor::White
+                ? FColor::LightGray : FColor::White;
+            const FColorPair stripe{FColor::Black, background};
+            for (int line : content.shadedLines)
+                text_.addHighlight(static_cast<std::size_t>(line + 1), FTextView::FTextHighlight{0, stripe});
+        }
         text_.scrollToBegin();
         general_.setEnable(page != 0);
         driver_.setEnable(page != 1);
         details_.setEnable(page != 2);
+        if (isShown()) adjustSize();
         redraw();
     }
     void adjustSize() override
     {
-        const auto w = std::max<std::size_t>(50, getDesktopWidth() > 4 ? getDesktopWidth() - 4 : 50);
-        const auto h = std::max<std::size_t>(10, getDesktopHeight() > 4 ? getDesktopHeight() - 4 : 10);
-        setGeometry(FPoint{2, 2}, FSize{w, h}, false);
+        const auto desktopWidth = getDesktopWidth();
+        const auto desktopHeight = getDesktopHeight();
+        const auto w = std::min<std::size_t>(100, std::max<std::size_t>(50,
+            desktopWidth > 4 ? desktopWidth - 4 : 50));
+        const auto h = std::min(preferredHeight_, std::max<std::size_t>(10,
+            desktopHeight > 4 ? desktopHeight - 4 : 10));
+        const int x = desktopWidth > w ? int((desktopWidth - w) / 2) + 1 : 1;
+        const int y = desktopHeight > h ? int((desktopHeight - h) / 2) + 1 : 1;
+        setGeometry(FPoint{x, y}, FSize{w, h}, false);
         text_.setGeometry(FPoint{2, 2}, FSize{w - 4, h - 6});
         general_.setGeometry(FPoint{2, int(h) - 3}, FSize{11, 1});
         driver_.setGeometry(FPoint{15, int(h) - 3}, FSize{10, 1});
@@ -48,6 +65,7 @@ private:
     void initLayout() override { adjustSize(); FDialog::initLayout(); }
     const Device device_;
     const QVector<PropertyEntry> entries_;
+    std::size_t preferredHeight_ = 12;
     FTextView text_{this};
     FButton general_{"&General", this};
     FButton driver_{"&Driver", this};
