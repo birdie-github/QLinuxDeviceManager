@@ -4,9 +4,6 @@
 #include "propertyreport.h"
 #include "reporttable.h"
 #include <QGridLayout>
-#include <QGraphicsOpacityEffect>
-#include <QPropertyAnimation>
-#include <QStyle>
 #include <QLabel>
 #include <QLocale>
 #include <QTabBar>
@@ -185,6 +182,7 @@ void SystemRamPage::rebuildMemory()
         if (index < 0 || index >= devices.size()) return;
         const auto &device = devices.at(index);
         table->clearContents();
+        table->setHorizontalHeaderLabels({tr("Property"), tr("Value — Chip %1").arg(device.index + 1)});
         const auto fields = memoryFields();
         const QString prefix = QStringLiteral("MEMORY_DEVICE_%1_").arg(device.index);
         for (int row = 0; row < fields.size(); ++row) {
@@ -200,24 +198,4 @@ void SystemRamPage::rebuildMemory()
     };
     connect(tabs, &QTabBar::currentChanged, table, showChip);
     showChip(tabs->currentIndex());
-    // Keep the effect disabled between transitions so normal table painting
-    // does not need an offscreen rendering pass.
-    auto *opacity = new QGraphicsOpacityEffect(table);
-    opacity->setOpacity(1.0);
-    opacity->setEnabled(false);
-    table->setGraphicsEffect(opacity);
-    auto *fade = new QPropertyAnimation(opacity, "opacity", table);
-    fade->setStartValue(0.35);
-    fade->setEndValue(1.0);
-    connect(fade, &QPropertyAnimation::finished, opacity, [opacity] { opacity->setEnabled(false); });
-    connect(tabs, &QTabBar::currentChanged, table, [table, opacity, fade] {
-        fade->stop();
-        opacity->setEnabled(false);
-        const int duration = table->style()->styleHint(QStyle::SH_Widget_Animation_Duration, nullptr, table);
-        if (!table->isVisible() || duration <= 0) return;
-        fade->setDuration(qMin(300, duration));
-        opacity->setOpacity(0.35);
-        opacity->setEnabled(true);
-        fade->start();
-    });
 }
