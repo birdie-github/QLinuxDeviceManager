@@ -54,7 +54,15 @@ private:
             desktopHeight > 4 ? desktopHeight - 4 : 10));
         const int x = desktopWidth > w ? int((desktopWidth - w) / 2) + 1 : 1;
         const int y = desktopHeight > h ? int((desktopHeight - h) / 2) + 1 : 1;
-        setGeometry(FPoint{x, y}, FSize{w, h}, false);
+        if (isShown()) {
+            // FDialog restores uncovered terminal cells when resized or moved.
+            // Inherited setGeometry bypasses that restoration in FINAL CUT 0.9.1.
+            // Suppress recursive adjustSize(): children are laid out below.
+            FDialog::setSize(FSize{w, h}, false);
+            FDialog::setPos(FPoint{x, y}, false);
+        } else {
+            setGeometry(FPoint{x, y}, FSize{w, h}, false);
+        }
         text_.setGeometry(FPoint{2, 2}, FSize{w - 4, h - 6});
         general_.setGeometry(FPoint{2, int(h) - 3}, FSize{11, 1});
         driver_.setGeometry(FPoint{15, int(h) - 3}, FSize{10, 1});
