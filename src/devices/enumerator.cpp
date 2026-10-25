@@ -6,6 +6,7 @@
 #include <memory>
 #include <cstring>
 #include <cerrno>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <poll.h>
 #include <utility>
