@@ -1,5 +1,9 @@
 #include "mainwindow.h"
+#ifdef QLDM_ENABLE_DONATION_BUTTON
 #include "donatebutton.h"
+#include <QDesktopServices>
+#include <QUrl>
+#endif
 #include "icontheme.h"
 #include "devicemodel.h"
 #include "devicefilter.h"
@@ -14,7 +18,6 @@
 #include <QThread>
 #include <QCloseEvent>
 #include <QCheckBox>
-#include <QDesktopServices>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
@@ -35,7 +38,6 @@
 #include <QTimer>
 #include <QToolBar>
 #include <QTreeView>
-#include <QUrl>
 #include <utility>
 #include <unistd.h>
 
@@ -259,6 +261,7 @@ MainWindow::MainWindow()
     toolbar->addAction(refreshAction_);
     toolbar->addAction(propertiesAction_);
     view->addAction(toolbar->toggleViewAction());
+#ifdef QLDM_ENABLE_DONATION_BUTTON
     auto *spacer = new QWidget(toolbar);
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     toolbar->addWidget(spacer);
@@ -285,6 +288,7 @@ MainWindow::MainWindow()
             QMessageBox::warning(this, tr("Open donation page"),
                 tr("Could not open the donation page in your web browser."));
     });
+#endif
     initializationProgress_ = new QProgressBar(this);
     initializationProgress_->setRange(0, 0); // The initial scan has no reliable total.
     initializationProgress_->setTextVisible(false);

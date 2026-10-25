@@ -28,6 +28,7 @@ find_package(Qt6 ${APP_MINIMUM_QT} REQUIRED COMPONENTS Widgets Network)
 # Optional read-only UDisks2 cache access. Native storage viewing still works without it.
 option(UDISKS2 "Use optional QtDBus for cached UDisks2 storage metadata" ON)
 option(BLUETOOTH "Use optional QtDBus for BlueZ Bluetooth metadata" ON)
+option(ENABLE_DONATION_BUTTON "Include the toolbar donation button and its preference" ON)
 if(UDISKS2 OR BLUETOOTH)
     find_package(Qt6 ${APP_MINIMUM_QT} QUIET COMPONENTS DBus)
 endif()
@@ -80,7 +81,6 @@ add_executable(qlinuxdevicemanager
     src/ui/devicemodel.h src/ui/devicemodel.cpp
     src/ui/icontheme.h src/ui/icontheme.cpp
     src/ui/mainwindow.h src/ui/mainwindow.cpp
-    src/ui/donatebutton.h src/ui/donatebutton.cpp
     src/devices/pcielinktext.h
     src/ui/gpulinktest.h src/ui/gpulinktest.cpp
     src/ui/propertiesdialog.h src/ui/propertiesdialog.cpp
@@ -108,6 +108,10 @@ add_executable(qlinuxdevicemanager
     src/ui/systempages/processorpage.h src/ui/systempages/processorpage.cpp
     src/ui/systempages/operatingsystempage.h src/ui/systempages/operatingsystempage.cpp
     src/ui/systemdialog.h src/ui/systemdialog.cpp)
+if(ENABLE_DONATION_BUTTON)
+    target_sources(qlinuxdevicemanager PRIVATE src/ui/donatebutton.h src/ui/donatebutton.cpp)
+    target_compile_definitions(qlinuxdevicemanager PRIVATE QLDM_ENABLE_DONATION_BUTTON)
+endif()
 # Embed existing PNG assets so a build-tree executable has its own icon without
 # an installed icon theme or Qt SVG image plugin. Keep every supplied raster size.
 set(APP_ICON_SIZES 16 32 48 64 128 256 512)

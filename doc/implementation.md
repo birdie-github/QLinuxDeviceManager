@@ -798,6 +798,9 @@ Install the executable, desktop entry, application icons and available translati
 sudo cmake --install build --prefix /usr/local
 ```
 
+Use `-DENABLE_DONATION_BUTTON=OFF` to exclude the donation button, acknowledgment,
+and related Options preference (enabled by default).
+
 Use `-DKMOD=OFF` to omit libkmod or `-DUDISKS2=OFF` for a native-only storage build.
 Use `-DBLUETOOTH=OFF` to omit the optional BlueZ D-Bus backend. Native controller
 association, rfkill reads and the permission-dependent read-only management query
