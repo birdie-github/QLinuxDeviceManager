@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 #include "aboutdialog.h"
+#include "treeexport.h"
 #ifdef QLDM_ENABLE_DONATION_BUTTON
 #include "donatebutton.h"
 #include <QDesktopServices>
@@ -109,6 +110,11 @@ MainWindow::MainWindow()
     systemInfo->setToolTip(tr("Show System Information"));
     systemInfo->setShortcut(QKeySequence(Qt::ALT | Qt::Key_I));
     connect(systemInfo, &QAction::triggered, this, &MainWindow::openSystemInformation);
+    auto *exportTree = file->addAction(tr("Export device tree…"));
+    connect(exportTree, &QAction::triggered, this, [this] {
+        if (filterTimer_.isActive()) applyFilter();
+        exportDeviceTree(tree_, DeviceModel::viewLabel(model_->view()), filterEdit_->text().trimmed());
+    });
     file->addSeparator();
     auto *quit = file->addAction(tr("&Quit"));
     quit->setShortcut(QKeySequence::Quit);

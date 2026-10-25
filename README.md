@@ -132,6 +132,21 @@ browse. Devices update automatically when hardware changes; use **F5** if you ne
 to refresh manually. Open Properties dialogs retain a snapshot until you reload
 them. System Information has its own **Refresh** and **Copy all** buttons.
 
+### Exporting device trees
+
+Choose **File → Export device tree…** to save the current view as an indented
+UTF-8 text file or a standalone interactive HTML document. Both formats include
+all rows allowed by the current search and device-visibility settings, including
+descendants of collapsed branches. Only displayed labels and their hierarchy are
+exported; no additional device properties are collected. Driver and resource
+views export their displayed rows too.
+
+HTML preserves the initial expansion state and includes Expand all / Collapse all
+buttons. It works offline with no external assets. The export captures the tree
+when the command is selected; if a deep search is still running, only the results
+already present are included. HTML also records the view, search text and capture
+time to give shared trees context.
+
 ### Wireless network details
 
 The Network tab includes a Wireless section for Wi-Fi interfaces. Read-only
