@@ -151,6 +151,50 @@ int main(int argc, char **argv)
     check(!searchDocumentMatch(efiDocument, "41 42 ff").isEmpty(), "EFI hex bytes are searchable");
     check(!searchDocumentMatch(efiDocument, "AB.").isEmpty(), "EFI printable byte view is searchable");
     check(!searchDocumentMatch(efiDocument, "4142ff").isEmpty(), "EFI compact hex bytes are searchable");
+    {
+        Device first = efi;
+        first.path = "/sys/firmware/efi/efivars/BootOrder-00000000-0000-0000-0000-000000000001";
+        first.parentPath = "/sys/firmware/efi/efivars";
+        first.sysname = "BootOrder-00000000-0000-0000-0000-000000000001";
+        first.name = "BootOrder";
+        first.category = "efi";
+        first.hidden = true;
+        Device second = first;
+        second.path = "/sys/firmware/efi/efivars/SecureBoot-00000000-0000-0000-0000-000000000001";
+        second.sysname = "SecureBoot-00000000-0000-0000-0000-000000000001";
+        second.name = "SecureBoot";
+        DeviceModel firmware;
+        firmware.setView(DeviceModel::View::Connection);
+        firmware.setShowInternal(true);
+        firmware.setInventory({first, second});
+        const auto find = [&](const QString &path) {
+            for (const auto &record : firmware.searchRecords())
+                if (record.device.path == path) return firmware.findDevice(path, record.device.generation);
+            return QModelIndex();
+        };
+        const auto firstIndex = find(first.path);
+        const auto branch = firstIndex.parent();
+        check(firstIndex.isValid() && branch == find(second.path).parent()
+              && branch.data(DeviceModel::NodeKeyRole).toString() == "firmware:efivars"
+              && branch.parent().data(DeviceModel::NodeKeyRole).toString() == "computer",
+              "UEFI records share one firmware group beneath the computer");
+        check(branch.data(DeviceModel::PathRole).toString().isEmpty()
+              && firmware.visibleCount() == 2 && firmware.searchRecords().size() == 2,
+              "Firmware grouping creates no device record and preserves variable counts");
+        DeviceFilter firmwareFilter;
+        firmwareFilter.setSourceModel(&firmware);
+        firmwareFilter.setQuery(firstIndex.data().toString(), false);
+        check(firmwareFilter.mapFromSource(firstIndex).isValid()
+              && firmwareFilter.mapFromSource(branch).isValid(),
+              "Searching a UEFI variable retains its firmware group");
+        firmware.setShowInternal(false);
+        check(firmware.rowCount(firmware.index(0, 0)) == 0,
+              "Hiding internal devices removes UEFI variables and their empty group");
+        firmware.setShowInternal(true);
+        firmware.setInventory({});
+        check(firmware.rowCount(firmware.index(0, 0)) == 0,
+              "Removing all variables leaves no empty firmware group");
+    }
     // Synthetic storage observations, not live hardware results. Missing health
     // must remain unavailable, while explicit cached evidence stays searchable.
     DeviceProperties storageFixture;
