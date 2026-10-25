@@ -1,4 +1,5 @@
 #include "browser.h"
+#include "browsermenu.h"
 #include "treeprojection.h"
 #include "inventoryfilter.h"
 #include "terminaltext.h"
@@ -11,7 +12,9 @@ namespace {
 using namespace finalcut;
 class Browser final : public FDialog {
 public:
-    Browser(Inventory inventory, FWidget *parent) : FDialog(parent), inventory_(std::move(inventory))
+    Browser(Inventory inventory, FWidget *parent) : FDialog(parent), inventory_(std::move(inventory)),
+        menu_(this, [this](bool connection) { setView(connection); },
+            [this](bool show) { showAll_ = show; populate(); })
     {
         // The dialog supplies the only frame and its caption. An unnamed
         // column keeps FINAL CUT from drawing a separate tree headline.
@@ -32,7 +35,7 @@ public:
             redraw();
         });
         tree_.addCallback("clicked", [this] { properties(); });
-        switch_.addCallback("clicked", [this] { connection_ = !connection_; populate(); });
+        switch_.addCallback("clicked", [this] { setView(!connection_); });
         refresh_.addCallback("clicked", [this] {
             Inventory next = collectInventory();
             if (!next.error.isEmpty()) {
@@ -43,7 +46,10 @@ public:
             populate();
         });
         quit_.addCallback("clicked", [this] { close(); });
-        viewKey_.addCallback("activate", [this] { connection_ = !connection_; populate(); });
+        viewKey_.addCallback("activate", [this] { setView(!connection_); });
+        menuKey_.addCallback("activate", [this] {
+            if (!modalOpen_) menu_.open();
+        });
         refreshKey_.addCallback("activate", [this] { refresh_.emitCallback("clicked"); });
         quitKey_.addCallback("activate", [this] { close(); });
         findKey_.addCallback("activate", [this] { find(); });
@@ -52,6 +58,12 @@ public:
         populate();
     }
 private:
+    void setView(bool connection)
+    {
+        if (connection_ == connection) return;
+        connection_ = connection;
+        populate();
+    }
     void find()
     {
         if (modalOpen_) return;
@@ -161,10 +173,13 @@ private:
     }
     void populate()
     {
-        setText(connection_ ? "Devices by connection" : "Devices by type");
+        FString title = connection_ ? "Devices by connection" : "Devices by type";
+        if (showAll_) title += " (All Devices)";
+        setText(title);
+        menu_.setState(connection_, showAll_);
         switch_.setText(connection_ ? "By &type" : "By &connection");
         const bool editing = filter_.hasFocus();
-        const int count = projection_.rebuild(inventory_, connection_, query_);
+        const int count = projection_.rebuild(inventory_, connection_, query_, showAll_);
         if (editing) filter_.setFocus();
         status_.setMessage(display(query_.isEmpty() ? QStringLiteral("F4: filter; Enter: properties")
             : QStringLiteral("%1 matches. Esc: clear filter").arg(count)));
@@ -190,6 +205,7 @@ private:
     void initLayout() override { adjustSize(); FDialog::initLayout(); }
     Inventory inventory_;
     bool connection_ = false;
+    bool showAll_ = false;
     bool modalOpen_ = false;
     bool filterVisible_ = false;
     QString query_;
@@ -197,6 +213,7 @@ private:
     DeviceTree tree_{this};
     FLabel treeCaption_{" Device (Enter: expand/collapse branch; properties for leaves) ", this};
     TreeProjection projection_{tree_};
+    BrowserMenu menu_;
     FButton switch_{this};
     FButton refresh_{"&Refresh", this};
     FButton quit_{"&Quit", this};
@@ -206,6 +223,7 @@ private:
     FStatusKey nextKey_{FKey::F3, "Next", &status_};
     FStatusKey previousKey_{FKey::F6, "Previous", &status_};
     FStatusKey refreshKey_{FKey::F5, "Refresh", &status_};
+    FStatusKey menuKey_{FKey::F9, "Menu", &status_};
     FStatusKey quitKey_{FKey::F10, "Quit", &status_};
 };
 }

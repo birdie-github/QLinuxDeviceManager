@@ -55,11 +55,15 @@ void TreeProjection::restoreState()
     if (selected) tree_.selectItem(selected, false);
 }
 
-int TreeProjection::rebuild(const Inventory &inventory, bool connection, const QString &query)
+int TreeProjection::rebuild(const Inventory &inventory, bool connection, const QString &query, bool showAll)
 {
+    // A visibility toggle should retain a selected search result if it survives.
+    const QString selected = initialized_ && connection_ == connection && showAll_ != showAll
+        ? keys_.value(tree_.getCurrentItem()) : QString();
     if (initialized_ && query_.isEmpty()) saveState();
     initialized_ = true;
     connection_ = connection;
+    showAll_ = showAll;
     query_ = query;
     inventory_ = &inventory;
     int count = 0;
@@ -84,7 +88,7 @@ int TreeProjection::rebuild(const Inventory &inventory, bool connection, const Q
             bool created = false;
             for (int i : order) {
                 const Device &d = devices[i];
-                if (d.hidden || d.category != QLatin1String(category.id)
+                if ((!showAll && d.hidden) || d.category != QLatin1String(category.id)
                     || (!query.isEmpty() && !matches(d, query))) continue;
                 if (!created) {
                     group = insertItem(display(categoryLabel(d.category)), -1, root);
@@ -98,7 +102,7 @@ int TreeProjection::rebuild(const Inventory &inventory, bool connection, const Q
         const auto parents = connectionParents(devices);
         QSet<QString> included;
         for (const Device &d : devices) {
-            if (d.hidden) continue;
+            if (!showAll && d.hidden) continue;
             QSet<QString> visited;
             QString path = d.path;
             while (lookup.contains(path) && !visited.contains(path)) {
@@ -149,6 +153,10 @@ int TreeProjection::rebuild(const Inventory &inventory, bool connection, const Q
     else {
         for (auto *item : keys_.keys()) item->expand();
         tree_.redraw();
+    }
+    if (!selected.isEmpty()) {
+        for (auto it = keys_.cbegin(); it != keys_.cend(); ++it)
+            if (it.value() == selected) { tree_.selectItem(it.key(), false); break; }
     }
     inventory_ = nullptr;
     return count;

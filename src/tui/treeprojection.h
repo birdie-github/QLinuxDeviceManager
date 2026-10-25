@@ -9,7 +9,7 @@
 class TreeProjection final {
 public:
     explicit TreeProjection(DeviceTree &tree) : tree_(tree) {}
-    int rebuild(const Inventory &inventory, bool connection, const QString &query);
+    int rebuild(const Inventory &inventory, bool connection, const QString &query, bool showAll);
 private:
     struct State { QSet<QString> expanded; QString selected; bool valid = false; };
     void saveState();
@@ -22,5 +22,6 @@ private:
     std::array<State, 2> states_;
     bool initialized_ = false;
     bool connection_ = false;
+    bool showAll_ = false;
     QString query_;
 };

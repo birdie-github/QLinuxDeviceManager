@@ -80,7 +80,29 @@ event loop is never run. FINAL CUT owns terminal setup and event dispatch.
 Both executables use the same discovery and classification implementation.
 Connection edges use the GUI's existing directory-ancestry bridging, hidden
 ancestor retention and separate UEFI firmware-record presentation group.
-The TUI omits hidden records except ancestors needed for connection context.
+By default the TUI omits hidden records except ancestors needed for connection
+context. F9 opens the native View popup, with Devices by type, Devices by
+connection, and the checked All Devices toggle. The toggle exposes the existing
+inventory's virtual/internal records using the same hidden flag as the GUI;
+it performs no enumeration or additional property reads. All Devices starts off
+and remains in effect across view changes, filtering and manual refresh for the
+current run. Active filtering also applies to the newly visible records.
+
+The menu shows the selected view and visibility setting. The window title adds
+`(All Devices)` while enabled so the mode remains visible with the popup closed.
+Unfiltered selection and expansion survive rebuilds where their rows remain;
+visibility changes also preserve a selected filtered result if it survives.
+The menu uses arrows, Enter, mouse activation and native Escape dismissal.
+It consumes no permanent row. The existing F2 shortcut and bottom buttons remain.
+
+Maintainer checks: open F9 and use both view entries and All Devices. Verify
+radio/check marks stay synchronized after F2 or clicking By type/connection,
+and the title indicator follows the toggle. Compare default/all visibility with
+the GUI in both views, including connection ancestors and UEFI records. Search
+for a normally hidden record, toggle All Devices and confirm results update.
+Check surviving selection/expansion, refresh, Escape from the popup with a filter
+active, repeated open/close, mouse activation, and resizing at 80x25 and 211x60.
+Open Properties and confirm its contextual bar hides F9 and restores it on close.
 
 Hardware-specific collectors can later be shared individually where independent
 of widgets. Their presentation needs separate FINAL CUT pages. System Information
@@ -140,6 +162,7 @@ The TUI source is separated by responsibility:
 
 - `main.cpp`: QtCore context, initial enumeration and FINAL CUT startup.
 - `browser.cpp`: controls, callbacks and match navigation.
+- `browsermenu.cpp`: native on-demand view/visibility menu.
 - `treeprojection.cpp`: type/connection construction, ancestor retention and state.
 - `inventoryfilter.cpp`: snapshot-only matching.
 - `devicetree.cpp`: FINAL CUT 0.9.1-compatible selection and scrolling.

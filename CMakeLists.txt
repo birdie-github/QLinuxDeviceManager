@@ -241,6 +241,7 @@ if(TUI)
     if(TARGET PkgConfig::FINALCUT)
         add_executable(qlinuxdevicemanager-tui src/tui/main.cpp
             src/tui/browser.h src/tui/browser.cpp
+            src/tui/browsermenu.h src/tui/browsermenu.cpp
             src/tui/treeprojection.h src/tui/treeprojection.cpp
             src/tui/inventoryfilter.h src/tui/inventoryfilter.cpp
             src/tui/terminaltext.h src/tui/terminaltext.cpp
