@@ -244,6 +244,7 @@ if(TUI)
         add_executable(qlinuxdevicemanager-tui src/tui/main.cpp
             src/tui/browser.h src/tui/browser.cpp
             src/tui/browsermenu.h src/tui/browsermenu.cpp
+            src/tui/modalcombobox.h src/tui/modalcombobox.cpp
             src/tui/systemdialog.h src/tui/systemdialog.cpp
             src/tui/systemsnapshot.h src/tui/systemsnapshot.cpp
             src/tui/systempages/pages.h

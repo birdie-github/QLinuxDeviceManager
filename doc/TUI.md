@@ -272,7 +272,7 @@ normal focus traversal, including the RAM chip selector and Close. Escape
 closes the dialog. The contextual bottom bar shows Previous/Next while open.
 
 Tables are plain aligned text with headers and alternating row shading. RAM
-shows one firmware record at a time, selected by Chip in the bottom selector;
+shows one firmware record at a time, selected by the dropdown above its table;
 CPU core groups and cache hierarchy are separate tables. There are no nested
 boxes, Copy/Copy All controls or dialog Refresh controls. The dialog is centered,
 bounded to 110x32 and shrinks for shorter pages and terminals. Long content
@@ -313,3 +313,29 @@ cycle short/long pages to check for stale borders. Verify stripes follow wrapped
 rows and scrolling. Close during collection, reopen, refresh from the browser
 and reopen again, then quit while a collection is active. Confirm no dialog
 Copy or Refresh controls appear and browser status keys return on close.
+
+### RAM selector compatibility
+
+The RAM summary remains above the selector; the selector replaces the static
+Chip heading immediately above the Property/Value table. The table and summary
+use separate borderless text views so scrolling the chip fields does not move
+its selector. Selection changes update only the table while the popup is open;
+accepting a selection can then refit the dialog. Page switching closes the popup
+before changing the layout.
+
+`modalcombobox.cpp` contains the FINAL CUT 0.9.1 compatibility adjustment. That
+release's dropdown is a non-modal window, so FApplication's modal-event filter
+rejects its input and focus events. Using the public child/flags APIs, the
+component gives only its owned FDropDownListBox the menu-window exemption also
+used by native menus. It does not modify dialog modality or the modal counter.
+Native popup drawing, item selection, mouse handling and Escape behavior remain
+in FINAL CUT. Tab/Shift+Tab explicitly dismiss the popup before normal traversal.
+
+Maintainer checks: open System Information, choose RAM and open the selector
+with its arrow or F4. Navigate with Up/Down and accept with Enter; click another
+entry with the mouse. Check that fields follow the selected chip and the popup
+stays interactive during navigation. Escape must dismiss it without closing the
+dialog; Tab/Shift+Tab must dismiss it and traverse controls. Check outside-click
+dismissal, scrolling with more than eight records if available, F7/F8 page
+switching, and resizing at 80x25 and 211x60. Confirm the selector replaces the
+static Chip heading, the summary stays visible, and the GUI remains unchanged.
