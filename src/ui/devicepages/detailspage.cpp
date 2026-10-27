@@ -94,3 +94,11 @@ void DetailsPage::copyAll()
     }
     QApplication::clipboard()->setText(values.join("\n\n"));
 }
+
+bool DetailsPage::selectProperty(const QString &id)
+{
+    const int index = property_->findData(id);
+    if (index < 0) return false;
+    property_->setCurrentIndex(index);
+    return true;
+}

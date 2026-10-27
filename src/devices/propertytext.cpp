@@ -1,4 +1,5 @@
 #include "propertytext.h"
+#include "efivalue.h"
 #include "devicelabel.h"
 #include <QCoreApplication>
 #include <QStringList>
@@ -109,25 +110,6 @@ QString storageFieldValue(const StorageField &field)
     }
     return {};
 }
-namespace {
-QString hexDump(const QByteArray &bytes)
-{
-    QStringList lines;
-    for (int offset = 0; offset < bytes.size(); offset += 16) {
-        QStringList hex;
-        QString printable;
-        for (int i = offset; i < qMin(offset + 16, static_cast<int>(bytes.size())); ++i) {
-            const unsigned char byte = static_cast<unsigned char>(bytes.at(i));
-            hex.append(QStringLiteral("%1").arg(byte, 2, 16, QLatin1Char('0')));
-            printable += byte >= 32 && byte <= 126 ? QLatin1Char(static_cast<char>(byte)) : QLatin1Char('.');
-        }
-        lines.append(QStringLiteral("%1  %2  %3").arg(offset, 8, 16, QLatin1Char('0'))
-            .arg(hex.join(' ').leftJustified(47), printable));
-    }
-    return lines.join('\n');
-}
-
-}
 
 QVector<PropertyEntry> propertyEntries(const DeviceProperties &snapshot, bool removed)
 {
@@ -187,7 +169,7 @@ QVector<PropertyEntry> propertyEntries(const DeviceProperties &snapshot, bool re
         const Attribute hex = raw("efi/hex");
         QString dump = propertyReadValue(hex);
         if (hex.state == ReadState::Available) {
-            dump = snapshot.efiBytes.isEmpty() ? QCoreApplication::translate("PropertiesDialog", "Empty file") : hexDump(snapshot.efiBytes);
+            dump = snapshot.efiBytes.isEmpty() ? QCoreApplication::translate("PropertiesDialog", "Empty file") : efiHexDump(snapshot.efiBytes);
             if (snapshot.efiTruncated) dump += '\n' + QCoreApplication::translate("PropertiesDialog", "Truncated: first 65536 bytes shown.");
         }
         add("efi/hex", QCoreApplication::translate("PropertiesDialog", "UEFI variable — hex dump"), dump,

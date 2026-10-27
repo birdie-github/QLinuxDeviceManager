@@ -37,6 +37,7 @@ signals:
     void reloadRequested();
 private:
     void rebuild();
+    void selectInitialPage();
     void setPageVisible(QWidget *page, bool visible, const QString &title, int index = -1);
     void rebuildResources();
     void rebuildStorage();
@@ -69,4 +70,6 @@ private:
     EventsPage *eventsPage_ = nullptr;
     DetailsPage *detailsPage_ = nullptr;
     bool removed_ = false;
+    bool initialSelectionPending_ = true;
+    bool rebuilding_ = false;
 };

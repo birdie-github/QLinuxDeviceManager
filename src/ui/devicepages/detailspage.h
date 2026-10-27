@@ -13,6 +13,7 @@ class DetailsPage final : public QWidget {
 public:
     explicit DetailsPage(QWidget *parent = nullptr);
     void setSnapshot(const QVector<PropertyEntry> &entries, const Device &device);
+    bool selectProperty(const QString &id);
 private:
     void rebuildDetails();
     void showDetail();

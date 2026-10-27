@@ -377,3 +377,17 @@ declared power, configuration and interface classes/drivers. Plain section
 headings and aligned alternating fields reuse the width-aware value wrapping.
 Power is declared, not measured; interface read errors remain explicit.
 There are no local Copy/Refresh controls. F7/F8 cycle only available pages.
+
+### Initial device-properties page
+
+Both frontends open the first embedded device-specific page, with General as
+the fallback. General, Driver, Details and Events are generic pages and do not
+participate. Resources is device-specific. The GUI chooses after its first
+successful property read; user tab changes while loading cancel that choice,
+and later reloads preserve the selection.
+
+EFI variables open Details instead. The GUI selects `efi/hex` by stable ID.
+The TUI puts the hex dump before inventory metadata and reads only the opened
+variable in a cancellable worker. It retains the world-readable-only rule,
+checks file identity before and after reading, and caps the dump at 64 KiB.
+The GUI and TUI share hex rendering, including the efivarfs attribute prefix.

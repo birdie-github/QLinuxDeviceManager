@@ -2,6 +2,7 @@
 #include "propertypages.h"
 #include "devicepages/resourcespage.h"
 #include "devicepages/usbpage.h"
+#include "devicepages/efipage.h"
 #include "propertypagecontrol.h"
 #include "propertiesstatus.h"
 #include "terminaltext.h"
@@ -20,7 +21,7 @@ private:
 class Properties final : public FDialog {
 public:
     Properties(const Device &device, FWidget *parent)
-        : FDialog(parent), device_(device), entries_(commonPropertyEntries(inventoryCommonProperties(device), false, PropertyPresentation::Tui))
+        : FDialog(parent), device_(device), entries_(commonPropertyEntries(inventoryCommonProperties(device), false, PropertyPresentation::Tui)), efiReader_(device)
     {
         setModal();
         const bool hasResources = device_.resources && device_.resources->hasInformation();
@@ -44,9 +45,25 @@ public:
             control->addCallback("next-page", [this] { setPage((page_ + 1) % pageCount()); });
             control->addCallback("previous-page", [this] { setPage((page_ + pageCount() - 1) % pageCount()); });
         }
-        setPage(0);
+        if (device_.subsystem == "efivarfs") {
+            efiReader_.start();
+            efiTimer_ = addTimer(100);
+        }
+        setPage(device_.subsystem == "efivarfs" ? 2 : pageCount() > 3 ? 3 : 0);
     }
+    ~Properties() override { if (efiTimer_) delTimer(efiTimer_); }
 private:
+    void onTimer(FTimerEvent *event) override
+    {
+        if (efiTimer_ && efiReader_.isFinished()) {
+            efiReader_.wait();
+            efiReady_ = true;
+            delTimer(efiTimer_);
+            efiTimer_ = 0;
+            if (pages_.at(page_) == 2) { adjustSize(); redraw(); }
+        }
+        FDialog::onTimer(event);
+    }
     int pageCount() const
     {
         return static_cast<int>(pages_.size());
@@ -69,6 +86,16 @@ private:
     PropertyPage pageContent(std::size_t columns = 0) const
     {
         const int kind = pages_.at(page_);
+        if (kind == 2 && device_.subsystem == "efivarfs") {
+            PropertyPage result = efiReady_ ? efiReader_.page()
+                : PropertyPage{QStringLiteral("Loading UEFI variable hex dump…\n"), {}};
+            result.text += '\n';
+            const int offset = result.text.count('\n');
+            const auto metadata = inventoryDetailsPage(device_);
+            result.text += metadata.text;
+            for (int line : metadata.shadedLines) result.shadedLines.append(offset + line);
+            return result;
+        }
         return kind == 4 ? usbPropertyPage(*device_.usb, device_.path, columns)
             : kind == 3 ? resourcesPropertyPage(*device_.resources)
             : kind == 2 ? inventoryDetailsPage(device_) : commonPropertyPage(entries_, kind, columns);
@@ -130,6 +157,9 @@ private:
     }
     const Device device_;
     const QVector<PropertyEntry> entries_;
+    EfiPageReader efiReader_;
+    int efiTimer_ = 0;
+    bool efiReady_ = false;
     int page_ = 0;
     QVector<int> pages_ {0, 1, 2};
     PropertyPageControl<PropertyTextView> text_{this};

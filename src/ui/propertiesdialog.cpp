@@ -11,6 +11,7 @@
 #include <QPushButton>
 #include <QTabWidget>
 #include <QThread>
+#include <QScopedValueRollback>
 #include <QVBoxLayout>
 #include <utility>
 
@@ -52,6 +53,10 @@ PropertiesDialog::PropertiesDialog(const Device &device, QWidget *parent) : QDia
     connect(reload_, &QPushButton::clicked, this, &PropertiesDialog::reloadRequested);
     layout->addWidget(buttons);
     rebuild();
+    if (device.subsystem == "efivarfs") selectInitialPage();
+    connect(tabs_, &QTabWidget::currentChanged, this, [this] {
+        if (!rebuilding_) initialSelectionPending_ = false;
+    });
 }
 void PropertiesDialog::setBusy(bool busy)
 {
@@ -77,6 +82,10 @@ void PropertiesDialog::acceptResult(DeviceProperties result)
     banner_->clear();
     banner_->hide();
     rebuild();
+    if (initialSelectionPending_) {
+        initialSelectionPending_ = false;
+        selectInitialPage();
+    }
 }
 void PropertiesDialog::reconcileInstance(const Device *current)
 {
@@ -100,6 +109,7 @@ void PropertiesDialog::markRemoved()
 }
 void PropertiesDialog::rebuild()
 {
+    const QScopedValueRollback<bool> rebuilding(rebuilding_, true);
     rebuildResources();
     const auto entries = propertyEntries(snapshot_, removed_);
     rebuildStorage();
@@ -230,4 +240,21 @@ void PropertiesDialog::rebuildStorage()
 void PropertiesDialog::updateEvents(const DeviceEventsSnapshot &history, const QString &monitorNote)
 {
     eventsPage_->updateEvents(device(), history, monitorNote);
+}
+
+void PropertiesDialog::selectInitialPage()
+{
+    if (device().subsystem == "efivarfs") {
+        tabs_->setCurrentWidget(detailsPage_);
+        detailsPage_->selectProperty(QStringLiteral("efi/hex"));
+        return;
+    }
+    for (int index = 0; index < tabs_->count(); ++index) {
+        QWidget *page = tabs_->widget(index);
+        if (page == generalPage_ || page == driverPage_ || page == detailsPage_ || page == eventsPage_)
+            continue;
+        tabs_->setCurrentIndex(index);
+        return;
+    }
+    tabs_->setCurrentWidget(generalPage_);
 }
