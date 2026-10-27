@@ -1,6 +1,7 @@
 #pragma once
 
 #include "device.h"
+#include "usbproperties.h"
 #include "deviceresources.h"
 #include "storageproperties.h"
 #include "networkproperties.h"
@@ -12,17 +13,6 @@
 #include <QByteArray>
 #include <QThread>
 
-// USB-specific values stay separate from generic Details metadata.
-struct UsbInterfaceProperties {
-    QString name;
-    QString path;
-    QHash<QString, Attribute> values;
-};
-struct UsbProperties {
-    QHash<QString, Attribute> values;
-    QVector<UsbInterfaceProperties> interfaces;
-    Attribute interfaceState;
-};
 struct BatteryProperties {
     bool applicable = false;
     QHash<QString, Attribute> values;

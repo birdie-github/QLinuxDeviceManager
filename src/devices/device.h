@@ -9,6 +9,7 @@
 #include <memory>
 
 struct DeviceResources;
+struct UsbProperties;
 
 enum class ReadState { Available, Unavailable, PermissionDenied, Removed, Error, Unsupported, NotApplicable };
 struct Attribute {
@@ -38,6 +39,7 @@ struct Device {
     quint64 eventInstance = 0; // Session-local live-event association token; zero is unassociated.
     quint64 generation = 0;   // Assigned by the GUI's inventory reconciliation.
     bool hidden = false;
+    std::shared_ptr<const UsbProperties> usb; // Immutable worker-collected USB configuration.
     std::shared_ptr<const DeviceResources> resources; // Immutable resource snapshot; worker-collected.
 };
 

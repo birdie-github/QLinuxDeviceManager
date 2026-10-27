@@ -101,3 +101,10 @@ PropertyPage inventoryDetailsPage(const Device &device)
     for (const QString &key : keys) rows.append({key, propertyReadValue(device.attributes.value(key))});
     return table(rows);
 }
+
+PropertyPage propertyFieldsPage(const QVector<PropertyEntry> &entries, std::size_t columns)
+{
+    QVector<Row> rows;
+    for (const PropertyEntry &entry : entries) rows.append({entry.label, entry.value});
+    return table(rows, columns);
+}

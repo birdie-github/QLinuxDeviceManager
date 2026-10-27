@@ -220,6 +220,7 @@ add_library(qldm-core STATIC
     src/devices/modulenames.h src/devices/modulenames.cpp
     src/devices/devicepresentation.h src/devices/devicepresentation.cpp
     src/devices/deviceresources.h src/devices/deviceresources.cpp
+    src/devices/usbproperties.h src/devices/usbproperties.cpp src/devices/usbformat.cpp
     src/devices/resourceformat.h src/devices/resourceformat.cpp
 )
 target_include_directories(qldm-core PUBLIC src/core src/devices)
@@ -261,6 +262,7 @@ if(TUI)
             src/tui/propertiesstatus.h src/tui/propertiesstatus.cpp
             src/tui/propertypages.h src/tui/propertypages.cpp
             src/tui/devicepages/resourcespage.h src/tui/devicepages/resourcespage.cpp
+            src/tui/devicepages/usbpage.h src/tui/devicepages/usbpage.cpp
             src/tui/devicetree.h src/tui/devicetree.cpp)
         target_include_directories(qlinuxdevicemanager-tui PRIVATE src/tui)
         target_link_libraries(qlinuxdevicemanager-tui PRIVATE
@@ -342,6 +344,7 @@ if(BUILD_TESTING)
     add_executable(device-search-test tests/device-search.cpp
         src/devices/devicesearch.cpp src/devices/devicesearch.h
         src/devices/deviceproperties.cpp src/devices/deviceproperties.h
+        src/devices/usbproperties.h src/devices/usbproperties.cpp src/devices/usbformat.cpp
         src/devices/networkproperties.cpp src/devices/networkproperties.h
         src/devices/ethernetproperties.cpp src/devices/ethernetproperties.h
         src/devices/genericnetlink.h src/devices/wirelessproperties.cpp src/devices/wirelessproperties.h

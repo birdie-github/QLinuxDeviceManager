@@ -15,6 +15,7 @@
 #include <sys/stat.h>
 #include <utility>
 #include "deviceresources.h"
+#include "usbproperties.h"
 
 namespace {
 QString text(const char *value)
@@ -175,6 +176,13 @@ Inventory collectInventory(const std::function<bool()> &cancelled)
                     : error == ENODEV ? ReadState::Removed : ReadState::Error, {}, error}});
             }
             d.resources = std::make_shared<const DeviceResources>(std::move(resources));
+        }
+        if (d.subsystem == "usb" && d.devtype == "usb_device") {
+            const int fd = open(path.constData(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+            const int error = fd < 0 ? errno : 0;
+            auto usb = collectUsbProperties(fd, d, error);
+            if (fd >= 0) close(fd);
+            d.usb = std::make_shared<const UsbProperties>(std::move(usb));
         }
         nameDevice(d);
         moduleNames.supplement(d);

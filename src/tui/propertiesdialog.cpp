@@ -1,6 +1,7 @@
 #include "propertiesdialog.h"
 #include "propertypages.h"
 #include "devicepages/resourcespage.h"
+#include "devicepages/usbpage.h"
 #include "propertypagecontrol.h"
 #include "propertiesstatus.h"
 #include "terminaltext.h"
@@ -22,16 +23,23 @@ public:
         : FDialog(parent), device_(device), entries_(commonPropertyEntries(inventoryCommonProperties(device), false, PropertyPresentation::Tui))
     {
         setModal();
-        const bool hasResources = pageCount() == 4;
+        const bool hasResources = device_.resources && device_.resources->hasInformation();
+        const bool hasUsb = device_.subsystem == "usb" && device_.devtype == "usb_device" && device_.usb;
+        if (hasResources) pages_.append(3);
+        if (hasUsb) pages_.append(4);
+        usb_.setVisible(hasUsb);
+        usb_.setEnable(hasUsb);
+        usb_.setFocusable(hasUsb);
+        usb_.addCallback("clicked", [this] { setPage(pages_.indexOf(4)); });
         resources_.setVisible(hasResources);
         resources_.setEnable(hasResources);
         resources_.setFocusable(hasResources);
-        resources_.addCallback("clicked", [this] { setPage(3); });
+        resources_.addCallback("clicked", [this] { setPage(pages_.indexOf(3)); });
         general_.addCallback("clicked", [this] { setPage(0); });
         driver_.addCallback("clicked", [this] { setPage(1); });
         details_.addCallback("clicked", [this] { setPage(2); });
         close_.addCallback("clicked", [this] { close(); });
-        const std::array<FWidget*, 6> controls {&text_, &general_, &driver_, &details_, &resources_, &close_};
+        const std::array<FWidget*, 7> controls {&text_, &general_, &driver_, &details_, &resources_, &usb_, &close_};
         for (auto *control : controls) {
             control->addCallback("next-page", [this] { setPage((page_ + 1) % pageCount()); });
             control->addCallback("previous-page", [this] { setPage((page_ + pageCount() - 1) % pageCount()); });
@@ -41,17 +49,18 @@ public:
 private:
     int pageCount() const
     {
-        return device_.resources && device_.resources->hasInformation() ? 4 : 3;
+        return static_cast<int>(pages_.size());
     }
     void setPage(int page)
     {
         page_ = page;
-        const std::array<const char*, 4> titles {"General", "Driver", "Details", "Resources"};
-        setText(display(deviceDisplayName(device_) + " - " + titles.at(page)));
+        const std::array<const char*, 5> titles {"General", "Driver", "Details", "Resources", "USB"};
+        setText(display(deviceDisplayName(device_) + " - " + titles.at(pages_.at(page))));
         general_.setEnable(page != 0);
         driver_.setEnable(page != 1);
         details_.setEnable(page != 2);
-        resources_.setEnable(pageCount() == 4 && page != 3);
+        resources_.setEnable(pages_.contains(3) && pages_.at(page) != 3);
+        usb_.setEnable(pages_.contains(4) && pages_.at(page) != 4);
         adjustSize();
         text_.scrollToBegin();
         if (isShown()) text_.setFocus();
@@ -59,8 +68,10 @@ private:
     }
     PropertyPage pageContent(std::size_t columns = 0) const
     {
-        return page_ == 3 ? resourcesPropertyPage(*device_.resources)
-            : page_ == 2 ? inventoryDetailsPage(device_) : commonPropertyPage(entries_, page_, columns);
+        const int kind = pages_.at(page_);
+        return kind == 4 ? usbPropertyPage(*device_.usb, device_.path, columns)
+            : kind == 3 ? resourcesPropertyPage(*device_.resources)
+            : kind == 2 ? inventoryDetailsPage(device_) : commonPropertyPage(entries_, kind, columns);
     }
     void renderContent(const PropertyPage &content)
     {
@@ -106,6 +117,7 @@ private:
         driver_.setGeometry(FPoint{15, int(h) - 3}, FSize{10, 1});
         details_.setGeometry(FPoint{27, int(h) - 3}, FSize{11, 1});
         resources_.setGeometry(FPoint{40, int(h) - 3}, FSize{13, 1});
+        usb_.setGeometry(FPoint{55, int(h) - 3}, FSize{8, 1});
         close_.setGeometry(FPoint{int(w) - 12, int(h) - 3}, FSize{10, 1});
         text_.scrollTo(scroll);
         FDialog::adjustSize();
@@ -119,11 +131,13 @@ private:
     const Device device_;
     const QVector<PropertyEntry> entries_;
     int page_ = 0;
+    QVector<int> pages_ {0, 1, 2};
     PropertyPageControl<PropertyTextView> text_{this};
     PropertyPageControl<FButton> general_{"&General", this};
     PropertyPageControl<FButton> driver_{"&Driver", this};
     PropertyPageControl<FButton> details_{"De&tails", this};
     PropertyPageControl<FButton> resources_{"&Resources", this};
+    PropertyPageControl<FButton> usb_{"&USB", this};
     PropertyPageControl<FButton> close_{"&Close", this};
     PropertiesStatus status_{FWidget::getStatusBar(), [this](int step) {
         setPage((page_ + step + pageCount()) % pageCount());

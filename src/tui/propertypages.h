@@ -9,3 +9,5 @@ struct PropertyPage {
 };
 PropertyPage commonPropertyPage(const QVector<PropertyEntry> &entries, int tab, std::size_t columns = 0);
 PropertyPage inventoryDetailsPage(const Device &device);
+
+PropertyPage propertyFieldsPage(const QVector<PropertyEntry> &entries, std::size_t columns = 0);

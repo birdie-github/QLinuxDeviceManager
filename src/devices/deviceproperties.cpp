@@ -223,88 +223,6 @@ void batteryProperties(DeviceProperties &result, int fd)
             battery.state.state = ReadState::Unsupported;
     }
 }
-void usbProperties(DeviceProperties &result, int fd)
-{
-    const Device &device = result.device;
-    if (device.subsystem != "usb" || device.devtype != "usb_device") return;
-    UsbProperties &usb = result.usb;
-    for (const char *key : {"bConfigurationValue", "bNumConfigurations", "configuration",
-                           "bNumInterfaces", "bmAttributes", "bMaxPower"})
-        usb.values.insert(QLatin1String(key), readText(fd, key));
-    const Attribute configuration = usb.values.value("bConfigurationValue");
-    const bool unconfigured = configuration.state == ReadState::Available
-        && (configuration.value.isEmpty() || configuration.value == "0");
-    if (unconfigured) {
-        for (const char *key : {"configuration", "bNumInterfaces", "bmAttributes", "bMaxPower"})
-            usb.values.insert(QLatin1String(key), {ReadState::NotApplicable, {}, 0});
-        usb.interfaceState = {ReadState::NotApplicable, {}, 0};
-    }
-    // Only direct USB interface children, never descendant devices behind hubs.
-    const DirectoryNames names = unconfigured ? DirectoryNames()
-        : boundedDirectoryNames(device.path, 256, {device.sysname + ":*"});
-    if (!unconfigured) usb.interfaceState = names.error ? failure(names.error) : available(QString());
-    for (const QString &name : names.names) {
-        if (QThread::currentThread()->isInterruptionRequested()) {
-            usb.interfaces.clear();
-            usb.interfaceState = failure(ECANCELED);
-            break;
-        }
-        UsbInterfaceProperties interface;
-        interface.name = name;
-        interface.path = device.path + '/' + name;
-        const QByteArray encoded = name.toUtf8();
-        Descriptor child(openat(fd, encoded.constData(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW));
-        struct stat before {};
-        const int readError = child.fd < 0 ? errno : (fstat(child.fd, &before) != 0 ? errno : 0);
-        if (readError) {
-            interface.values.insert("state", failure(readError));
-        } else {
-            const Attribute driver = linkTarget(child.fd, "driver");
-            for (const char *key : {"bInterfaceNumber", "bAlternateSetting", "bInterfaceClass",
-                                   "bInterfaceSubClass", "bInterfaceProtocol", "interface"})
-                interface.values.insert(QLatin1String(key), readText(child.fd, key));
-            Attribute binding = driver;
-            if (binding.state == ReadState::Available) binding.value = QFileInfo(binding.value).fileName();
-            else if (binding.state == ReadState::Unavailable && binding.error == ENOENT) binding = available(QString());
-            interface.values.insert("driver", binding);
-            const Attribute afterDriver = linkTarget(child.fd, "driver");
-            const Attribute afterSetting = readText(child.fd, "bAlternateSetting");
-            const Attribute setting = interface.values.value("bAlternateSetting");
-            struct stat after {};
-            if (fstatat(fd, encoded.constData(), &after, AT_SYMLINK_NOFOLLOW) != 0) {
-                const int error = errno;
-                interface.values.clear();
-                interface.values.insert("state", failure(error));
-            } else if (inodeIdentity(before) != inodeIdentity(after)
-                || driver.state != afterDriver.state || driver.value != afterDriver.value || driver.error != afterDriver.error
-                || setting.state != afterSetting.state || setting.value != afterSetting.value || setting.error != afterSetting.error) {
-                interface.values.clear();
-                interface.values.insert("state", failure(EAGAIN));
-            }
-        }
-        usb.interfaces.append(interface);
-    }
-    // A listing failure must not become a successful empty/partial result.
-    const Attribute count = usb.values.value("bNumInterfaces");
-    bool validCount = false;
-    const uint expected = count.value.toUInt(&validCount);
-    if (!unconfigured && !names.error && names.names.isEmpty() && count.state != ReadState::Available)
-        usb.interfaceState = count;
-    if (!unconfigured && !names.error && count.state == ReadState::Available
-        && (!validCount || expected > 255 || expected != static_cast<uint>(names.names.size()))) {
-        usb.interfaces.clear();
-        usb.interfaceState = failure(validCount && expected <= 255 ? EAGAIN : EINVAL);
-    }
-    // Configuration changes invalidate both its declarations and interface list.
-    const Attribute afterConfiguration = readText(fd, "bConfigurationValue");
-    if (configuration.state != afterConfiguration.state || configuration.value != afterConfiguration.value
-        || configuration.error != afterConfiguration.error) {
-        usb.interfaces.clear();
-        const Attribute changed = failure(EAGAIN);
-        for (auto it = usb.values.begin(); it != usb.values.end(); ++it) it.value() = changed;
-        usb.interfaceState = changed;
-    }
-}
 
 NetworkProperties networkInterface(int fd, const QString &path, const QString &name, bool ethernetDetails)
 {
@@ -601,7 +519,7 @@ DeviceProperties collectDeviceProperties(const Device &device, bool cachedStorag
             result.storage = collectStorageProperties(d, cachedStorageService);
         if (!QThread::currentThread()->isInterruptionRequested()) networkProperties(result, deviceFd.fd, cachedStorageService);
         if (cachedStorageService && !QThread::currentThread()->isInterruptionRequested())
-            usbProperties(result, deviceFd.fd);
+            result.usb = collectUsbProperties(deviceFd.fd, d);
         if (cachedStorageService && !QThread::currentThread()->isInterruptionRequested())
             batteryProperties(result, deviceFd.fd);
         if (cachedStorageService && d.subsystem == "video4linux" && d.sysname.startsWith("video")

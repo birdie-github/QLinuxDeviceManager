@@ -363,3 +363,17 @@ each corresponding side. Smaller desktops may use the full available area.
 Resize reflows General/Driver; Details and Resources retain their existing
 report layouts. Check long names, paths, identifiers, Unicode, page navigation
 and resizing at 80x25 and larger terminal sizes.
+
+### USB device page
+
+USB appears only for USB device nodes (`usb_device`), including root hubs;
+interface nodes and non-USB descendants do not receive an inherited USB page.
+The inventory worker captures bounded configuration and direct-interface
+metadata through the same collector used by GUI properties. Opening or resizing
+a TUI dialog performs no hardware reads. Refresh/F5 refreshes the inventory.
+
+The page shares GUI field interpretation and reports connection version/rate,
+declared power, configuration and interface classes/drivers. Plain section
+headings and aligned alternating fields reuse the width-aware value wrapping.
+Power is declared, not measured; interface read errors remain explicit.
+There are no local Copy/Refresh controls. F7/F8 cycle only available pages.
