@@ -636,9 +636,9 @@ int main(int argc, char **argv)
         drive.id = "/org/freedesktop/UDisks2/drives/ata_fixture";
         drive.fields = {sf("org.freedesktop.UDisks2.Drive/Model", "ATA fixture"),
             sf("org.freedesktop.UDisks2.Drive.Ata/SmartFailing", "0", StorageField::Format::AtaHealth)};
-        drive.ataAttributes = {{194, "temperature-celsius", 0, 100, 95, 0, 306000, 4},
-            {9, "power-on-hours", 0, 0, -1, 0, 1234567, 0},
-            {5, "reallocated-sector-count", 3, 100, 100, 36, 0, 3}};
+        drive.ataAttributes = {{194, "temperature-celsius", 0, 100, 95, 0, 306000, {}, {}, 4},
+            {9, "power-on-hours", 0, 0, -1, 0, 1234567, {}, {}, 0},
+            {5, "reallocated-sector-count", 3, 100, 100, 36, 0, {}, {}, 3}};
         health.entities = {drive};
         report = storagePresentation(health, drive.id);
         const auto &table = report.health.front().ataAttributes;
