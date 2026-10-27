@@ -5,6 +5,11 @@ using namespace finalcut;
 void DeviceTree::onKeyPress(FKeyEvent *event)
 {
     auto *item = getCurrentItem();
+    if (event->key() == FKey::Ctrl_p) {
+        emitCallback("clicked");
+        event->accept();
+        return;
+    }
     if ((event->key() == FKey::Enter || event->key() == FKey::Return)
         && item && item->hasChildren()) {
         if (item->isExpand()) item->collapse();

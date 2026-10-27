@@ -391,3 +391,19 @@ The TUI puts the hex dump before inventory metadata and reads only the opened
 variable in a cancellable worker. It retains the world-readable-only rule,
 checks file identity before and after reading, and caps the dump at 64 KiB.
 The GUI and TUI share hex rendering, including the efivarfs attribute prefix.
+
+### Type-view hierarchy
+
+Both frontends share a type-view projection. All Devices nests logical
+network/audio/DRM/Bluetooth endpoints, USB interfaces/root hubs and grouped
+implementation records under their nearest recorded sysfs parent. Each record
+appears once; top-level devices retain their category, and children may cross
+category boundaries. Roles replace inherited model names only on nested nodes.
+
+ACPI-to-ACPI ancestry is retained in either visibility mode. Normally hidden
+ancestors needed to explain visible ACPI nodes remain as context. No firmware
+ID matching or ACPI-to-physical-device mapping is inferred. Connection view and
+raw inventory ancestry are unchanged. Missing parents remain category roots;
+cyclic metadata is cut to avoid recursive trees. Search keeps ancestors of
+matching descendants. Ctrl+P opens TUI properties on a device branch or leaf;
+Enter continues to expand/collapse branches or open leaf properties.

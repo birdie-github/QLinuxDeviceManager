@@ -1,5 +1,6 @@
 #include "treeprojection.h"
 #include "inventoryfilter.h"
+#include "typeprojection.h"
 #include "terminaltext.h"
 #include "devicelabel.h"
 #include <QSysInfo>
@@ -83,19 +84,44 @@ int TreeProjection::rebuild(const Inventory &inventory, bool connection, const Q
         return cmp ? cmp < 0 : devices[a].path < devices[b].path;
     });
     if (!connection) {
-        for (const Category &category : categories()) {
-            FListViewItem *group = nullptr;
-            bool created = false;
+        const auto type = typeProjection(devices, showAll);
+        QSet<QString> included = type.included;
+        if (!query.isEmpty()) {
+            QSet<QString> filtered;
             for (int i : order) {
-                const Device &d = devices[i];
-                if ((!showAll && d.hidden) || d.category != QLatin1String(category.id)
-                    || (!query.isEmpty() && !matches(d, query))) continue;
-                if (!created) {
-                    group = insertItem(display(categoryLabel(d.category)), -1, root);
-                    created = true;
-                }
-                insertItem(display(deviceDisplayName(d, true)), i, group);
+                const Device &device = devices[i];
+                if (!included.contains(device.path) || !matches(device, query)) continue;
                 ++count;
+                QString path = device.path;
+                while (included.contains(path)) {
+                    filtered.insert(path);
+                    path = type.parents.value(path);
+                }
+            }
+            included = std::move(filtered);
+        }
+        QHash<QString, FListViewItem *> nodes, groups;
+        std::function<FListViewItem *(int)> ensure = [&](int i) -> FListViewItem * {
+            const Device &device = devices[i];
+            if (nodes.contains(device.path)) return nodes.value(device.path);
+            const QString ancestor = type.parents.value(device.path);
+            FListViewItem *parent = nullptr;
+            if (included.contains(ancestor)) parent = ensure(lookup.value(ancestor));
+            else {
+                if (!groups.contains(device.category))
+                    groups.insert(device.category, insertItem(display(categoryLabel(device.category)), -1, root));
+                parent = groups.value(device.category);
+            }
+            auto *item = insertItem(display(typeDeviceLabel(device, type.parents.contains(device.path), true)), i, parent);
+            nodes.insert(device.path, item);
+            return item;
+        };
+        for (const Category &category : categories()) {
+            for (int i : order) {
+                if (!included.contains(devices[i].path)) continue;
+                QString top = devices[i].path;
+                while (included.contains(type.parents.value(top))) top = type.parents.value(top);
+                if (devices[lookup.value(top)].category == QLatin1String(category.id)) ensure(i);
             }
         }
     } else {

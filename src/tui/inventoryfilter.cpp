@@ -1,5 +1,6 @@
 #include "inventoryfilter.h"
 #include "devicelabel.h"
+#include "typeprojection.h"
 
 // Snapshot-only matching: do not trigger deep collectors or filesystem reads.
 bool matches(const Device &d, const QString &query)
@@ -7,7 +8,7 @@ bool matches(const Device &d, const QString &query)
     const auto contains = [&query](const QString &text) {
         return text.contains(query, Qt::CaseInsensitive);
     };
-    for (const QString &text : {deviceDisplayName(d, true), d.name, d.sysname,
+    for (const QString &text : {deviceDisplayName(d, true), typeDeviceLabel(d, true, true), d.name, d.sysname,
             d.path, d.parentPath, d.driver, d.driverModule, d.subsystem,
             d.category, categoryLabel(d.category)})
         if (contains(text)) return true;

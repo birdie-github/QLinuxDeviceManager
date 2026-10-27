@@ -213,7 +213,7 @@ private:
         const bool editing = filter_.hasFocus();
         const int count = projection_.rebuild(inventory_, connection_, query_, showAll_);
         if (editing) filter_.setFocus();
-        status_.setMessage(display(query_.isEmpty() ? QStringLiteral("F4: filter; Enter: properties")
+        status_.setMessage(display(query_.isEmpty() ? QStringLiteral("F4: filter; Ctrl+P: properties")
             : QStringLiteral("%1 matches. Esc: clear filter").arg(count)));
         redraw();
     }
@@ -244,7 +244,7 @@ private:
     QString query_;
     FLineEdit filter_{this};
     DeviceTree tree_{this};
-    FLabel treeCaption_{" Device (Enter: expand/collapse branch; properties for leaves) ", this};
+    FLabel treeCaption_{" Device (Enter: expand/collapse or open leaf; Ctrl+P: properties) ", this};
     TreeProjection projection_{tree_};
     SystemSnapshot systemSnapshot_;
     BrowserMenu menu_;

@@ -1,4 +1,5 @@
 #include "inventory.h"
+#include "typeprojection.h"
 #include "devicemodel.h"
 #include "icontheme.h"
 #include "devicelabel.h"
@@ -113,7 +114,7 @@ QVariant DeviceModel::data(const QModelIndex &i, int role) const
                     tooltip += QStringLiteral("\n%1: %2").arg(QLatin1String(key), attribute.value);
             }
         }
-        if (n->context) tooltip += QStringLiteral("\n") + tr("Ancestor retained for connection context");
+        if (n->context) tooltip += QStringLiteral("\n") + tr("Ancestor retained for hierarchy context");
         if (!d->representedByPath.isEmpty())
             tooltip += QStringLiteral("\n%1: %2").arg(tr("Represented by"), d->representedByPath);
         QStringList grouped;
@@ -254,10 +255,13 @@ void DeviceModel::rebuild()
     std::sort(members.begin(), members.end(), [](const Device *a, const Device *b) {
         return a->path < b->path;
     });
+    const auto type = view_ == View::Type ? typeProjection(devices_, showInternal_) : TypeProjection();
     QHash<QString, QString> labels;
     QHash<QString, int> counts;
     for (const Device *d : members) {
-        const QString label = deviceDisplayName(*d, showInternal_);
+        const QString label = view_ == View::Type
+            ? typeDeviceLabel(*d, type.parents.contains(d->path), showInternal_)
+            : deviceDisplayName(*d, showInternal_);
         labels.insert(d->path, label);
         if (showInternal_ || !d->hidden) ++counts[d->category + ":" + label];
     }
@@ -267,7 +271,8 @@ void DeviceModel::rebuild()
         if (counts.value(d->category + ":" + label) <= 1) continue;
         if (d->subsystem == "efivarfs" && !showInternal_)
             labels[d->path] = tr("%1 (namespace %2)").arg(label).arg(++namespaceNumbers[label]);
-        else labels[d->path] = deviceDisplayName(*d, true);
+        else labels[d->path] = view_ == View::Type
+            ? typeDeviceLabel(*d, type.parents.contains(d->path), true) : deviceDisplayName(*d, true);
     }
     std::sort(members.begin(), members.end(), [&labels](const Device *a, const Device *b) {
         const int cmp = naturalCompare(labels.value(a->path), labels.value(b->path));
@@ -375,6 +380,21 @@ void DeviceModel::rebuild()
             if (resourcesByConnection && (showInternal_ || !d->hidden) && hasResources(*d))
                 for (const ResourceRow &row : resourceRows(*d->resources)) resourceNode(item, *d, row);
         }
+    } else if (view_ == View::Type) {
+        QHash<QString, Node *> nodes;
+        std::function<Node *(const Device &)> ensure = [&](const Device &device) -> Node * {
+            if (nodes.contains(device.path)) return nodes.value(device.path);
+            const QString ancestor = type.parents.value(device.path);
+            Node *parent = type.included.contains(ancestor)
+                ? ensure(devices_.at(lookup_.value(ancestor)))
+                : group(computer, "category:" + device.category, categoryLabel(device.category), device.category);
+            Node *item = deviceNode(parent, device);
+            item->context = !showInternal_ && device.hidden;
+            nodes.insert(device.path, item);
+            return item;
+        };
+        for (const Device *device : members)
+            if (type.included.contains(device->path)) ensure(*device);
     } else {
         for (const Device *d : members) {
             if (!showInternal_ && d->hidden) continue;

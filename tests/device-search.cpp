@@ -53,6 +53,62 @@ int main(int argc, char **argv)
         check(bt.devices.isEmpty() && bt.values.value("supported/11").state == ReadState::Removed,
               "Device identity failure invalidates Bluetooth data and known-device associations");
     }
+    {
+        Device controller;
+        controller.path = "/sys/devices/pci-fixture/0000:05:00.0";
+        controller.incarnation = "controller";
+        controller.sysname = "0000:05:00.0";
+        controller.name = "Fixture Ethernet controller";
+        controller.subsystem = "pci";
+        controller.category = "network";
+        Device endpoint = controller;
+        endpoint.path += "/net/enp5s0";
+        endpoint.incarnation = "interface";
+        endpoint.parentPath = controller.path;
+        endpoint.subsystem = "net";
+        endpoint.sysname = "enp5s0";
+        endpoint.hidden = true;
+        endpoint.representedByPath = controller.path;
+        DeviceModel hierarchy;
+        hierarchy.setInventory({endpoint, controller});
+        const auto find = [&](const QString &path) {
+            for (const auto &record : hierarchy.searchRecords())
+                if (record.device.path == path)
+                    return hierarchy.findDevice(path, record.device.generation);
+            return QModelIndex();
+        };
+        check(hierarchy.visibleCount() == 1 && !find(endpoint.path).isValid(),
+              "Default type view keeps grouped network endpoints hidden");
+        hierarchy.setShowInternal(true);
+        const auto child = find(endpoint.path);
+        check(hierarchy.visibleCount() == 2 && child.isValid()
+              && child.parent() == find(controller.path)
+              && child.data().toString() == "Network interface [enp5s0]",
+              "All Devices nests the interface once under its actual controller with a role label");
+        hierarchy.setView(DeviceModel::View::Connection);
+        check(find(endpoint.path).parent() == find(controller.path),
+              "Connection projection retains actual network ancestry");
+        Device acpi;
+        acpi.path = "/sys/devices/LNXSYSTM:00";
+        acpi.incarnation = "acpi-root";
+        acpi.sysname = "LNXSYSTM:00";
+        acpi.name = acpi.sysname;
+        acpi.subsystem = "acpi";
+        acpi.category = "system";
+        acpi.hidden = true;
+        Device resource = acpi;
+        resource.path += "/PNP0C02:0d";
+        resource.parentPath = acpi.path;
+        resource.incarnation = "acpi-resource";
+        resource.sysname = "PNP0C02:0d";
+        resource.name = "Motherboard resources";
+        resource.hidden = false;
+        hierarchy.setView(DeviceModel::View::Type);
+        hierarchy.setShowInternal(false);
+        hierarchy.setInventory({resource, acpi});
+        check(hierarchy.visibleCount() == 2 && find(resource.path).parent() == find(acpi.path),
+              "Type view retains hidden ACPI ancestors as context without losing visible descendants");
+    }
     Device device;
     device.path = "/sys/devices/fixture";
     device.incarnation = "fixture:1";

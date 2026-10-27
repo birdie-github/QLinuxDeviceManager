@@ -205,6 +205,7 @@ target_compile_definitions(qlinuxdevicemanager PRIVATE
 # Shared synchronous discovery and naming; neither frontend toolkit belongs here.
 add_library(qldm-core STATIC
     src/core/inventory.h src/core/inventory.cpp src/core/connectionparents.cpp
+    src/core/typeprojection.h src/core/typeprojection.cpp
     src/core/commonproperties.h src/core/commonproperties.cpp src/core/commonpropertywording.h
     src/core/systemreport.h src/core/systemreportplatform.cpp
     src/core/systemreportprocessor.cpp src/core/systemreportmemory.cpp
@@ -370,6 +371,7 @@ if(BUILD_TESTING)
         src/devices/acpivendors.cpp src/devices/acpivendors.h
         src/ui/devicemodel.cpp src/ui/devicemodel.h
         src/core/connectionparents.cpp src/core/inventory.h
+        src/core/typeprojection.h src/core/typeprojection.cpp
         src/core/commonproperties.h src/core/commonproperties.cpp src/core/commonpropertywording.h
         src/ui/icontheme.cpp src/ui/icontheme.h
         src/ui/devicefilter.cpp src/ui/devicefilter.h)
@@ -400,6 +402,9 @@ if(BUILD_TESTING)
     target_include_directories(system-properties-test PRIVATE src/devices)
     target_link_libraries(system-properties-test PRIVATE Qt6::Core Qt6::Network PkgConfig::UDEV)
     add_test(NAME system-properties COMMAND system-properties-test)
+    add_executable(type-projection-test tests/type-projection.cpp)
+    target_link_libraries(type-projection-test PRIVATE qldm-core)
+    add_test(NAME type-projection COMMAND type-projection-test)
     add_executable(system-report-test tests/system-report.cpp)
     target_link_libraries(system-report-test PRIVATE qldm-core)
     add_test(NAME system-report COMMAND system-report-test)
