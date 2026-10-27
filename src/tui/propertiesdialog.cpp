@@ -1,5 +1,6 @@
 #include "propertiesdialog.h"
 #include "propertypages.h"
+#include "devicepages/resourcespage.h"
 #include "propertypagecontrol.h"
 #include "propertiesstatus.h"
 #include "terminaltext.h"
@@ -9,30 +10,46 @@
 
 namespace {
 using namespace finalcut;
+class PropertyTextView : public FTextView {
+public:
+    using FTextView::FTextView;
+private:
+    void drawBorder() override {}
+};
 class Properties final : public FDialog {
 public:
     Properties(const Device &device, FWidget *parent)
         : FDialog(parent), device_(device), entries_(commonPropertyEntries(inventoryCommonProperties(device)))
     {
         setModal();
+        const bool hasResources = pageCount() == 4;
+        resources_.setVisible(hasResources);
+        resources_.setEnable(hasResources);
+        resources_.setFocusable(hasResources);
+        resources_.addCallback("clicked", [this] { setPage(3); });
         general_.addCallback("clicked", [this] { setPage(0); });
         driver_.addCallback("clicked", [this] { setPage(1); });
         details_.addCallback("clicked", [this] { setPage(2); });
         close_.addCallback("clicked", [this] { close(); });
-        const std::array<FWidget*, 5> controls {&text_, &general_, &driver_, &details_, &close_};
+        const std::array<FWidget*, 6> controls {&text_, &general_, &driver_, &details_, &resources_, &close_};
         for (auto *control : controls) {
-            control->addCallback("next-page", [this] { setPage((page_ + 1) % 3); });
-            control->addCallback("previous-page", [this] { setPage((page_ + 2) % 3); });
+            control->addCallback("next-page", [this] { setPage((page_ + 1) % pageCount()); });
+            control->addCallback("previous-page", [this] { setPage((page_ + pageCount() - 1) % pageCount()); });
         }
         setPage(0);
     }
 private:
+    int pageCount() const
+    {
+        return device_.resources && device_.resources->hasInformation() ? 4 : 3;
+    }
     void setPage(int page)
     {
         page_ = page;
-        const std::array<const char*, 3> titles {"General", "Driver", "Details"};
+        const std::array<const char*, 4> titles {"General", "Driver", "Details", "Resources"};
         setText(display(deviceDisplayName(device_) + " - " + titles.at(page)));
-        const PropertyPage content = page == 2 ? inventoryDetailsPage(device_) : commonPropertyPage(entries_, page);
+        const PropertyPage content = page == 3 ? resourcesPropertyPage(*device_.resources)
+            : page == 2 ? inventoryDetailsPage(device_) : commonPropertyPage(entries_, page);
         const QString &text = content.text;
         preferredHeight_ = std::clamp<std::size_t>(static_cast<std::size_t>(text.count('\n')) + 9, 12, 28);
         text_.setText(display(text));
@@ -48,6 +65,7 @@ private:
         general_.setEnable(page != 0);
         driver_.setEnable(page != 1);
         details_.setEnable(page != 2);
+        resources_.setEnable(pageCount() == 4 && page != 3);
         if (isShown()) {
             adjustSize();
             text_.setFocus();
@@ -58,8 +76,8 @@ private:
     {
         const auto desktopWidth = getDesktopWidth();
         const auto desktopHeight = getDesktopHeight();
-        const auto w = std::min<std::size_t>(100, std::max<std::size_t>(50,
-            desktopWidth > 4 ? desktopWidth - 4 : 50));
+        const auto w = std::min<std::size_t>(100, std::max<std::size_t>(65,
+            desktopWidth > 4 ? desktopWidth - 4 : 65));
         const auto h = std::min(preferredHeight_, std::max<std::size_t>(10,
             desktopHeight > 4 ? desktopHeight - 4 : 10));
         const int x = desktopWidth > w ? int((desktopWidth - w) / 2) + 1 : 1;
@@ -77,6 +95,7 @@ private:
         general_.setGeometry(FPoint{2, int(h) - 3}, FSize{11, 1});
         driver_.setGeometry(FPoint{15, int(h) - 3}, FSize{10, 1});
         details_.setGeometry(FPoint{27, int(h) - 3}, FSize{11, 1});
+        resources_.setGeometry(FPoint{40, int(h) - 3}, FSize{13, 1});
         close_.setGeometry(FPoint{int(w) - 12, int(h) - 3}, FSize{10, 1});
         FDialog::adjustSize();
     }
@@ -90,13 +109,14 @@ private:
     const QVector<PropertyEntry> entries_;
     std::size_t preferredHeight_ = 12;
     int page_ = 0;
-    PropertyPageControl<FTextView> text_{this};
+    PropertyPageControl<PropertyTextView> text_{this};
     PropertyPageControl<FButton> general_{"&General", this};
     PropertyPageControl<FButton> driver_{"&Driver", this};
     PropertyPageControl<FButton> details_{"De&tails", this};
+    PropertyPageControl<FButton> resources_{"&Resources", this};
     PropertyPageControl<FButton> close_{"&Close", this};
     PropertiesStatus status_{FWidget::getStatusBar(), [this](int step) {
-        setPage((page_ + step + 3) % 3);
+        setPage((page_ + step + pageCount()) % pageCount());
     }};
 };
 }

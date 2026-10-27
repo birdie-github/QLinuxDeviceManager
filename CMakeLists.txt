@@ -70,7 +70,6 @@ add_executable(qlinuxdevicemanager
     src/devices/storageproperties.h src/devices/storageproperties.cpp
     src/devices/directoryscan.h src/devices/naturalsort.h
     src/devices/storagepresentation.h src/devices/storagepresentation.cpp
-    src/devices/resourceformat.h src/devices/resourceformat.cpp
 
 
 
@@ -221,6 +220,7 @@ add_library(qldm-core STATIC
     src/devices/modulenames.h src/devices/modulenames.cpp
     src/devices/devicepresentation.h src/devices/devicepresentation.cpp
     src/devices/deviceresources.h src/devices/deviceresources.cpp
+    src/devices/resourceformat.h src/devices/resourceformat.cpp
 )
 target_include_directories(qldm-core PUBLIC src/core src/devices)
 target_link_libraries(qldm-core PUBLIC Qt6::Core PRIVATE Qt6::Network PkgConfig::UDEV)
@@ -260,6 +260,7 @@ if(TUI)
             src/tui/propertypagecontrol.h
             src/tui/propertiesstatus.h src/tui/propertiesstatus.cpp
             src/tui/propertypages.h src/tui/propertypages.cpp
+            src/tui/devicepages/resourcespage.h src/tui/devicepages/resourcespage.cpp
             src/tui/devicetree.h src/tui/devicetree.cpp)
         target_include_directories(qlinuxdevicemanager-tui PRIVATE src/tui)
         target_link_libraries(qlinuxdevicemanager-tui PRIVATE

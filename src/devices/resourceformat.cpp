@@ -1,5 +1,5 @@
 #include "resourceformat.h"
-#include "propertytext.h"
+#include "commonproperties.h"
 #include <QCoreApplication>
 #include <QStringList>
 
