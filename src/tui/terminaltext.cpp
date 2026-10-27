@@ -23,16 +23,20 @@ QStringList wrapTerminalLine(QString line, std::size_t columns)
     QStringList result;
     while (finalcut::getColumnWidth(display(line)) > columns) {
         QTextBoundaryFinder boundaries(QTextBoundaryFinder::Grapheme, line);
-        qsizetype fit = 0, preferred = 0;
+        qsizetype fit = 0, whitespace = 0, punctuation = 0;
         for (int end = boundaries.toNextBoundary(); end >= 0; end = boundaries.toNextBoundary()) {
             if (finalcut::getColumnWidth(display(line.left(end))) > columns - 1) break;
             fit = end;
             const QChar last = line.at(end - 1);
-            if (!last.isLetterOrNumber() && last != '_' && !last.isMark()) preferred = end;
+            if (last.isSpace()) whitespace = end;
+            else if (!last.isLetterOrNumber() && last != '_' && !last.isMark()
+                     && last.category() != QChar::Punctuation_Open)
+                punctuation = end;
         }
         // A grapheme wider than the viewport cannot be split safely.
         if (!fit) { result.append(line); return result; }
-        const qsizetype cut = preferred ? preferred : fit;
+        // Keep space-delimited values (e.g. [0000:00:14.3]) together first.
+        const qsizetype cut = whitespace ? whitespace : punctuation ? punctuation : fit;
         result.append(line.left(cut) + QChar(0x25ba));
         line.remove(0, cut);
     }

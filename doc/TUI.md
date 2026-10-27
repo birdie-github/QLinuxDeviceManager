@@ -352,8 +352,8 @@ to omit that field entirely, including for EFI entries. Both text variants use
 ### Device property wrapping
 
 General and Driver wrap values to the text viewport using terminal display
-columns. Continuations end in `►`; breaks prefer non-word characters and
-otherwise preserve grapheme boundaries. Explicit newlines remain separate.
+columns. Continuations end in `►`; breaks prefer whitespace, then punctuation
+(excluding opening brackets), and finally grapheme boundaries. Explicit newlines remain separate.
 All physical lines belonging to a property retain its alternating shading.
 Narrow value columns switch to a label above an indented value.
 
