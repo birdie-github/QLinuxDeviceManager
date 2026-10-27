@@ -10,6 +10,8 @@ does not upload it.
 
 ![QLinuxDeviceManager showing the Linux hardware device tree](screenshots/main-window.webp)
 
+![QLinuxDeviceManager running in terminal/console and showing the Linux hardware device tree](screenshots/main-window-tui.webp)
+
 [More screenshots](SCREENSHOTS.md) ·
 [Download an AppImage](https://github.com/birdie-github/QLinuxDeviceManager/releases) ·
 [Build from source](doc/implementation.md#build-and-installation)
