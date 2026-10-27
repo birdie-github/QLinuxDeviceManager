@@ -105,6 +105,7 @@ To compile and install the application yourself, see the
 * [Alt Linux package](https://packages.altlinux.org/en/sisyphus/srpms/qlinuxdevicemanager/), maintainer [Nikolay Strelkov](https://github.com/k0ly4n)
 * [Arch Linux AUR](https://aur.archlinux.org/packages/qlinux-device-manager-appimage) - **unofficial**
 * [pkgs.org package](https://pkgs.org/download/qlinuxdevicemanager)
+* [Suse OBS](https://build.opensuse.org/package/show/home:AndnoVember:test/QLinuxDeviceManager)
 
 ## Getting started
 
