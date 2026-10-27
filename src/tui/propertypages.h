@@ -7,5 +7,5 @@ struct PropertyPage {
     QString text;
     QVector<int> shadedLines; // Physical lines of alternating logical fields.
 };
-PropertyPage commonPropertyPage(const QVector<PropertyEntry> &entries, int tab);
+PropertyPage commonPropertyPage(const QVector<PropertyEntry> &entries, int tab, std::size_t columns = 0);
 PropertyPage inventoryDetailsPage(const Device &device);

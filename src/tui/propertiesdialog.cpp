@@ -48,12 +48,23 @@ private:
         page_ = page;
         const std::array<const char*, 4> titles {"General", "Driver", "Details", "Resources"};
         setText(display(deviceDisplayName(device_) + " - " + titles.at(page)));
-        const PropertyPage content = page == 3 ? resourcesPropertyPage(*device_.resources)
-            : page == 2 ? inventoryDetailsPage(device_) : commonPropertyPage(entries_, page);
-        const QString &text = content.text;
-        preferredHeight_ = std::clamp<std::size_t>(static_cast<std::size_t>(text.count('\n')) + 9, 12, 28);
-        text_.setText(display(text));
-        // FINAL CUT 0.9.1 supports native line highlights: no custom drawing.
+        general_.setEnable(page != 0);
+        driver_.setEnable(page != 1);
+        details_.setEnable(page != 2);
+        resources_.setEnable(pageCount() == 4 && page != 3);
+        adjustSize();
+        text_.scrollToBegin();
+        if (isShown()) text_.setFocus();
+        redraw();
+    }
+    PropertyPage pageContent(std::size_t columns = 0) const
+    {
+        return page_ == 3 ? resourcesPropertyPage(*device_.resources)
+            : page_ == 2 ? inventoryDetailsPage(device_) : commonPropertyPage(entries_, page_, columns);
+    }
+    void renderContent(const PropertyPage &content)
+    {
+        text_.setText(display(content.text));
         if (!FTerm::isMonochron()) {
             const auto background = text_.getBackgroundColor() == FColor::White
                 ? FColor::LightGray : FColor::White;
@@ -61,25 +72,24 @@ private:
             for (int line : content.shadedLines)
                 text_.addHighlight(static_cast<std::size_t>(line), FTextView::FTextHighlight{0, stripe});
         }
-        text_.scrollToBegin();
-        general_.setEnable(page != 0);
-        driver_.setEnable(page != 1);
-        details_.setEnable(page != 2);
-        resources_.setEnable(pageCount() == 4 && page != 3);
-        if (isShown()) {
-            adjustSize();
-            text_.setFocus();
-        }
-        redraw();
     }
     void adjustSize() override
     {
         const auto desktopWidth = getDesktopWidth();
         const auto desktopHeight = getDesktopHeight();
-        const auto w = std::min<std::size_t>(100, std::max<std::size_t>(65,
-            desktopWidth > 4 ? desktopWidth - 4 : 65));
-        const auto h = std::min(preferredHeight_, std::max<std::size_t>(10,
-            desktopHeight > 4 ? desktopHeight - 4 : 10));
+        const auto availableWidth = desktopWidth > 80 ? desktopWidth - 4 : desktopWidth;
+        const auto availableHeight = desktopHeight > 25 ? desktopHeight - 4 : desktopHeight;
+        std::size_t naturalWidth = 0;
+        for (const QString &line : pageContent().text.split('\n'))
+            naturalWidth = std::max(naturalWidth, getColumnWidth(display(line)));
+        const auto w = std::min(availableWidth, std::clamp<std::size_t>(naturalWidth + 8, 80, 120));
+        // FTextView reserves its own border/scrollbar columns even with a blank border.
+        const auto scroll = text_.getScrollPos();
+        text_.setGeometry(FPoint{2, 2}, FSize{w > 4 ? w - 4 : 1, 6});
+        const auto content = pageContent(text_.getTextVisibleSize().getWidth());
+        const auto preferredHeight = std::clamp<std::size_t>(content.text.count('\n') + 8, 12, 50);
+        const auto h = std::min(preferredHeight, availableHeight);
+        renderContent(content);
         const int x = desktopWidth > w ? int((desktopWidth - w) / 2) + 1 : 1;
         const int y = desktopHeight > h ? int((desktopHeight - h) / 2) + 1 : 1;
         if (isShown()) {
@@ -97,6 +107,7 @@ private:
         details_.setGeometry(FPoint{27, int(h) - 3}, FSize{11, 1});
         resources_.setGeometry(FPoint{40, int(h) - 3}, FSize{13, 1});
         close_.setGeometry(FPoint{int(w) - 12, int(h) - 3}, FSize{10, 1});
+        text_.scrollTo(scroll);
         FDialog::adjustSize();
     }
     void initLayout() override
@@ -107,7 +118,6 @@ private:
     }
     const Device device_;
     const QVector<PropertyEntry> entries_;
-    std::size_t preferredHeight_ = 12;
     int page_ = 0;
     PropertyPageControl<PropertyTextView> text_{this};
     PropertyPageControl<FButton> general_{"&General", this};

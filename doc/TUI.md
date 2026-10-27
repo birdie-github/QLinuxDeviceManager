@@ -348,3 +348,18 @@ TUI explicitly selects `PropertyPresentation::Tui`. Keep field IDs, collection
 and read-state handling shared. The metadata-scope pair uses `nullptr` for TUI
 to omit that field entirely, including for EFI entries. Both text variants use
 `QT_TRANSLATE_NOOP` with the existing `PropertiesDialog` translation context.
+
+### Device property wrapping
+
+General and Driver wrap values to the text viewport using terminal display
+columns. Continuations end in `►`; breaks prefer non-word characters and
+otherwise preserve grapheme boundaries. Explicit newlines remain separate.
+All physical lines belonging to a property retain its alternating shading.
+Narrow value columns switch to a label above an indented value.
+
+Device-properties dialogs size to their content, capped at 120 columns and
+50 rows. Desktop widths above 80 and heights above 25 reserve two cells on
+each corresponding side. Smaller desktops may use the full available area.
+Resize reflows General/Driver; Details and Resources retain their existing
+report layouts. Check long names, paths, identifiers, Unicode, page navigation
+and resizing at 80x25 and larger terminal sizes.

@@ -33,7 +33,7 @@ CommonProperties inventoryCommonProperties(const Device &device)
 
 namespace {
 struct Row { QString label; QString value; bool section = false; };
-PropertyPage table(const QVector<Row> &rows)
+PropertyPage table(const QVector<Row> &rows, std::size_t columns = 0)
 {
     std::size_t width = 0;
     for (const Row &row : rows)
@@ -49,16 +49,25 @@ PropertyPage table(const QVector<Row> &rows)
             continue;
         }
         const QString value = row.value.isEmpty() ? QStringLiteral("Unavailable") : row.value;
-        const auto lines = value.split('\n');
-        bool first = true;
-        for (const QString &line : lines) {
-            const QString label = first ? row.label : QString();
-            const auto cells = finalcut::getColumnWidth(display(label));
-            result.text += label + QString(static_cast<qsizetype>(width - cells), QLatin1Char(' '))
-                + "  " + line + '\n';
+        const bool stacked = columns && width + 2 + 20 > columns;
+        const std::size_t indent = stacked ? 2 : width + 2;
+        const auto append = [&](const QString &line) {
+            result.text += line + '\n';
             if (fieldNumber % 2) result.shadedLines.append(lineNumber);
             ++lineNumber;
-            first = false;
+        };
+        if (stacked)
+            for (const QString &line : wrapTerminalLine(row.label, columns)) append(line);
+        bool first = true;
+        for (const QString &physical : value.split('\n')) {
+            const auto lines = columns ? wrapTerminalLine(physical, columns > indent ? columns - indent : 2)
+                                       : QStringList{physical};
+            for (const QString &line : lines) {
+                const QString label = first && !stacked ? row.label : QString();
+                const auto cells = finalcut::getColumnWidth(display(label));
+                append(label + QString(static_cast<qsizetype>(indent - cells), QLatin1Char(' ')) + line);
+                first = false;
+            }
         }
         ++fieldNumber;
     }
@@ -66,12 +75,12 @@ PropertyPage table(const QVector<Row> &rows)
 }
 }
 
-PropertyPage commonPropertyPage(const QVector<PropertyEntry> &entries, int tab)
+PropertyPage commonPropertyPage(const QVector<PropertyEntry> &entries, int tab, std::size_t columns)
 {
     QVector<Row> rows;
     for (const PropertyEntry &entry : entries)
         if (entry.tab == tab) rows.append({entry.label, entry.value});
-    return table(rows);
+    return table(rows, columns);
 }
 
 PropertyPage inventoryDetailsPage(const Device &device)
