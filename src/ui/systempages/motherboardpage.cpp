@@ -1,30 +1,13 @@
 #include "motherboardpage.h"
+#include "systemreport.h"
 #include "propertypage.h"
 #include "propertytext.h"
 #include "propertyreport.h"
-#include <QDateTime>
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QLabel>
-#include <QLocale>
 #include <QVBoxLayout>
 
-namespace {
-QString motherboardValue(const Attribute &value)
-{
-    return value.state == ReadState::Available ? value.value : propertyReadValue(value);
-}
-QVector<QPair<QString, QString>> motherboardFields()
-{
-    using D = SystemMotherboardPage;
-    return {{"manufacturer", D::tr("System manufacturer")},
-        {"model", D::tr("System model")},
-        {"board_vendor", D::tr("Motherboard manufacturer")},
-        {"board_model", D::tr("Motherboard model")},
-        {"firmware", D::tr("Firmware version")},
-        {"firmware_date", D::tr("Firmware date (reported)")}};
-}
-}
 SystemMotherboardPage::SystemMotherboardPage(QWidget *parent) : QWidget(parent)
 {
     const auto page = reportPageLayout(this);
@@ -34,7 +17,7 @@ SystemMotherboardPage::SystemMotherboardPage(QWidget *parent) : QWidget(parent)
     summary_->setColumnStretch(1, 1);
     page.contents->addWidget(fields);
     int row = 0;
-    for (const auto &field : motherboardFields()) {
+    for (const auto &field : systemFields(SystemPage::Motherboard)) {
         auto *name = new QLabel(field.second, fields);
         name->setTextFormat(Qt::PlainText);
         auto *value = propertyValueLabel(tr("Not collected"), fields);
@@ -53,7 +36,7 @@ SystemMotherboardPage::SystemMotherboardPage(QWidget *parent) : QWidget(parent)
 int SystemMotherboardPage::captionWidthHint() const
 {
     int width = 0;
-    for (const auto &field : motherboardFields())
+    for (const auto &field : systemFields(SystemPage::Motherboard))
         width = qMax(width, QLabel(field.second).sizeHint().width());
     for (const QString &caption : {tr("Owner:"), tr("Issuer:"), tr("Expires:")})
         width = qMax(width, QLabel(caption).sizeHint().width());
@@ -69,7 +52,7 @@ void SystemMotherboardPage::setSnapshot(const SystemProperties &snapshot)
 {
     snapshot_ = snapshot;
     for (auto it = fields_.cbegin(); it != fields_.cend(); ++it) {
-        it.value()->setText(motherboardValue(snapshot_.values.value(it.key())));
+        it.value()->setText(systemMotherboardValue(snapshot_.values.value(it.key())));
         it.value()->setToolTip(propertyToolTip(snapshot_.sources.value(it.key())));
     }
     rebuildMok();
@@ -77,23 +60,14 @@ void SystemMotherboardPage::setSnapshot(const SystemProperties &snapshot)
 QString SystemMotherboardPage::copyText() const
 {
     QStringList lines;
-    for (const auto &field : motherboardFields())
-        lines.append(field.second + ": " + motherboardValue(snapshot_.values.value(field.first)));
-    lines.append(tr("MOK certificates") + ": " + mokText());
+    for (const auto &field : systemFields(SystemPage::Motherboard))
+        lines.append(field.second + ": " + systemMotherboardValue(snapshot_.values.value(field.first)));
+    lines.append(systemMokTitle() + ": " + mokText());
     return lines.join('\n');
 }
 QString SystemMotherboardPage::mokText() const
 {
-    const MokCertificates &mok = snapshot_.mok;
-    if (mok.status.state != ReadState::Available) return propertyReadValue(mok.status);
-    QStringList certificates;
-    const auto known = [this](const QString &text) { return text.isEmpty() ? tr("Unavailable") : text; };
-    for (const MokCertificate &certificate : mok.certificates)
-        certificates.append(tr("Owner: %1\nIssuer: %2\nExpires: %3")
-            .arg(known(certificate.subject), known(certificate.issuer), known(certificate.expires)));
-    if (certificates.isEmpty()) certificates.append(tr("No X.509 certificates in the exposed MOK list"));
-    if (mok.otherSignatures) certificates.append(tr("%1 non-certificate signatures omitted").arg(mok.otherSignatures));
-    return certificates.join("\n\n");
+    return systemMokText(snapshot_);
 }
 void SystemMotherboardPage::rebuildMok()
 {
@@ -119,11 +93,10 @@ void SystemMotherboardPage::rebuildMok()
         message(mokText());
         return;
     }
-    const auto known = [this](const QString &text) { return text.isEmpty() ? tr("Unavailable") : text; };
     int index = 0;
     for (const MokCertificate &certificate : mok.certificates) {
-        const QString title = mok.certificates.size() == 1 ? tr("MOK Certificate")
-            : tr("MOK Certificate %1").arg(++index);
+        const auto report = systemCertificateReport(certificate, ++index, mok.certificates.size());
+        const QString title = report.title;
         auto *box = new QGroupBox(title, mokForm_->parentWidget());
         auto *form = new QGridLayout(box);
         form->setColumnStretch(1, 1);
@@ -139,17 +112,10 @@ void SystemMotherboardPage::rebuildMok()
             form->addWidget(name, certificateRow, 0, Qt::AlignLeading | Qt::AlignTop);
             form->addWidget(value, certificateRow++, 1);
         };
-        const QString owner = certificate.subjectDisplay.isEmpty() ? certificate.subject : certificate.subjectDisplay;
-        const QString issuer = !certificate.subject.isEmpty() && certificate.subject == certificate.issuer
-            ? tr("Same as owner")
-            : (certificate.issuerDisplay.isEmpty() ? certificate.issuer : certificate.issuerDisplay);
-        const QDateTime expires = QDateTime::fromString(certificate.expires, Qt::ISODate);
-        const QString date = expires.isValid()
-            ? tr("%1 UTC").arg(QLocale().toString(expires.toUTC(), "d MMM yyyy, HH:mm:ss")) : known(certificate.expires);
-        field(tr("Owner:"), known(owner), certificate.subject);
-        field(tr("Issuer:"), known(issuer), certificate.issuer);
-        field(tr("Expires:"), date, certificate.expires);
+        field(report.fields.at(0).first, report.fields.at(0).second, certificate.subject);
+        field(report.fields.at(1).first, report.fields.at(1).second, certificate.issuer);
+        field(report.fields.at(2).first, report.fields.at(2).second, certificate.expires);
     }
     if (mok.otherSignatures)
-        message(tr("%1 non-certificate signatures omitted").arg(mok.otherSignatures));
+        message(systemMokOmitted(mok.otherSignatures));
 }

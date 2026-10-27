@@ -52,11 +52,10 @@ if(KMOD)
     pkg_check_modules(KMOD QUIET IMPORTED_TARGET libkmod>=30)
 endif()
 add_executable(qlinuxdevicemanager
-    src/main.cpp src/devices/device.h src/devices/device.cpp
+    src/main.cpp
     src/ui/reporttable.h src/ui/reporttable.cpp
     src/devices/enumerator.h src/devices/enumerator.cpp
     src/devices/monitorstate.h src/devices/monitorstate.cpp
-    src/devices/deviceevents.h src/devices/deviceevents.cpp
     src/devices/deviceproperties.h src/devices/deviceproperties.cpp
     src/devices/networkproperties.h src/devices/networkproperties.cpp
     src/devices/ethernetproperties.h src/devices/ethernetproperties.cpp
@@ -71,15 +70,10 @@ add_executable(qlinuxdevicemanager
     src/devices/storageproperties.h src/devices/storageproperties.cpp
     src/devices/directoryscan.h src/devices/naturalsort.h
     src/devices/storagepresentation.h src/devices/storagepresentation.cpp
-    src/devices/deviceresources.h src/devices/deviceresources.cpp
     src/devices/resourceformat.h src/devices/resourceformat.cpp
-    src/devices/cpumetadata.h src/devices/cpumetadata.cpp
-    src/devices/functionnames.h src/devices/functionnames.cpp
-    src/devices/acpivendors.h src/devices/acpivendors.cpp
-    src/devices/devicelabel.h src/devices/devicelabel.cpp
-    src/devices/efivariables.h src/devices/efivariables.cpp
-    src/devices/modulenames.h src/devices/modulenames.cpp
-    src/devices/devicepresentation.h src/devices/devicepresentation.cpp
+
+
+
     src/devices/devicesearch.h src/devices/devicesearch.cpp
     src/devices/propertytext.h src/devices/propertytext.cpp
     src/ui/devicefilter.h src/ui/devicefilter.cpp
@@ -109,8 +103,6 @@ add_executable(qlinuxdevicemanager
     src/ui/devicepages/storagepage.h src/ui/devicepages/storagepage.cpp
     src/ui/devicepages/eventspage.h src/ui/devicepages/eventspage.cpp
     src/ui/devicepages/resourcespage.h src/ui/devicepages/resourcespage.cpp
-    src/devices/secureboot.h src/devices/secureboot.cpp
-    src/devices/systemproperties.h src/devices/systemproperties.cpp src/devices/cputopology.h
     src/ui/systempages/rampage.h src/ui/systempages/rampage.cpp
     src/ui/systempages/motherboardpage.h src/ui/systempages/motherboardpage.cpp
     src/ui/systempages/processorpage.h src/ui/systempages/processorpage.cpp
@@ -211,6 +203,74 @@ target_compile_definitions(qlinuxdevicemanager PRIVATE
     QLDM_INSTALLED_BLUETOOTH_SERVICES="${CMAKE_INSTALL_FULL_DATADIR}/${APP_NAME}/bluetooth-services.ids")
 target_compile_definitions(qlinuxdevicemanager PRIVATE
     QLDM_INSTALLED_ACPI_IDS="${CMAKE_INSTALL_FULL_DATADIR}/${APP_NAME}/acpi-pnp.ids")
+# Shared synchronous discovery and naming; neither frontend toolkit belongs here.
+add_library(qldm-core STATIC
+    src/core/inventory.h src/core/inventory.cpp src/core/connectionparents.cpp
+    src/core/commonproperties.h src/core/commonproperties.cpp
+    src/core/systemreport.h src/core/systemreportplatform.cpp
+    src/core/systemreportprocessor.cpp src/core/systemreportmemory.cpp
+    src/devices/secureboot.h src/devices/secureboot.cpp
+    src/devices/systemproperties.h src/devices/systemproperties.cpp src/devices/cputopology.h
+    src/devices/device.h src/devices/device.cpp
+    src/devices/deviceevents.h src/devices/deviceevents.cpp
+    src/devices/cpumetadata.h src/devices/cpumetadata.cpp
+    src/devices/functionnames.h src/devices/functionnames.cpp
+    src/devices/acpivendors.h src/devices/acpivendors.cpp
+    src/devices/devicelabel.h src/devices/devicelabel.cpp
+    src/devices/efivariables.h src/devices/efivariables.cpp
+    src/devices/modulenames.h src/devices/modulenames.cpp
+    src/devices/devicepresentation.h src/devices/devicepresentation.cpp
+    src/devices/deviceresources.h src/devices/deviceresources.cpp
+)
+target_include_directories(qldm-core PUBLIC src/core src/devices)
+target_link_libraries(qldm-core PUBLIC Qt6::Core PRIVATE Qt6::Network PkgConfig::UDEV)
+target_compile_definitions(qldm-core PRIVATE
+    QLDM_INSTALLED_ACPI_IDS="${CMAKE_INSTALL_FULL_DATADIR}/${APP_NAME}/acpi-pnp.ids"
+    QT_ENABLE_STRICT_MODE_UP_TO=${APP_QT_STRICT_VERSION})
+if(KMOD AND TARGET PkgConfig::KMOD)
+    target_link_libraries(qldm-core PRIVATE PkgConfig::KMOD)
+    target_compile_definitions(qldm-core PRIVATE QLDM_HAVE_KMOD)
+endif()
+target_link_libraries(qlinuxdevicemanager PRIVATE qldm-core)
+
+option(TUI "Build the optional FINAL CUT terminal frontend" OFF)
+# Some static FINAL CUT installations omit transitive dependencies from finalcut.pc.
+# Keep these configurable: GPM and the terminal-capability provider vary by build.
+set(TUI_FINALCUT_EXTRA_LIBRARIES "" CACHE STRING
+    "Additional FINAL CUT link dependencies (semicolon-separated, e.g. gpm;tinfo)")
+if(TUI)
+    pkg_check_modules(FINALCUT QUIET IMPORTED_TARGET finalcut>=0.9.0)
+    if(TARGET PkgConfig::FINALCUT)
+        add_executable(qlinuxdevicemanager-tui src/tui/main.cpp
+            src/tui/browser.h src/tui/browser.cpp
+            src/tui/browsermenu.h src/tui/browsermenu.cpp
+            src/tui/modalcombobox.h src/tui/modalcombobox.cpp
+            src/tui/systemdialog.h src/tui/systemdialog.cpp
+            src/tui/systemsnapshot.h src/tui/systemsnapshot.cpp
+            src/tui/systempages/pages.h
+            src/tui/systempages/report.h src/tui/systempages/report.cpp
+            src/tui/systempages/operatingsystempage.cpp
+            src/tui/systempages/motherboardpage.cpp
+            src/tui/systempages/processorpage.cpp
+            src/tui/systempages/rampage.cpp
+            src/tui/treeprojection.h src/tui/treeprojection.cpp
+            src/tui/inventoryfilter.h src/tui/inventoryfilter.cpp
+            src/tui/terminaltext.h src/tui/terminaltext.cpp
+            src/tui/propertiesdialog.h src/tui/propertiesdialog.cpp
+            src/tui/propertypagecontrol.h
+            src/tui/propertiesstatus.h src/tui/propertiesstatus.cpp
+            src/tui/propertypages.h src/tui/propertypages.cpp
+            src/tui/devicetree.h src/tui/devicetree.cpp)
+        target_include_directories(qlinuxdevicemanager-tui PRIVATE src/tui)
+        target_link_libraries(qlinuxdevicemanager-tui PRIVATE
+            qldm-core PkgConfig::FINALCUT ${TUI_FINALCUT_EXTRA_LIBRARIES})
+        target_compile_options(qlinuxdevicemanager-tui PRIVATE -Wall -Wextra -Wpedantic)
+        install(TARGETS qlinuxdevicemanager-tui RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    else()
+        message(WARNING "FINAL CUT >= 0.9.0 not found; skipping terminal frontend")
+    endif()
+endif()
+
 # Optional tools: basic viewing never requires Linguist.
 find_package(Qt6 ${APP_MINIMUM_QT} QUIET COMPONENTS LinguistTools)
 if(TARGET Qt6::lupdate)
@@ -302,9 +362,11 @@ if(BUILD_TESTING)
         src/devices/functionnames.cpp src/devices/functionnames.h
         src/devices/acpivendors.cpp src/devices/acpivendors.h
         src/ui/devicemodel.cpp src/ui/devicemodel.h
+        src/core/connectionparents.cpp src/core/inventory.h
+        src/core/commonproperties.h src/core/commonproperties.cpp
         src/ui/icontheme.cpp src/ui/icontheme.h
         src/ui/devicefilter.cpp src/ui/devicefilter.h)
-    target_include_directories(device-search-test PRIVATE src/devices src/ui
+    target_include_directories(device-search-test PRIVATE src/core src/devices src/ui
         ${DISPLAY_X11_INCLUDE_DIRS} ${DISPLAY_WAYLAND_INCLUDE_DIRS})
     target_link_libraries(device-search-test PRIVATE Qt6::Widgets PkgConfig::UDEV PkgConfig::V4L2)
     if(DISPLAY_INFO AND TARGET PkgConfig::DISPLAY_INFO)
@@ -331,11 +393,14 @@ if(BUILD_TESTING)
     target_include_directories(system-properties-test PRIVATE src/devices)
     target_link_libraries(system-properties-test PRIVATE Qt6::Core Qt6::Network PkgConfig::UDEV)
     add_test(NAME system-properties COMMAND system-properties-test)
+    add_executable(system-report-test tests/system-report.cpp)
+    target_link_libraries(system-report-test PRIVATE qldm-core)
+    add_test(NAME system-report COMMAND system-report-test)
 endif()
 
 # Apply the declared Qt baseline's API checks to project executables and fixture targets.
 foreach(qldm_target IN ITEMS qlinuxdevicemanager monitor-state-test device-events-test
-        device-rules-test device-resources-test device-search-test system-properties-test
+        device-rules-test device-resources-test device-search-test system-properties-test system-report-test
         directory-scan-test display-identity-test gpu-link-sample-test pcie-link-text-test tree-export-test)
     if(TARGET ${qldm_target})
         target_compile_definitions(${qldm_target} PRIVATE QT_ENABLE_STRICT_MODE_UP_TO=${APP_QT_STRICT_VERSION})

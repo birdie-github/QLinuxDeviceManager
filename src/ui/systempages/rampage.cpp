@@ -1,33 +1,15 @@
 #include "rampage.h"
+#include "systemreport.h"
 #include "propertypage.h"
 #include "propertytext.h"
 #include "propertyreport.h"
 #include "reporttable.h"
 #include <QGridLayout>
 #include <QLabel>
-#include <QLocale>
 #include <QTabBar>
 #include <QVBoxLayout>
 #include <QFont>
-#include <limits>
 
-namespace {
-QVector<QPair<QString, QString>> memoryFields()
-{
-    using D = SystemRamPage;
-    return {{"PRESENT", D::tr("Presence")}, {"SIZE", D::tr("Capacity (total)")},
-        {"VOLATILE_SIZE", D::tr("Volatile capacity")}, {"NON_VOLATILE_SIZE", D::tr("Nonvolatile capacity")},
-        {"LOCATOR", D::tr("Device locator")}, {"BANK_LOCATOR", D::tr("Bank locator")},
-        {"TYPE", D::tr("Memory type")}, {"FORM_FACTOR", D::tr("Form factor")},
-        {"SPEED_MTS", D::tr("Rated transfer rate")}, {"CONFIGURED_SPEED_MTS", D::tr("Configured transfer rate")},
-        {"MANUFACTURER", D::tr("Manufacturer")}, {"PART_NUMBER", D::tr("Part number")}};
-}
-QString memoryScope()
-{
-    return SystemRamPage::tr("Firmware-reported records; these do not establish removable modules, physical slots, "
-        "memory channels, upgradeability or active ECC. Transfer rates are firmware declarations, not live measurements.");
-}
-}
 
 SystemRamPage::SystemRamPage(QWidget *parent) : QWidget(parent)
 {
@@ -45,8 +27,8 @@ SystemRamPage::SystemRamPage(QWidget *parent) : QWidget(parent)
         summary_->addWidget(value, row, 1);
         return value;
     };
-    physical_ = field(0, tr("Physical RAM"));
-    usable_ = field(1, tr("Usable RAM"));
+    physical_ = field(0, systemFieldCaption(SystemPage::Ram, "physical_memory"));
+    usable_ = field(1, systemFieldCaption(SystemPage::Ram, "memory"));
     auto *memory = new QWidget(fields);
     memoryForm_ = new QGridLayout(memory);
     memoryForm_->setContentsMargins(0, 0, 0, 0);
@@ -58,9 +40,9 @@ SystemRamPage::SystemRamPage(QWidget *parent) : QWidget(parent)
 int SystemRamPage::captionWidthHint() const
 {
     int width = 0;
-    for (const QString &caption : {tr("Physical RAM"), tr("Usable RAM")})
+    for (const QString &caption : {systemFieldCaption(SystemPage::Ram, "physical_memory"), systemFieldCaption(SystemPage::Ram, "memory")})
         width = qMax(width, QLabel(caption).sizeHint().width());
-    for (const auto &field : memoryFields())
+    for (const auto &field : systemMemoryFields())
         width = qMax(width, QLabel(field.second).sizeHint().width());
     return width;
 }
@@ -85,56 +67,30 @@ void SystemRamPage::setSnapshot(const SystemProperties &snapshot)
 }
 QString SystemRamPage::summaryValue(const QString &key) const
 {
-    const Attribute value = snapshot_.values.value(key);
-    if (value.state != ReadState::Available) return propertyReadValue(value);
-    constexpr qulonglong gib = 1024ULL * 1024 * 1024;
-    constexpr qulonglong mib = 1024ULL * 1024;
-    const qulonglong bytes = value.value.toULongLong();
-    const int precision = key == "physical_memory" && bytes % gib == 0 ? 0 : 2;
-    QString text = tr("%1 GiB").arg(QLocale().toString(bytes / static_cast<double>(gib), 'f', precision));
-    const Attribute physical = snapshot_.values.value("physical_memory");
-    if (key == "memory" && physical.state == ReadState::Available) {
-        const qulonglong installed = physical.value.toULongLong();
-        if (installed >= bytes)
-            text += tr(" (%1 MiB is system reserved)")
-                .arg(QLocale().toString((installed - bytes) / static_cast<double>(mib), 'f', 0));
-    }
-    return text;
+    return systemRamSummaryValue(snapshot_, key);
 }
 QString SystemRamPage::devicesText() const
 {
-    QStringList lines {memoryScope()};
+    QStringList lines {systemMemoryScope()};
     const auto &memory = snapshot_.memoryDevices;
-    if (memory.status.state != ReadState::Available) lines.append(propertyReadValue(memory.status));
-    else if (memory.devices.isEmpty()) lines.append(tr("No memory-device records reported"));
+    if (memory.status.state != ReadState::Available || memory.devices.isEmpty())
+        lines.append(systemMemoryStatus(memory));
     else for (const FirmwareMemoryDevice &device : memory.devices) {
         lines.append(tr("Memory device %1 (firmware record %2)").arg(device.index + 1).arg(device.index));
-        for (const auto &field : memoryFields())
+        for (const auto &field : systemMemoryFields())
             lines.append(field.second + ": " + memoryValue(field.first, device.values.value(field.first)));
     }
     return lines.join('\n');
 }
 QString SystemRamPage::copyText() const
 {
-    return tr("Physical RAM") + ": " + summaryValue("physical_memory") + '\n'
-        + tr("Usable RAM") + ": " + summaryValue("memory") + '\n'
+    return systemFieldCaption(SystemPage::Ram, "physical_memory") + ": " + summaryValue("physical_memory") + '\n'
+        + systemFieldCaption(SystemPage::Ram, "memory") + ": " + summaryValue("memory") + '\n'
         + tr("RAM") + ": " + devicesText();
 }
 QString SystemRamPage::memoryValue(const QString &key, const Attribute &value) const
 {
-    if (key == "PRESENT" && value.state == ReadState::Unavailable)
-        return tr("Unknown (no explicit presence flag)");
-    if (value.state != ReadState::Available) return propertyReadValue(value);
-    if (key == "PRESENT") return value.value == "0" ? tr("No device reported present") : tr("Device reported present");
-    if (key == "SPEED_MTS" || key == "CONFIGURED_SPEED_MTS")
-        return tr("%1 MT/s").arg(QLocale().toString(value.value.toULongLong()));
-    if (key == "SIZE" || key == "VOLATILE_SIZE" || key == "NON_VOLATILE_SIZE") {
-        const qulonglong bytes = value.value.toULongLong();
-        if (bytes <= static_cast<qulonglong>(std::numeric_limits<qlonglong>::max()))
-            return QLocale().formattedDataSize(static_cast<qlonglong>(bytes), 2, QLocale::DataSizeIecFormat);
-        return tr("%1 bytes").arg(QLocale().toString(bytes));
-    }
-    return value.value;
+    return systemMemoryValue(key, value);
 }
 void SystemRamPage::rebuildMemory()
 {
@@ -142,17 +98,16 @@ void SystemRamPage::rebuildMemory()
         delete item->widget();
         delete item;
     }
-    auto *heading = new QLabel(tr("Memory Devices"), memoryForm_->parentWidget());
+    auto *heading = new QLabel(systemMemoryHeading(), memoryForm_->parentWidget());
     QFont font = heading->font(); font.setBold(true); heading->setFont(font);
-    heading->setToolTip(memoryScope());
+    heading->setToolTip(systemMemoryScope());
     memoryForm_->addWidget(heading, 0, 0);
     const FirmwareMemoryInformation &memory = snapshot_.memoryDevices;
     if (memory.status.state != ReadState::Available || memory.devices.isEmpty()) {
-        auto *message = new QLabel(memory.status.state != ReadState::Available
-            ? propertyReadValue(memory.status) : tr("No memory-device records reported"), memoryForm_->parentWidget());
+        auto *message = new QLabel(systemMemoryStatus(memory), memoryForm_->parentWidget());
         message->setTextFormat(Qt::PlainText);
         message->setWordWrap(true);
-        message->setToolTip(snapshot_.sources.value("memory_devices") + '\n' + memoryScope());
+        message->setToolTip(snapshot_.sources.value("memory_devices") + '\n' + systemMemoryScope());
         memoryForm_->addWidget(message, 1, 0);
         return;
     }
@@ -168,28 +123,28 @@ void SystemRamPage::rebuildMemory()
     // obsolete widths, which QTabWidget includes in the whole stack's minimum.
     auto *table = new ReportTable(chips);
     table->setColumnCount(2);
-    table->setHorizontalHeaderLabels({tr("Property"), tr("Value")});
-    table->setRowCount(memoryFields().size());
+    table->setHorizontalHeaderLabels(systemPropertyHeaders());
+    table->setRowCount(systemMemoryFields().size());
     layout->addWidget(table);
     memoryForm_->addWidget(chips, 1, 0);
     for (const FirmwareMemoryDevice &device : memory.devices) {
-        const int tab = tabs->addTab(tr("Chip %1").arg(device.index + 1));
+        const int tab = tabs->addTab(systemMemoryTitle(device.index));
         tabs->setTabToolTip(tab, tr("Memory device %1 (firmware record %2)")
-            .arg(device.index + 1).arg(device.index) + '\n' + memoryScope());
+            .arg(device.index + 1).arg(device.index) + '\n' + systemMemoryScope());
     }
     const auto showChip = [this, table](int index) {
         const auto &devices = snapshot_.memoryDevices.devices;
         if (index < 0 || index >= devices.size()) return;
         const auto &device = devices.at(index);
         table->clearContents();
-        table->setHorizontalHeaderLabels({tr("Property"), tr("Value — Chip %1").arg(device.index + 1)});
-        const auto fields = memoryFields();
+        table->setHorizontalHeaderLabels({systemPropertyHeaders().at(0), tr("Value — Chip %1").arg(device.index + 1)});
+        const auto fields = systemMemoryFields();
         const QString prefix = QStringLiteral("MEMORY_DEVICE_%1_").arg(device.index);
         for (int row = 0; row < fields.size(); ++row) {
             const auto &field = fields[row];
             auto *name = new QTableWidgetItem(field.second);
             auto *value = new QTableWidgetItem(memoryValue(field.first, device.values.value(field.first)));
-            const QString hint = QStringLiteral("libudev: dmi/id ") + prefix + field.first + '\n' + memoryScope();
+            const QString hint = QStringLiteral("libudev: dmi/id ") + prefix + field.first + '\n' + systemMemoryScope();
             name->setToolTip(hint); value->setToolTip(hint);
             table->setItem(row, 0, name);
             table->setItem(row, 1, value);

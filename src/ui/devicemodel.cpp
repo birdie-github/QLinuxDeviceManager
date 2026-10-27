@@ -1,3 +1,4 @@
+#include "inventory.h"
 #include "devicemodel.h"
 #include "icontheme.h"
 #include "devicelabel.h"
@@ -337,17 +338,7 @@ void DeviceModel::rebuild()
         // Some real sysfs parents (e.g. ata5) have no enumerated device record.
         // Bridge those gaps to the nearest inventoried directory ancestor. This
         // changes only the projection; keep recorded parentPath metadata intact.
-        QHash<QString, QString> parents;
-        for (const Device &d : devices_) {
-            QString path = d.parentPath;
-            if (!lookup_.contains(path) && path.startsWith("/sys/devices/")
-                && d.path.startsWith(path + '/')) {
-                while (path.startsWith("/sys/devices/") && !lookup_.contains(path))
-                    path.truncate(path.lastIndexOf('/'));
-                if (!lookup_.contains(path)) path.clear();
-            }
-            parents.insert(d.path, path);
-        }
+        const auto parents = connectionParents(devices_);
         // Hidden inventory ancestors still provide connection context.
         QSet<QString> included;
         for (const Device *d : members) {
