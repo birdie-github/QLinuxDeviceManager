@@ -339,3 +339,12 @@ dialog; Tab/Shift+Tab must dismiss it and traverse controls. Check outside-click
 dismissal, scrolling with more than eight records if available, F7/F8 page
 switching, and resizing at 80x25 and 211x60. Confirm the selector replaces the
 static Chip heading, the summary stays visible, and the GUI remains unchanged.
+
+### Frontend wording
+
+`src/core/commonpropertywording.h` keeps the GUI and TUI text pairs together.
+The shared common-property formatter defaults to the original GUI wording; the
+TUI explicitly selects `PropertyPresentation::Tui`. Keep field IDs, collection
+and read-state handling shared. The metadata-scope pair uses `nullptr` for TUI
+to omit that field entirely, including for EFI entries. Both text variants use
+`QT_TRANSLATE_NOOP` with the existing `PropertiesDialog` translation context.

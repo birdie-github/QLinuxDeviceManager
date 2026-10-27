@@ -19,7 +19,7 @@ private:
 class Properties final : public FDialog {
 public:
     Properties(const Device &device, FWidget *parent)
-        : FDialog(parent), device_(device), entries_(commonPropertyEntries(inventoryCommonProperties(device)))
+        : FDialog(parent), device_(device), entries_(commonPropertyEntries(inventoryCommonProperties(device), false, PropertyPresentation::Tui))
     {
         setModal();
         const bool hasResources = pageCount() == 4;

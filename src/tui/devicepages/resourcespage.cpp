@@ -7,9 +7,9 @@ PropertyPage resourcesPropertyPage(const DeviceResources &snapshot)
     SystemReport report;
     if (!snapshot.pnpState.isEmpty())
         report.fields({{"PnP device state", snapshot.pnpState == "active" ? "Active" : "Disabled"}});
-    QVector<QStringList> rows {{"Resource type", "Setting", "Details", "Source"}};
+    QVector<QStringList> rows {{"Resource type", "Setting", "Details"}};
     for (const ResourceRow &row : resourceRows(snapshot))
-        rows.append({row.type, row.setting, row.details, row.source});
+        rows.append({row.type, row.setting, row.details});
     report.table({}, rows);
     return report.take();
 }

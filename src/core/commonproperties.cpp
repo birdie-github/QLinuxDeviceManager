@@ -27,8 +27,12 @@ QString propertyReadValue(const Attribute &a)
     }
     return {};
 }
-QVector<PropertyEntry> commonPropertyEntries(const CommonProperties &snapshot, bool removed)
+QVector<PropertyEntry> commonPropertyEntries(const CommonProperties &snapshot, bool removed,
+                                           PropertyPresentation presentation)
 {
+    const auto wording = [presentation](CommonPropertyWording::Text text) {
+        return CommonPropertyWording::translated(text, presentation);
+    };
     QVector<PropertyEntry> entries;
     const Device &d = snapshot.device;
     const bool efi = d.subsystem == "efivarfs";
@@ -79,13 +83,13 @@ QVector<PropertyEntry> commonPropertyEntries(const CommonProperties &snapshot, b
     add("location", QCoreApplication::translate("PropertiesDialog", "Location"), efi ? d.parentPath : d.path, QCoreApplication::translate("PropertiesDialog", "Kernel path"), false, 0);
     QString status;
     if (removed) status = QCoreApplication::translate("PropertiesDialog", "Removed or replaced; showing a snapshot.");
-    else if (snapshot.state != ReadState::Available) status = QCoreApplication::translate("PropertiesDialog", "Inventory snapshot; properties unverified.");
+    else if (snapshot.state != ReadState::Available) status = wording(CommonPropertyWording::unverifiedPresence);
     else {
-        status = QCoreApplication::translate("PropertiesDialog", "Present at last property read.");
+        status = wording(CommonPropertyWording::verifiedPresence);
         if (!efi) {
             const Attribute binding = raw("driver/name");
             status += '\n' + (binding.state == ReadState::Available
-                ? binding.value.isEmpty() ? QCoreApplication::translate("PropertiesDialog", "No driver bound; not necessarily a fault.") : QCoreApplication::translate("PropertiesDialog", "Driver bound: %1").arg(binding.value)
+                ? binding.value.isEmpty() ? wording(CommonPropertyWording::unboundStatus) : QCoreApplication::translate("PropertiesDialog", "Driver bound: %1").arg(binding.value)
                 : QCoreApplication::translate("PropertiesDialog", "Driver binding: %1").arg(propertyReadValue(binding)));
             const Attribute authorization = raw("sysfs/authorized");
             if (authorization.state == ReadState::Available && authorization.value == "0") status += '\n' + QCoreApplication::translate("PropertiesDialog", "USB device/interface is unauthorized.");
@@ -99,8 +103,8 @@ QVector<PropertyEntry> commonPropertyEntries(const CommonProperties &snapshot, b
         : Attribute{ReadState::Available, d.driver, 0});
     if (efi) binding = notApplicable;
     const QString driverName = !efi && binding.state == ReadState::Available && binding.value.isEmpty()
-        ? QCoreApplication::translate("PropertiesDialog", "No driver bound") : propertyReadValue(binding);
-    add("driver/name", QCoreApplication::translate("PropertiesDialog", "Kernel driver"), driverName, efi ? QString() : d.path + "/driver", false, 0, binding.state, binding.error);
+        ? wording(CommonPropertyWording::unboundDriver) : propertyReadValue(binding);
+    add("driver/name", wording(CommonPropertyWording::driver), driverName, efi ? QString() : d.path + "/driver", false, 0, binding.state, binding.error);
     QStringList identifiers;
     const Attribute alias = snapshot.values.value("udev/MODALIAS",
         d.properties.contains("MODALIAS")
@@ -130,27 +134,28 @@ QVector<PropertyEntry> commonPropertyEntries(const CommonProperties &snapshot, b
     add("identifiers", QCoreApplication::translate("PropertiesDialog", "Hardware identifiers"), efi ? propertyReadValue(notApplicable)
         : identifiers.isEmpty() ? QCoreApplication::translate("PropertiesDialog", "Unavailable") : identifiers.join('\n'), QCoreApplication::translate("PropertiesDialog", "Selected udev and direct sysfs identifiers"), false, 0,
         efi ? ReadState::NotApplicable : identifiers.isEmpty() ? ReadState::Unavailable : ReadState::Available);
-    add("driver/binding", QCoreApplication::translate("PropertiesDialog", "Kernel driver"), driverName, efi ? QString() : d.path + "/driver", false, 1, binding.state, binding.error);
+    add("driver/binding", wording(CommonPropertyWording::driver), driverName, efi ? QString() : d.path + "/driver", false, 1, binding.state, binding.error);
     const Attribute moduleFallback = efi || (binding.state == ReadState::Available && binding.value.isEmpty())
         ? notApplicable : Attribute();
     addRaw("driver/bus", QCoreApplication::translate("PropertiesDialog", "Driver bus"), 1, moduleFallback);
-    addRaw("module/name", QCoreApplication::translate("PropertiesDialog", "Kernel module"), 1, moduleFallback);
+    addRaw("module/name", wording(CommonPropertyWording::module), 1, moduleFallback);
     const Attribute type = snapshot.values.value("module/type", moduleFallback);
-    add("module/type", QCoreApplication::translate("PropertiesDialog", "Module type"), type.state == ReadState::Available ? QCoreApplication::translate("PropertiesDialog", "Modular (kernel initstate)")
+    add("module/type", wording(CommonPropertyWording::moduleType), type.state == ReadState::Available ? wording(CommonPropertyWording::modular)
         : type.state == ReadState::NotApplicable || type.state == ReadState::PermissionDenied || type.state == ReadState::Error
-            ? propertyReadValue(type) : QCoreApplication::translate("PropertiesDialog", "Undetermined; a missing module link/version does not prove built-in."),
+            ? propertyReadValue(type) : wording(CommonPropertyWording::undetermined),
         snapshot.sources.value("module/type"), false, 1,
         type.state == ReadState::NotApplicable || type.state == ReadState::PermissionDenied || type.state == ReadState::Error
             ? type.state : ReadState::Available, type.error);
-    addRaw("module/runtime_version", QCoreApplication::translate("PropertiesDialog", "Running version"), 1, moduleFallback);
+    addRaw("module/runtime_version", wording(CommonPropertyWording::runtimeVersion), 1, moduleFallback);
     const QStringList fields {"filename", "version", "description", "author", "license", "firmware"};
-    const QStringList labels {QCoreApplication::translate("PropertiesDialog", "Module file"), QCoreApplication::translate("PropertiesDialog", "Installed version"), QCoreApplication::translate("PropertiesDialog", "Description"),
-        QCoreApplication::translate("PropertiesDialog", "Author"), QCoreApplication::translate("PropertiesDialog", "License"), QCoreApplication::translate("PropertiesDialog", "Firmware names")};
+    const QStringList labels {wording(CommonPropertyWording::moduleFile), wording(CommonPropertyWording::installedVersion), wording(CommonPropertyWording::description),
+        wording(CommonPropertyWording::author), wording(CommonPropertyWording::license), wording(CommonPropertyWording::firmwareNames)};
     for (int i = 0; i < fields.size(); ++i) addRaw("module/" + fields[i], labels[i], 1, moduleFallback);
-    addRaw("sysfs/firmware_rev", QCoreApplication::translate("PropertiesDialog", "Device firmware revision"), 1,
+    addRaw("sysfs/firmware_rev", wording(CommonPropertyWording::firmwareRevision), 1,
         d.subsystem == "nvme" ? Attribute() : notApplicable);
-    add("module/note", QCoreApplication::translate("PropertiesDialog", "Metadata scope"), efi ? propertyReadValue(notApplicable)
-        : QCoreApplication::translate("PropertiesDialog", "Installed metadata may differ from loaded code. Firmware names do not confirm loading or version."), {}, false, 1,
-        efi ? ReadState::NotApplicable : ReadState::Available);
+    if (CommonPropertyWording::source(CommonPropertyWording::metadataScope, presentation))
+        add("module/note", QCoreApplication::translate("PropertiesDialog", "Metadata scope"), efi ? propertyReadValue(notApplicable)
+            : wording(CommonPropertyWording::metadataScope), {}, false, 1,
+            efi ? ReadState::NotApplicable : ReadState::Available);
     return entries;
 }

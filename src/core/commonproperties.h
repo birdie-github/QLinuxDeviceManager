@@ -1,5 +1,6 @@
 #pragma once
 #include "device.h"
+#include "commonpropertywording.h"
 
 // Pure text presentation shared by Properties and deep search; no widgets.
 struct PropertyEntry {
@@ -21,4 +22,5 @@ struct CommonProperties {
     ReadState state = ReadState::Unavailable;
 };
 QString propertyReadValue(const Attribute &attribute);
-QVector<PropertyEntry> commonPropertyEntries(const CommonProperties &snapshot, bool removed = false);
+QVector<PropertyEntry> commonPropertyEntries(const CommonProperties &snapshot, bool removed = false,
+                                           PropertyPresentation presentation = PropertyPresentation::Gui);
