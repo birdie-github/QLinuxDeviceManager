@@ -25,7 +25,7 @@ QStringList wrapTerminalLine(QString line, std::size_t columns)
         QTextBoundaryFinder boundaries(QTextBoundaryFinder::Grapheme, line);
         qsizetype fit = 0, whitespace = 0, punctuation = 0;
         for (int end = boundaries.toNextBoundary(); end >= 0; end = boundaries.toNextBoundary()) {
-            if (finalcut::getColumnWidth(display(line.left(end))) > columns - 1) break;
+            if (finalcut::getColumnWidth(display(line.left(end))) > columns) break;
             fit = end;
             const QChar last = line.at(end - 1);
             if (last.isSpace()) whitespace = end;
@@ -37,7 +37,7 @@ QStringList wrapTerminalLine(QString line, std::size_t columns)
         if (!fit) { result.append(line); return result; }
         // Keep space-delimited values (e.g. [0000:00:14.3]) together first.
         const qsizetype cut = whitespace ? whitespace : punctuation ? punctuation : fit;
-        result.append(line.left(cut) + QChar(0x25ba));
+        result.append(line.left(cut));
         line.remove(0, cut);
     }
     result.append(line);
