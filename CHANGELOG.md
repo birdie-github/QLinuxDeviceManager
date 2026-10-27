@@ -1,3 +1,12 @@
+### v2.0.0 (27 October 2026)
+
+- **New terminal interface:** An optional terminal version lets you browse devices, search, view system information, and inspect device properties without opening a graphical window. It used FINAL CUT, a C++ library for creating terminal-based applications (TUI) with text-based widgets.
+- **Export your device tree:** Save the device list as a text file or a web page with expandable branches, making it easier to share your hardware setup.
+- **Clearer device organization:** All Devices now groups related hardware entries into expandable branches, with clearer names for network interfaces, sound cards, and graphics functions. Firmware-controlled devices are also grouped beneath their recorded parents.
+- **More reliable connection trees:** Devices stay beneath their hardware ancestors even when intermediate entries are missing. UEFI firmware variables have their own clearly labeled group.
+- **Open the most useful details first:** Device properties automatically open the first relevant tab, such as USB for a USB hub. UEFI firmware variables open directly to their hex dump. Your tab choice is preserved when reloading properties.
+- **Keep your place after searching:** Clearing the search keeps the device you selected in the results selected and brings it into view.
+
 ### v1.4.1 (25 October 2026)
 - Fixed RAM chips tabs switching
 
