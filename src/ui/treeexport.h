@@ -15,7 +15,7 @@ struct TreeExportSnapshot {
     // Preorder with nonnegative depths, starting at zero, increasing by at most
     // one after a branch. Includes descendants of collapsed branches.
     QVector<TreeExportRow> rows;
-    QVector<QByteArray> icons; // Owned PNG bytes; no theme paths or external URLs.
+    QVector<QByteArray> icons {}; // Owned PNG bytes; no theme paths or external URLs.
     bool icons8 = false; // Capture selected-theme attribution before the file dialog.
 };
 
