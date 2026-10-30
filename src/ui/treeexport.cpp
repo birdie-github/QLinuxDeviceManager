@@ -28,7 +28,7 @@ QString singleLine(QString label)
 }
 TreeExportSnapshot capture(const QTreeView &tree, const QString &view, const QString &query, bool icons8)
 {
-    TreeExportSnapshot result {view, query, QDateTime::currentDateTime().toString(Qt::ISODate), {}};
+    TreeExportSnapshot result {view, query, QDateTime::currentDateTimeUtc().toString(Qt::ISODate), {}};
     result.icons8 = icons8;
     const auto *model = tree.model();
     if (!model) return result;
