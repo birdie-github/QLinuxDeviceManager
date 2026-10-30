@@ -113,7 +113,8 @@ MainWindow::MainWindow()
     auto *exportTree = file->addAction(tr("Export device tree…"));
     connect(exportTree, &QAction::triggered, this, [this] {
         if (filterTimer_.isActive()) applyFilter();
-        exportDeviceTree(tree_, DeviceModel::viewLabel(model_->view()), filterEdit_->text().trimmed());
+        exportDeviceTree(tree_, DeviceModel::viewLabel(model_->view()), filterEdit_->text().trimmed(),
+                         IconTheme::instance().theme().startsWith("Icons8", Qt::CaseInsensitive));
     });
     file->addSeparator();
     auto *quit = file->addAction(tr("&Quit"));

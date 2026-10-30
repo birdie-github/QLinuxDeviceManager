@@ -1,4 +1,5 @@
 #include "aboutdialog.h"
+#include "iconcredits.h"
 #include "projectmetadata.h"
 #ifdef QLDM_ENABLE_DONATION_BUTTON
 #include "donatebutton.h"
@@ -57,10 +58,7 @@ void showAboutDialog(QWidget *parent, QAction *donationAction)
     credits->setFont(creditsFont);
     layout->addWidget(credits);
     paragraph(text("Application code is licensed under GNU GPL version 3; see LICENSE."));
-    paragraph(text("Optional Windows 11 Color icons by %1. Copyright Icons8. "
-                   "Icons8 assets are excluded from GPLv3. They may be included in this project and downstream builds; "
-                   "independent extraction, redistribution or reuse requires a license from Icons8.")
-        .toHtmlEscaped().arg(QStringLiteral("<a href=\"https://icons8.com/\">Icons8</a>")), true);
+    paragraph(icons8AttributionHtml(), true);
 
     auto *footer = new QHBoxLayout;
 #ifdef QLDM_ENABLE_DONATION_BUTTON
