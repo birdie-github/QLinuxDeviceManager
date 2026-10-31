@@ -203,7 +203,10 @@ target_compile_definitions(qlinuxdevicemanager PRIVATE
 target_compile_definitions(qlinuxdevicemanager PRIVATE
     QLDM_INSTALLED_ACPI_IDS="${CMAKE_INSTALL_FULL_DATADIR}/${APP_NAME}/acpi-pnp.ids")
 # Shared synchronous discovery and naming; neither frontend toolkit belongs here.
+qt_add_resources(UEFI_SPELLING_RESOURCES resources/embedded/uefi_spellings.qrc)
+
 add_library(qldm-core STATIC
+    ${UEFI_SPELLING_RESOURCES}
     src/core/inventory.h src/core/inventory.cpp src/core/connectionparents.cpp
     src/core/typeprojection.h src/core/typeprojection.cpp
     src/core/commonproperties.h src/core/commonproperties.cpp src/core/commonpropertywording.h
@@ -328,6 +331,7 @@ if(BUILD_TESTING)
     target_link_libraries(device-events-test PRIVATE Qt6::Core)
     add_test(NAME device-events COMMAND device-events-test)
     add_executable(device-rules-test tests/device-rules.cpp
+        ${UEFI_SPELLING_RESOURCES}
         src/devices/device.cpp src/devices/device.h
         src/devices/cpumetadata.cpp src/devices/cpumetadata.h
         src/devices/functionnames.cpp src/devices/functionnames.h

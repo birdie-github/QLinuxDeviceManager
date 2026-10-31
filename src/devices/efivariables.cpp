@@ -1,4 +1,7 @@
 #include "efivariables.h"
+#include <QFile>
+#include <QHash>
+#include <QResource>
 #include <QRegularExpression>
 #include <QStringList>
 #include <QThread>
@@ -8,6 +11,24 @@
 #include <memory>
 #include <sys/stat.h>
 #include <unistd.h>
+
+// Explicit initialization keeps the resource linked from the static core library.
+static const QHash<QString, QString> &efiPreferredSpellings()
+{
+    static const QHash<QString, QString> spellings = [] {
+        Q_INIT_RESOURCE(uefi_spellings);
+        QHash<QString, QString> result;
+        QFile file(QStringLiteral(":/device-names/uefi-acronyms.txt"));
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return result;
+        while (!file.atEnd()) {
+            const QString word = QString::fromUtf8(file.readLine()).trimmed();
+            if (word.isEmpty() || word.startsWith(QLatin1Char('#'))) continue;
+            result.insert(word.toLower(), word);
+        }
+        return result;
+    }();
+    return spellings;
+}
 
 bool splitEfiVariableFilename(const QString &filename, QString &name, QString &guid)
 {
@@ -25,8 +46,18 @@ QString efiVariableLabel(const QString &name)
 {
     // Preserve standard mixed-case spellings before applying case boundaries.
     // Unknown capital runs remain intact; this does not decode vendor meanings.
-    static const QStringList preserved {QStringLiteral("WiMAX"), QStringLiteral("WiFi"),
-        QStringLiteral("NVMe"), QStringLiteral("PCIe"), QStringLiteral("IPv4"), QStringLiteral("IPv6")};
+    static const QStringList preserved = [] {
+        QStringList result;
+        for (const QString &word : efiPreferredSpellings()) {
+            // Only mixed-case terms need protection from word splitting.
+            if (word != word.toUpper() && word != word.toLower()) result.append(word);
+        }
+        // Prefer the longest match if the data contains overlapping terms.
+        std::sort(result.begin(), result.end(), [](const QString &a, const QString &b) {
+            return a.size() > b.size();
+        });
+        return result;
+    }();
     const auto preservedAt = [&name](int offset) {
         for (const QString &word : preserved) {
             const int end = offset + static_cast<int>(word.size());
@@ -62,6 +93,21 @@ QString efiVariableLabel(const QString &name)
             words.append("ID");
             words.append(word.mid(2));
         } else words.append(word);
+    }
+    for (QString &word : words) {
+        const auto spelling = efiPreferredSpellings().constFind(word.toLower());
+        if (spelling != efiPreferredSpellings().cend()) {
+            word = spelling.value();
+            continue;
+        }
+        // Only ASCII letters qualify: digits and punctuation are not consonants.
+        const bool consonantsOnly = !word.isEmpty()
+            && std::all_of(word.cbegin(), word.cend(), [](QChar character) {
+                return character.unicode() < 128
+                    && QLatin1String("bcdfghjklmnpqrstvwxyz").contains(character.toLower());
+            });
+        if (consonantsOnly)
+            word = word.toUpper();
     }
     QString label = words.join(' ');
     static const QRegularExpression boot(QStringLiteral("^(Boot|Driver|SysPrep)([0-9a-fA-F]{4})$"));

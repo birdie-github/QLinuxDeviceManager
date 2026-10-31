@@ -1,0 +1,14 @@
+# Preferred UEFI label spellings, one per line. Matching is case-insensitive.
+# Blank lines and lines beginning with # are ignored. Rebuild after editing.
+# Mixed-case entries are also preserved when splitting compound variable names.
+AMI
+AP
+OS
+SMBIOS
+PCIe
+VGA
+WiMAX
+WiFi
+NVMe
+IPv4
+IPv6

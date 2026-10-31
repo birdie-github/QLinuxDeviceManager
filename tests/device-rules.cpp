@@ -478,9 +478,22 @@ int main()
           && efiVariableLabel("OfflineUniqueIDEKPubCRC") == "Offline Unique ID EK Pub CRC"
           && efiVariableLabel("LoaderDevicePartUUID") == "Loader Device Part UUID"
           && efiVariableLabel("AMITCGPPIVAR") == "AMITCGPPIVAR"
-          && efiVariableLabel("EDID1Nv") == "EDID1 Nv"
-          && efiVariableLabel("SmbiosV3EntryPointTable") == "Smbios V3 Entry Point Table",
+          && efiVariableLabel("EDID1Nv") == "EDID1 NV"
+          && efiVariableLabel("SmbiosV3EntryPointTable") == "SMBIOS V3 Entry Point Table",
           "EFI word boundaries must preserve mixed-case terms and capital runs without swallowing ID or version boundaries");
+    check(efiVariableLabel("PcieLink") == "PCIe Link"
+          && efiVariableLabel("pcie") == "PCIe" && efiVariableLabel("PCIeLink") == "PCIe Link",
+          "EFI labels must use the standard mixed-case PCIe spelling");
+    check(efiVariableLabel("AmiApOsSmbiosVga") == "AMI AP OS SMBIOS VGA"
+          && efiVariableLabel("ami_ap_os_smbios_vga") == "AMI AP OS SMBIOS VGA"
+          && efiVariableLabel("db") == "DB" && efiVariableLabel("dbx") == "DBX"
+          && efiVariableLabel("dbxDefault") == "DBX Default"
+          && efiVariableLabel("nvDbt") == "NV DBT",
+          "EFI labels must uppercase known acronyms and words containing only consonants");
+    check(efiVariableLabel("dbx2") == "dbx2" && efiVariableLabel("db.x") == "db.x"
+          && efiVariableLabel("dbxé") == "dbxé"
+          && efiVariableLabel("KeyData") == "Key Data" && efiVariableLabel("").isEmpty(),
+          "Consonant-only casing must exclude digits, punctuation, non-ASCII letters and ordinary words");
     check(splitEfiVariableFilename("Vendor-Setting-8be4df61-93ca-11d2-aa0d-00e098032b8c", efiName, efiGuid)
           && efiName == "Vendor-Setting", "Variable names may themselves contain hyphens");
     check(!splitEfiVariableFilename("BootCurrent-not-a-guid", efiName, efiGuid)

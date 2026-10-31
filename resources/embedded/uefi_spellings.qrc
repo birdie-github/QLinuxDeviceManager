@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/device-names">
+        <file>uefi-acronyms.txt</file>
+    </qresource>
+</RCC>
