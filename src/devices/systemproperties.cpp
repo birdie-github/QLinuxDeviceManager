@@ -56,6 +56,75 @@ Attribute readText(const QString &path, int limit = 4096)
     const QString text = QString::fromUtf8(bytes).trimmed();
     return text.isEmpty() ? Attribute() : available(text);
 }
+Attribute kernelTpmIdentity()
+{
+    const QString root = QStringLiteral("/sys/class/tpm");
+    const auto devices = boundedDirectoryNames(root, 64, {QStringLiteral("tpm[0-9]*")});
+    if (devices.error) return failed(devices.error);
+    static const QRegularExpression deviceName(QStringLiteral("^tpm[0-9]+$"));
+    QStringList lines;
+    for (const auto &device : devices.names) {
+        if (!deviceName.match(device).hasMatch()) continue;
+        const auto major = readText(root + '/' + device + "/tpm_version_major", 64);
+        if (major.error == ECANCELED) return major;
+        const QString identity = major.state == ReadState::Available && (major.value == "1" || major.value == "2")
+            ? QStringLiteral("TPM %1.x").arg(major.value)
+            : QString();
+        lines.append(identity.isEmpty() ? device : QStringLiteral("%1: %2").arg(device, identity));
+    }
+    return lines.isEmpty() ? Attribute{} : available(lines.join('\n'));
+}
+
+Attribute parseFirmwareTpm(const QByteArray &raw)
+{
+    constexpr int minimumLength = 0x1b;
+    if (raw.size() < minimumLength + 2 || raw.at(0) != 43) return failed(EPROTO);
+    const auto byte = [&](int index) { return static_cast<unsigned char>(raw.at(index)); };
+    const int length = byte(1);
+    if (length < minimumLength || length + 2 > raw.size()) return failed(EPROTO);
+    const auto end = raw.indexOf(QByteArray(2, '\0'), length);
+    if (end < 0) return failed(EPROTO);
+    const auto printable = [](const QByteArray &bytes) {
+        QString text;
+        for (const char c : bytes) {
+            const auto value = static_cast<unsigned char>(c);
+            if (!value) break;
+            text += value >= 32 && value <= 126 ? QLatin1Char(c) : QLatin1Char('?');
+        }
+        return text.trimmed();
+    };
+    const auto strings = raw.mid(length, end - length).split('\0');
+    const int index = byte(0x12);
+    const QString vendor = printable(raw.mid(4, 4));
+    const QString description = index > 0 && index <= strings.size()
+        ? printable(strings.at(index - 1).left(128)) : QString();
+    const unsigned major = byte(8), minor = byte(9);
+    QStringList identity;
+    if (major && major != 0xff && minor != 0xff)
+        identity.append(QStringLiteral("TPM %1.%2").arg(major).arg(minor));
+    if (!vendor.isEmpty()) identity.append(vendor);
+    if (!description.isEmpty() && description != vendor) identity.append(description);
+    return identity.isEmpty() ? Attribute{} : available(identity.join(QStringLiteral(" · ")));
+}
+
+Attribute firmwareTpmIdentity()
+{
+    const QString root = QStringLiteral("/sys/firmware/dmi/entries");
+    const auto entries = boundedDirectoryNames(root, 64, {QStringLiteral("43-*")});
+    if (entries.error) return failed(entries.error);
+    QStringList lines;
+
+    for (const auto &entry : entries.names) {
+        QByteArray raw;
+        const auto status = readSystemBytes(root + '/' + entry + "/raw", 4096, raw);
+        if (status.error == ECANCELED) return status;
+        const auto identity = status.state == ReadState::Available ? parseFirmwareTpm(raw) : status;
+        if (identity.state == ReadState::Available) lines.append(identity.value);
+        else if (identity.error) return identity;
+    }
+    return lines.isEmpty() ? Attribute{} : available(lines.join('\n'));
+}
+
 bool parseExpansionSlot(const QByteArray &raw, ExpansionSlot &slot)
 {
     const auto byte = [&](qsizetype index) { return static_cast<unsigned char>(raw.at(index)); };
@@ -744,6 +813,8 @@ SystemProperties collectSystemProperties()
         put(QLatin1String(field.first), readText("/sys/class/dmi/id/" + QString::fromLatin1(field.second)),
             "/sys/class/dmi/id/" + QString::fromLatin1(field.second));
     result.expansionSlots = collectExpansionSlots();
+    put("tpm_kernel", kernelTpmIdentity(), "/sys/class/tpm/tpm*/tpm_version_major: TPM devices registered by Linux");
+    put("tpm_firmware", firmwareTpmIdentity(), "/sys/firmware/dmi/entries/43-*/raw: SMBIOS Type 43 vendor ID, specification version and description");
     struct stat efi {};
     const int status = stat("/sys/firmware/efi", &efi);
     put("boot", status == 0 ? S_ISDIR(efi.st_mode) ? available("uefi") : failed(ENOTDIR) : errno == ENOENT ? available("not-exposed") : failed(errno), "/sys/firmware/efi directory presence");

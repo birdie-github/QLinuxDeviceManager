@@ -17,7 +17,9 @@ static SystemFields motherboardFields()
         {"board_vendor", Text::tr("Motherboard manufacturer")},
         {"board_model", Text::tr("Motherboard model")},
         {"firmware", Text::tr("Firmware version")},
-        {"firmware_date", Text::tr("Firmware date (reported)")}};
+        {"firmware_date", Text::tr("Firmware date (reported)")},
+        {"tpm_kernel", Text::tr("TPM detected by Linux")},
+        {"tpm_firmware", Text::tr("TPM reported by firmware")}};
 }
 
 QString systemOsValue(const SystemProperties &snapshot, const QString &key, const Attribute &value)
