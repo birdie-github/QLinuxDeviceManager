@@ -5,6 +5,7 @@
 #include <libudev.h>
 #include <memory>
 #include <QMap>
+#include <QRegularExpression>
 #include <QStringList>
 #include <QSysInfo>
 #include <cerrno>
@@ -28,12 +29,11 @@ Attribute failed(int error)
     return {error == EACCES || error == EPERM ? ReadState::PermissionDenied
         : error == ENOENT ? ReadState::Unavailable : ReadState::Error, {}, error};
 }
-Attribute readText(const QString &path, int limit = 4096)
+Attribute readSystemBytes(const QString &path, int limit, QByteArray &bytes)
 {
     if (QThread::currentThread()->isInterruptionRequested()) return failed(ECANCELED);
     const int fd = open(path.toUtf8().constData(), O_RDONLY | O_CLOEXEC);
     if (fd < 0) return failed(errno);
-    QByteArray bytes;
     int error = 0;
     while (bytes.size() <= limit) {
         char buffer[4096];
@@ -46,9 +46,99 @@ Attribute readText(const QString &path, int limit = 4096)
     close(fd);
     if (error) return failed(error);
     if (bytes.size() > limit) return failed(EOVERFLOW);
+    return available({});
+}
+Attribute readText(const QString &path, int limit = 4096)
+{
+    QByteArray bytes;
+    const auto status = readSystemBytes(path, limit, bytes);
+    if (status.state != ReadState::Available) return status;
     const QString text = QString::fromUtf8(bytes).trimmed();
     return text.isEmpty() ? Attribute() : available(text);
 }
+bool parseExpansionSlot(const QByteArray &raw, ExpansionSlot &slot)
+{
+    const auto byte = [&](qsizetype index) { return static_cast<unsigned char>(raw.at(index)); };
+    if (raw.size() < 14 || byte(0) != 9) return false;
+    const int length = byte(1);
+    if (length < 12 || length + 2 > raw.size()) return false;
+    const auto end = raw.indexOf(QByteArray(2, '\0'), length);
+    if (end < 0) return false;
+    const auto strings = raw.mid(length, end - length).split('\0');
+    if (byte(4) > 0 && byte(4) <= strings.size())
+        slot.designation = QString::fromLatin1(strings.at(byte(4) - 1).left(128)).simplified();
+    slot.type = byte(5);
+    slot.reportedWidth = byte(6);
+    slot.usage = byte(7);
+    slot.length = byte(8);
+    if (length >= 17) {
+        const unsigned domain = byte(13) | (byte(14) << 8);
+        const unsigned bus = byte(15), devfn = byte(16);
+        if (domain != 0xffff || bus != 0xff || devfn != 0xff) {
+            slot.address = QStringLiteral("%1:%2:%3.%4").arg(domain, 4, 16, QLatin1Char('0'))
+                .arg(bus, 2, 16, QLatin1Char('0')).arg(devfn >> 3, 2, 16, QLatin1Char('0')).arg(devfn & 7);
+        }
+    }
+    if (length >= 19) {
+        slot.baseLanes = byte(17);
+        const int physicalWidthOffset = 20 + byte(18) * 5;
+        if (physicalWidthOffset < length) slot.physicalWidth = byte(physicalWidthOffset);
+    }
+    return true;
+}
+ExpansionSlots collectExpansionSlots()
+{
+    ExpansionSlots result;
+    const QString dmi = QStringLiteral("/sys/firmware/dmi/entries");
+    const auto entries = boundedDirectoryNames(dmi, 256, {QStringLiteral("9-*")});
+    if (entries.error) result.firmwareStatus = failed(entries.error);
+    else if (!entries.names.isEmpty()) result.firmwareStatus = available({});
+    for (const auto &entry : entries.names) {
+        QByteArray raw;
+        const auto status = readSystemBytes(dmi + '/' + entry + "/raw", 4096, raw);
+        ExpansionSlot slot;
+        if (status.state != ReadState::Available) result.firmwareStatus = status;
+        else if (!parseExpansionSlot(raw, slot)) result.firmwareStatus = failed(EPROTO);
+        else {
+            if (!slot.address.isEmpty())
+                slot.currentLinkWidth = readText("/sys/bus/pci/devices/" + slot.address + "/current_link_width");
+            result.records.append(slot);
+        }
+        if (QThread::currentThread()->isInterruptionRequested()) return {};
+    }
+
+    const QString pci = QStringLiteral("/sys/bus/pci/slots");
+    const auto kernel = boundedDirectoryNames(pci, 256);
+    if (kernel.error) result.kernelStatus = failed(kernel.error);
+    else if (!kernel.names.isEmpty()) result.kernelStatus = available({});
+    const QRegularExpression addressFormat(QStringLiteral(
+        "^[0-9a-f]{4,8}:[0-9a-f]{2}(?::[0-1][0-9a-f](?:\\.[0-7])?)?$"));
+    for (const auto &name : kernel.names) {
+        const auto value = readText(pci + '/' + name + "/address", 64);
+        const QString address = value.value.toLower();
+        if (value.state != ReadState::Available) result.kernelStatus = value;
+        else if (!addressFormat.match(address).hasMatch()) result.kernelStatus = failed(EPROTO);
+        else {
+            ExpansionSlot *match = nullptr;
+            for (auto &record : result.records) {
+                if (!record.type || record.address.isEmpty()) continue;
+                if (record.address != address && record.address.section('.', 0, 0) != address) continue;
+                if (match || !record.kernelName.isEmpty()) { match = nullptr; break; }
+                match = &record;
+            }
+            if (match) match->kernelName = name;
+            else {
+                ExpansionSlot slot;
+                slot.address = address;
+                slot.kernelName = name;
+                result.records.append(slot);
+            }
+        }
+        if (QThread::currentThread()->isInterruptionRequested()) return {};
+    }
+    return result;
+}
+
 bool number(const Attribute &value, qlonglong &result)
 {
     bool ok = false;
@@ -641,6 +731,7 @@ SystemProperties collectSystemProperties()
                              qMakePair("firmware", "bios_version"), qMakePair("firmware_date", "bios_date")})
         put(QLatin1String(field.first), readText("/sys/class/dmi/id/" + QString::fromLatin1(field.second)),
             "/sys/class/dmi/id/" + QString::fromLatin1(field.second));
+    result.expansionSlots = collectExpansionSlots();
     struct stat efi {};
     const int status = stat("/sys/firmware/efi", &efi);
     put("boot", status == 0 ? S_ISDIR(efi.st_mode) ? available("uefi") : failed(ENOTDIR) : errno == ENOENT ? available("not-exposed") : failed(errno), "/sys/firmware/efi directory presence");

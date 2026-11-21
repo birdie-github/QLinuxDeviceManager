@@ -6,6 +6,7 @@
 
 class QGridLayout;
 class QLabel;
+class ReportTable;
 
 // Owns motherboard fields and MOK certificate widgets from supplied snapshots.
 // Refresh and clipboard actions remain with the dialog, as for SystemRamPage.
@@ -20,6 +21,11 @@ public:
 private:
     QString mokText() const;
     void rebuildMok();
+    QStringList expansionSlotHeaders() const;
+    QStringList expansionSlotCells(const ExpansionSlot &slot) const;
+    QString expansionSlotStatus() const;
+    ReportTable *expansionTable_ = nullptr;
+    QLabel *expansionStatus_ = nullptr;
     QGridLayout *summary_ = nullptr;
     QGridLayout *mokForm_ = nullptr;
     QHash<QString, QLabel *> fields_;

@@ -21,7 +21,22 @@ struct GpuResizableBar {
     QHash<int, Attribute> currentSizes; // Allocated aperture size in bytes.
 };
 
+struct ExpansionSlot {
+    QString designation;
+    QString kernelName;
+    QString address;
+    int type = 0, usage = 0, length = 0;
+    int reportedWidth = 0, physicalWidth = 0, baseLanes = 0;
+    Attribute currentLinkWidth;
+};
+struct ExpansionSlots {
+    Attribute firmwareStatus;
+    Attribute kernelStatus;
+    QVector<ExpansionSlot> records;
+};
+
 struct SystemProperties {
+    ExpansionSlots expansionSlots;
     QVector<CpuCoreGroup> cpuGroups;
     QVector<CpuCacheRecord> cpuCaches;
     Attribute gpuRebarStatus;
