@@ -1,4 +1,5 @@
 #include "cpumetadata.h"
+#include "cputopology.h"
 
 #include <QFile>
 #include <QThread>
@@ -29,6 +30,64 @@ QHash<int, QString> parseCpuModels(const QString &cpuinfo)
     }
     commit();
     return models;
+}
+
+QHash<QString, Attribute> parseCpuIdentity(const QString &cpuinfo)
+{
+    QHash<QString, Attribute> result;
+    const auto stop = [&](int error) {
+        for (const auto &field : cpuIdentityFields)
+            result.insert(QLatin1String(field.key), {ReadState::Error, {}, error});
+        return result;
+    };
+    if (cpuinfo.size() > 4 * 1024 * 1024) return stop(EOVERFLOW);
+    QHash<QString, QMap<QString, QSet<int>>> groups;
+    QHash<QString, QString> record;
+    QSet<int> seen;
+    int error = 0;
+    const auto commit = [&] {
+        if (!record.contains("processor")) return;
+        bool valid = false;
+        const int cpu = record.value("processor").toInt(&valid);
+        if (!valid || cpu < 0 || seen.contains(cpu)) { error = EINVAL; return; }
+        if (seen.size() >= 4096) { error = EOVERFLOW; return; }
+        seen.insert(cpu);
+        for (const auto &field : cpuIdentityFields)
+            groups[QLatin1String(field.key)][record.value(QLatin1String(field.procName))].insert(cpu);
+    };
+    for (const QString &line : cpuinfo.split('\n')) {
+        if (QThread::currentThread()->isInterruptionRequested()) return stop(ECANCELED);
+        if (line.trimmed().isEmpty()) {
+            commit();
+            if (error) return stop(error);
+            record.clear();
+            continue;
+        }
+        const int colon = line.indexOf(':');
+        if (colon < 0) continue;
+        const QString key = line.left(colon).trimmed();
+        if (key == "processor") record.insert(key, line.mid(colon + 1).trimmed());
+        for (const auto &field : cpuIdentityFields) {
+            if (key != QLatin1String(field.procName)) continue;
+            const QString value = line.mid(colon + 1).trimmed();
+            bool valid = false;
+            const bool hex = value.startsWith("0x", Qt::CaseInsensitive);
+            const auto number = (hex ? value.mid(2) : value).toUInt(&valid, hex ? 16 : 10);
+            if (valid) record.insert(key, hex ? QStringLiteral("0x%1").arg(number, 0, 16) : QString::number(number));
+            break;
+        }
+    }
+    commit();
+    if (error) return stop(error);
+    for (auto field = groups.cbegin(); field != groups.cend(); ++field) {
+        const auto &values = field.value();
+        if (values.size() == 1 && values.firstKey().isEmpty()) continue;
+        QStringList lines;
+        for (auto it = values.cbegin(); it != values.cend(); ++it)
+            lines.append(cpuListText(it.value()) + '\t' + it.key());
+        result.insert(field.key(), {ReadState::Available, lines.join('\n'), 0});
+    }
+    return result;
 }
 
 Attribute readCpuInfo()

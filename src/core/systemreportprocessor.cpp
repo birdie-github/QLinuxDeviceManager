@@ -1,9 +1,11 @@
 #include "systemreport.h"
+#include "cpumetadata.h"
 #include "commonproperties.h"
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QLocale>
 #include <algorithm>
+#include <iterator>
 #include <limits>
 
 namespace {
@@ -27,15 +29,18 @@ QString systemProcessorValue(const SystemProperties &snapshot, const QString &ke
         if (value.value == "notimplemented") return Text::tr("Status reporting not implemented by kernel");
         return Text::tr("Unknown (%1)").arg(value.value);
     }
-    if (key == "instruction_sets") {
+    const bool identity = std::any_of(std::begin(cpuIdentityFields), std::end(cpuIdentityFields),
+        [&](const auto &field) { return key == QLatin1String(field.key); });
+    if (key == "instruction_sets" || identity) {
         const QStringList groups = value.value.split('\n');
         QStringList lines;
         for (const QString &group : groups) {
             const QStringList parts = group.split('\t');
-            lines.append(groups.size() == 1 ? parts.value(1)
-                : Text::tr("Logical CPUs %1: %2").arg(parts.value(0), parts.value(1)));
+            const QString item = parts.value(1).isEmpty() ? Text::tr("Unavailable") : parts.value(1);
+            lines.append(groups.size() == 1 ? item
+                : Text::tr("Logical CPUs %1: %2").arg(parts.value(0), item));
         }
-        return lines.join("\n\n");
+        return lines.join(identity ? "\n" : "\n\n");
     }
     if (key == "caches") {
         QStringList lines;
@@ -97,10 +102,11 @@ SystemProcessorTable systemProcessorTable(const SystemProperties &snapshot, cons
             table.rows.append({name, Text::tr("%1 / %2").arg(threads.size()).arg(cpus.size()), frequency, cpuListText(cpus)});
         }
     } else if (key == "cache_topology") {
-        // Keep each sharing domain explicit; aggregate equal-sized cache instances.
+        // Aggregate instances only when capacity and reported geometry agree.
         QMap<QString, QVector<CpuCacheRecord>> kinds;
         for (const auto &cache : snapshot.cpuCaches)
-            kinds[QStringLiteral("%1/%2/%3").arg(cache.level).arg(cache.type).arg(cache.bytes)].append(cache);
+            kinds[QStringLiteral("%1/%2/%3/%4/%5/%6").arg(cache.level).arg(cache.type).arg(cache.bytes)
+                .arg(cache.lineBytes).arg(cache.ways).arg(cache.sets)].append(cache);
         QMap<int, QString> cpuCores;
         QMap<QString, QSet<int>> coreCpus;
         QSet<int> onlineCpus;
@@ -111,7 +117,7 @@ SystemProcessorTable systemProcessorTable(const SystemProperties &snapshot, cons
                 onlineCpus.insert(member.cpu);
             }
         }
-        table.headers = {Text::tr("Cache"), Text::tr("Configuration"), Text::tr("Sharing (logical CPUs)")};
+        table.headers = {Text::tr("Cache"), Text::tr("Configuration"), Text::tr("Sharing (logical CPUs)"), Text::tr("Geometry")};
         for (auto it = kinds.cbegin(); it != kinds.cend(); ++it) {
             auto instances = it.value();
             std::sort(instances.begin(), instances.end(), [](const auto &a, const auto &b) {
@@ -154,8 +160,13 @@ SystemProcessorTable systemProcessorTable(const SystemProperties &snapshot, cons
                     domains = Text::tr("Shared by all online cores");
             }
             const QString size = QLocale().formattedDataSize(static_cast<qlonglong>(cache.bytes), 0, QLocale::DataSizeIecFormat);
+            QStringList geometry;
+            if (cache.lineBytes) geometry.append(Text::tr("%1 B/line").arg(cache.lineBytes));
+            if (cache.ways) geometry.append(Text::tr("%1-way").arg(cache.ways));
+            if (cache.sets) geometry.append(Text::tr("%1 sets").arg(cache.sets));
             table.rows.append({Text::tr("L%1 %2").arg(cache.level).arg(type),
-                         instances.size() == 1 ? size : Text::tr("%1 × %2").arg(instances.size()).arg(size), domains});
+                instances.size() == 1 ? size : Text::tr("%1 × %2").arg(instances.size()).arg(size),
+                domains, geometry.isEmpty() ? Text::tr("Unavailable") : geometry.join(", ")});
         }
     }
     if (table.rows.isEmpty()) table.status = Text::tr("Unavailable");

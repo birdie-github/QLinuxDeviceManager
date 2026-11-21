@@ -49,11 +49,10 @@ SystemProcessorPage::SystemProcessorPage(QWidget *parent) : QWidget(parent)
     };
 
     auto *processor = form_;
-    field(processor, "cpu", systemFieldCaption(SystemPage::Processor, "cpu"));
-    field(processor, "sockets", systemFieldCaption(SystemPage::Processor, "sockets"));
-    field(processor, "cores", systemFieldCaption(SystemPage::Processor, "cores"));
-    field(processor, "logical", systemFieldCaption(SystemPage::Processor, "logical"));
-    field(processor, "smt", systemFieldCaption(SystemPage::Processor, "smt"));
+    for (const auto &entry : systemFields(SystemPage::Processor)) {
+        if (entry.first == "instruction_sets") break;
+        field(processor, entry.first, entry.second);
+    }
     const QString featuresCaption = systemFieldCaption(SystemPage::Processor, "instruction_sets");
     auto *featuresLabel = new QLabel(featuresCaption, processor->parentWidget());
     captionsWidgets_.append(featuresLabel);

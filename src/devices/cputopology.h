@@ -17,6 +17,7 @@ struct CpuCacheRecord {
     QString type;
     qulonglong bytes = 0;
     QSet<int> cpus; // Full kernel sharing set, including any offline siblings.
+    qulonglong lineBytes = 0, ways = 0, sets = 0; // Zero means not reported.
 };
 struct CpuCoreGroup {
     QVector<CpuTopologyRecord> members;

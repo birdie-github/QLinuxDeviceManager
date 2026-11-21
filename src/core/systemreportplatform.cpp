@@ -112,6 +112,10 @@ SystemFields systemFields(SystemPage page)
     case SystemPage::Motherboard: return motherboardFields();
     case SystemPage::Processor: return {
         {"cpu", Text::tr("CPU model(s)")},
+        {"cpu_family", Text::tr("CPU family")},
+        {"cpu_model_id", Text::tr("Model ID")},
+        {"cpu_stepping", Text::tr("Stepping")},
+        {"cpu_microcode", Text::tr("Loaded microcode revision")},
         {"sockets", Text::tr("Sockets")},
         {"cores", Text::tr("Physical cores")},
         {"logical", Text::tr("Logical CPUs")},

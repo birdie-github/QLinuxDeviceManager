@@ -415,7 +415,12 @@ void cpuTopology(SystemProperties &result)
                 sharingEntries += siblings.size();
                 if (sharingEntries > 65536) { cacheError = failed(EOVERFLOW); complete = false; break; }
                 seen.insert(key, bytes);
-                result.cpuCaches.append({static_cast<int>(levelNumber), type.value, bytes, siblings});
+                const auto geometry = [&](const char *name) -> qulonglong {
+                    qlonglong value = 0;
+                    return number(readText(prefix + QLatin1String(name), 64), value) ? value : 0;
+                };
+                result.cpuCaches.append({static_cast<int>(levelNumber), type.value, bytes, siblings,
+                    geometry("coherency_line_size"), geometry("ways_of_associativity"), geometry("number_of_sets")});
                 auto &total = totals[kind];
                 if (bytes > static_cast<qulonglong>(std::numeric_limits<qlonglong>::max())
                     || total.first > static_cast<qulonglong>(std::numeric_limits<qlonglong>::max()) - bytes) {
@@ -434,7 +439,8 @@ void cpuTopology(SystemProperties &result)
     result.sources["caches"] = base + "/cpu*/cache/index*/{level,type,size,shared_cpu_list}; online CPUs only";
     if (!complete) result.cpuCaches.clear();
     result.values["cache_topology"] = result.values.value("caches");
-    result.sources["cache_topology"] = result.sources.value("caches");
+    result.sources["cache_topology"] = result.sources.value("caches") + "; geometry from coherency_line_size, "
+        "ways_of_associativity and number_of_sets for each cache instance";
     result.values["core_groups"] = topologyComplete ? available(QString()) : topologyError;
     if (topologyComplete) result.cpuGroups = groupCpuTopology(records, result.cpuCaches);
     // Detect observed hotplug during collection rather than publish mixed counts.
@@ -701,6 +707,12 @@ SystemProperties collectSystemProperties()
     put("cpu", cpu.state == ReadState::Available ? models.isEmpty() ? Attribute() : available(models.join('\n')) : cpu, "/proc/cpuinfo: per-processor model fields");
     put("instruction_sets", cpu.state == ReadState::Available ? parseCpuInstructionSets(cpu.value) : cpu,
         "/proc/cpuinfo: per-processor flags, Features or isa; kernel-exposed instruction sets and CPU features");
+    const auto identity = cpu.state == ReadState::Available ? parseCpuIdentity(cpu.value) : QHash<QString, Attribute>();
+    for (const auto &field : cpuIdentityFields) {
+        const QString key = QLatin1String(field.key);
+        put(key, cpu.state == ReadState::Available ? identity.value(key) : cpu,
+            QStringLiteral("/proc/cpuinfo: per-processor %1").arg(QLatin1String(field.procName)));
+    }
     gpuResizableBar(result);
     result.sources["gpu_rebar"] = "/sys/bus/pci/devices: display-controller class, resourceN_resize supported-size bitmaps, resource allocation metadata; BIOS setting is not exposed";
     cpuTopology(result);
