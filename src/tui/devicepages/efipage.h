@@ -9,7 +9,11 @@ public:
     ~EfiPageReader() override { requestInterruption(); wait(); }
     PropertyPage page() const { return {QStringLiteral("UEFI variable — hex dump\n") + text_ + '\n', {}}; }
 protected:
-    void run() override { text_ = readEfiHexDump(device_); }
+    void run() override
+    {
+        const auto snapshot = readEfiSnapshot(device_);
+        text_ = efiSnapshotText(snapshot.status, snapshot.bytes, snapshot.truncated);
+    }
 private:
     const Device device_;
     QString text_;

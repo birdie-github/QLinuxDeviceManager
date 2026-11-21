@@ -1,4 +1,5 @@
 #include "deviceproperties.h"
+#include "efivalue.h"
 #include "directoryscan.h"
 #include "acpivendors.h"
 #include <libudev.h>
@@ -19,7 +20,6 @@
 
 namespace {
 constexpr int textLimit = 4096;
-constexpr int efiLimit = 65536;
 struct Descriptor {
     int fd = -1;
     explicit Descriptor(int value) : fd(value) {}
@@ -404,23 +404,21 @@ DeviceProperties collectDeviceProperties(const Device &device, bool cachedStorag
     DeviceProperties result;
     result.device = device;
     const Device &d = result.device;
-    const bool efi = d.subsystem == "efivarfs";
-    const QByteArray path = d.path.toUtf8();
-    if (efi) {
-        struct stat entry {};
-        if (lstat(path.constData(), &entry) != 0) {
-            result.error = errno;
-            result.state = errno == ENOENT || errno == ENODEV ? ReadState::Removed : failure(errno).state;
+    if (d.subsystem == "efivarfs") {
+        auto efi = readEfiSnapshot(d);
+        if (!efi.instanceValidated) {
+            result.state = efi.status.state;
+            result.error = efi.status.error;
             return result;
         }
-        if (inodeIdentity(entry) != d.incarnation) { result.state = ReadState::Removed; return result; }
-        if (!S_ISREG(entry.st_mode) || !(entry.st_mode & S_IROTH)) {
-            result.state = ReadState::PermissionDenied;
-            result.error = EACCES;
-            return result;
-        }
+        result.state = ReadState::Available;
+        result.efiBytes = std::move(efi.bytes);
+        result.efiTruncated = efi.truncated;
+        put(result, "efi/hex", efi.status, QStringLiteral("efivarfs: complete file bytes, no decoding"));
+        return result;
     }
-    Descriptor deviceFd(open(path.constData(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW | (efi ? 0 : O_DIRECTORY)));
+    const QByteArray path = d.path.toUtf8();
+    Descriptor deviceFd(open(path.constData(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_DIRECTORY));
     if (deviceFd.fd < 0) {
         result.error = errno;
         result.state = errno == ENOENT || errno == ENODEV ? ReadState::Removed : failure(errno).state;
@@ -431,24 +429,9 @@ DeviceProperties collectDeviceProperties(const Device &device, bool cachedStorag
         result.error = errno; result.state = ReadState::Error; return result;
     }
     const QString identity = inodeIdentity(before);
-    const bool sameIdentity = efi ? identity == d.incarnation : d.incarnation.startsWith(identity + ':');
-    if (!sameIdentity) { result.state = ReadState::Removed; return result; }
+    if (!d.incarnation.startsWith(identity + ':')) { result.state = ReadState::Removed; return result; }
     result.state = ReadState::Available;
-    if (efi) {
-        if (!S_ISREG(before.st_mode) || !(before.st_mode & S_IROTH)) {
-            result.state = ReadState::PermissionDenied;
-            result.error = EACCES;
-            return result;
-        }
-        int error = 0;
-        result.efiBytes = readBytes(deviceFd.fd, efiLimit, error);
-        if (error) put(result, "efi/hex", failure(error), QStringLiteral("efivarfs: complete file bytes"));
-        else {
-            result.efiTruncated = result.efiBytes.size() > efiLimit;
-            result.efiBytes.truncate(efiLimit);
-            put(result, "efi/hex", available(QString()), QStringLiteral("efivarfs: complete file bytes, no decoding"));
-        }
-    } else {
+    {
         std::unique_ptr<udev, decltype(&udev_unref)> context(udev_new(), &udev_unref);
         std::unique_ptr<udev_device, decltype(&udev_device_unref)> raw(
             context ? udev_device_new_from_syspath(context.get(), path.constData()) : nullptr, &udev_device_unref);
@@ -551,11 +534,6 @@ DeviceProperties collectDeviceProperties(const Device &device, bool cachedStorag
         result.error = errno;
         result.state = errno == ENOENT || errno == ENODEV ? ReadState::Removed : failure(errno).state;
     } else if (inodeIdentity(after) != identity) result.state = ReadState::Removed;
-    else if (efi && !(after.st_mode & S_IROTH)) {
-        result.state = ReadState::PermissionDenied;
-        result.error = EACCES;
-        result.efiBytes.clear();
-    }
     if (QThread::currentThread()->isInterruptionRequested()) { result.state = ReadState::Error; result.error = ECANCELED; }
     if (result.state != ReadState::Available && result.bluetooth.applicable)
         result.bluetooth.invalidate({result.state, {}, result.error});

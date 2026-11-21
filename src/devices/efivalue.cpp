@@ -25,45 +25,62 @@ QString efiHexDump(const QByteArray &bytes)
     return lines.join('\n');
 }
 
-QString readEfiHexDump(const Device &device)
+EfiSnapshot readEfiSnapshot(const Device &device)
 {
-    const auto error = [](int code) {
-        return propertyReadValue({code == EACCES || code == EPERM ? ReadState::PermissionDenied
-            : code == ENOENT || code == ENODEV ? ReadState::Removed : ReadState::Error, {}, code});
+    const auto failure = [](int code) -> EfiSnapshot {
+        const auto state = code == EACCES || code == EPERM ? ReadState::PermissionDenied
+            : code == ENOENT || code == ENODEV ? ReadState::Removed : ReadState::Error;
+        return {{state, {}, code}, {}, false, false};
     };
     const auto identity = [](const struct stat &info) {
         return QStringLiteral("%1:%2").arg(qulonglong(info.st_dev)).arg(qulonglong(info.st_ino));
     };
-    if (device.subsystem != "efivarfs") return propertyReadValue({ReadState::NotApplicable, {}, 0});
+    if (device.subsystem != "efivarfs") return {{ReadState::NotApplicable, {}, 0}, {}, false, false};
     const auto path = device.path.toUtf8();
     struct stat before {};
-    if (lstat(path.constData(), &before) != 0) return error(errno);
-    if (identity(before) != device.incarnation) return error(ENODEV);
-    if (!S_ISREG(before.st_mode) || !(before.st_mode & S_IROTH)) return error(EACCES);
-    const int fd = open(path.constData(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
-    if (fd < 0) return error(errno);
+    if (lstat(path.constData(), &before) != 0) return failure(errno);
+    if (identity(before) != device.incarnation) return failure(ENODEV);
+    if (!S_ISREG(before.st_mode) || !(before.st_mode & S_IROTH)) return failure(EACCES);
+    const int fd = open(path.constData(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
+    if (fd < 0) return failure(errno);
     struct Close { int fd; ~Close() { close(fd); } } closeFile {fd};
     struct stat opened {};
-    if (fstat(fd, &opened) != 0) return error(errno);
-    if (identity(opened) != device.incarnation) return error(ENODEV);
-    if (!S_ISREG(opened.st_mode) || !(opened.st_mode & S_IROTH)) return error(EACCES);
-    QByteArray bytes;
+    if (fstat(fd, &opened) != 0) return failure(errno);
+    if (identity(opened) != device.incarnation) return failure(ENODEV);
+    if (!S_ISREG(opened.st_mode) || !(opened.st_mode & S_IROTH)) return failure(EACCES);
+
+    EfiSnapshot result;
     constexpr int limit = 65536;
-    while (bytes.size() <= limit) {
-        if (QThread::currentThread()->isInterruptionRequested()) return error(ECANCELED);
+    while (result.bytes.size() <= limit) {
+        if (QThread::currentThread()->isInterruptionRequested()) return failure(ECANCELED);
         char buffer[4096];
-        const auto count = read(fd, buffer, qMin<int>(sizeof(buffer), limit + 1 - bytes.size()));
-        if (count < 0) { if (errno == EINTR) continue; return error(errno); }
+        const auto count = read(fd, buffer, qMin<int>(sizeof(buffer), limit + 1 - result.bytes.size()));
+        if (count < 0) {
+            if (errno == EINTR) continue;
+            result = failure(errno);
+            break;
+        }
         if (!count) break;
-        bytes.append(buffer, count);
+        result.bytes.append(buffer, count);
     }
+
     struct stat after {};
-    if (lstat(path.constData(), &after) != 0) return error(errno);
-    if (identity(after) != device.incarnation) return error(ENODEV);
-    if (!(after.st_mode & S_IROTH)) return error(EACCES);
-    const bool truncated = bytes.size() > limit;
-    bytes.truncate(limit);
-    QString result = bytes.isEmpty() ? QCoreApplication::translate("PropertiesDialog", "Empty file") : efiHexDump(bytes);
-    if (truncated) result += '\n' + QCoreApplication::translate("PropertiesDialog", "Truncated: first 65536 bytes shown.");
+    if (lstat(path.constData(), &after) != 0) return failure(errno);
+    if (identity(after) != device.incarnation) return failure(ENODEV);
+    if (!S_ISREG(after.st_mode) || !(after.st_mode & S_IROTH)) return failure(EACCES);
+    if (QThread::currentThread()->isInterruptionRequested()) return failure(ECANCELED);
+    result.instanceValidated = true;
+    if (result.status.error) return result;
+    result.status = {ReadState::Available, {}, 0};
+    result.truncated = result.bytes.size() > limit;
+    result.bytes.truncate(limit);
     return result;
+}
+
+QString efiSnapshotText(const Attribute &status, const QByteArray &bytes, bool truncated)
+{
+    if (status.state != ReadState::Available) return propertyReadValue(status);
+    QString text = bytes.isEmpty() ? QCoreApplication::translate("PropertiesDialog", "Empty file") : efiHexDump(bytes);
+    if (truncated) text += '\n' + QCoreApplication::translate("PropertiesDialog", "Truncated: first 65536 bytes shown.");
+    return text;
 }

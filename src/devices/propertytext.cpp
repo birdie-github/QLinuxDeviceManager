@@ -167,11 +167,7 @@ QVector<PropertyEntry> propertyEntries(const DeviceProperties &snapshot, bool re
         add("inventory/sysfs/" + key, QCoreApplication::translate("PropertiesDialog", "Inventory attribute: %1").arg(key), propertyReadValue(d.attributes.value(key)), QCoreApplication::translate("PropertiesDialog", "Last inventory; see name source for derived naming metadata"), true, 2, d.attributes.value(key).state, d.attributes.value(key).error);
     if (efi) {
         const Attribute hex = raw("efi/hex");
-        QString dump = propertyReadValue(hex);
-        if (hex.state == ReadState::Available) {
-            dump = snapshot.efiBytes.isEmpty() ? QCoreApplication::translate("PropertiesDialog", "Empty file") : efiHexDump(snapshot.efiBytes);
-            if (snapshot.efiTruncated) dump += '\n' + QCoreApplication::translate("PropertiesDialog", "Truncated: first 65536 bytes shown.");
-        }
+        const QString dump = efiSnapshotText(hex, snapshot.efiBytes, snapshot.efiTruncated);
         add("efi/hex", QCoreApplication::translate("PropertiesDialog", "UEFI variable — hex dump"), dump,
             QCoreApplication::translate("PropertiesDialog", "Complete efivarfs file bytes, including the attribute prefix; contents are not decoded."), false, 2, hex.state, hex.error);
     }
