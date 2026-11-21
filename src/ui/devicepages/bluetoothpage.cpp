@@ -121,7 +121,9 @@ void BluetoothPage::setSnapshot(const BluetoothProperties &bt, const QString &de
     const QString bluezStatus = bt.bluezState.state == ReadState::Available ? tr("Available")
         : bt.bluezState.state == ReadState::Unsupported ? tr("BlueZ service unavailable or D-Bus support disabled")
         : propertyReadValue(bt.bluezState);
-    renderField(radio, tr("BlueZ metadata"), bluezStatus, bt.bluezPath);
+    renderField(radio, tr("BlueZ metadata"), bluezStatus, bt.bluezPath
+        + (bt.bluezState.state == ReadState::PermissionDenied
+            ? '\n' + tr("The system D-Bus policy denied access to BlueZ metadata.") : QString()));
     copy.append(tr("BlueZ metadata: %1").arg(bluezStatus));
     auto *features = group(tr("Kernel-reported capabilities and settings"));
     if (bt.managementState.state == ReadState::Available) {
@@ -144,7 +146,7 @@ void BluetoothPage::setSnapshot(const BluetoothProperties &bt, const QString &de
         field(features, tr("Supported settings mask"), "SupportedMask");
         field(features, tr("Current settings mask"), "CurrentMask");
     } else {
-        const QString status = propertyReadValue(bt.managementState);
+        const QString status = administrativeReadValue(bt.managementState);
         renderField(features, tr("Management API"), status,
             tr("Read Controller Information only. Access commonly requires CAP_NET_ADMIN (root/sudo). "
                "Missing access does not mean the controller lacks these features."));

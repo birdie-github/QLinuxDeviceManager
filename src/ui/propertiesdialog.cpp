@@ -74,8 +74,14 @@ void PropertiesDialog::acceptResult(DeviceProperties result)
     if (result.state == ReadState::Removed) { markRemoved(); return; }
     if (result.state != ReadState::Available) {
         banner_->show();
-        banner_->setText(tr("Properties could not be refreshed: %1. Showing the previous snapshot.")
-            .arg(propertyReadValue({result.state, {}, result.error})));
+        QString message = tr("Properties could not be refreshed: %1. Showing the previous snapshot.")
+            .arg(propertyReadValue({result.state, {}, result.error}));
+        if (result.state == ReadState::PermissionDenied) {
+            message += ' ' + (device().subsystem == "efivarfs"
+                ? tr("The EFI variable viewer only reads world-readable files, even when run as root.")
+                : tr("Check access to this device's kernel path."));
+        }
+        banner_->setText(message);
         return;
     }
     snapshot_ = std::move(result);
@@ -203,7 +209,6 @@ void PropertiesDialog::rebuildPcie()
     page.pcieApplicable = applicable;
     page.pcieType = snapshot_.pcieType;
     page.pcieTypeSource = snapshot_.pcieTypeSource;
-    page.pcieTypeRequiresRoot = snapshot_.pcieTypeRequiresRoot;
     for (const QString &key : {QStringLiteral("sysfs/current_link_speed"), QStringLiteral("sysfs/current_link_width"),
                               QStringLiteral("sysfs/max_link_speed"), QStringLiteral("sysfs/max_link_width")}) {
         page.values.insert(key, snapshot_.values.value(key));

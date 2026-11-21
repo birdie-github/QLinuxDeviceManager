@@ -23,5 +23,8 @@ struct CommonProperties {
     int error = 0;
 };
 QString propertyReadValue(const Attribute &attribute);
+// Only for sources known to use administrative access.
+QString administrativeReadValue(const Attribute &attribute);
+QString administrativeReadHint(const Attribute &attribute);
 QVector<PropertyEntry> commonPropertyEntries(const CommonProperties &snapshot, bool removed = false,
                                            PropertyPresentation presentation = PropertyPresentation::Gui);

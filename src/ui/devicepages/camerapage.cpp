@@ -66,6 +66,9 @@ void CameraPage::setSnapshot(const CameraProperties &data, const QString &device
         : data.state.error ? errorText(data.state.error) : propertyReadValue(data.state);
     if (data.state.state != ReadState::Available && !modes.isEmpty()) status = tr("Incomplete enumeration: %1").arg(status);
     field(identity, tr("Query status"), status, data.node + ": read-only capability enumeration; two-second worker wait budget");
+    if (data.state.state == ReadState::PermissionDenied || data.state.error == EACCES || data.state.error == EPERM)
+        field(identity, tr("Access"), tr("Use a local desktop session with permission to access this camera. "
+            "Check the device node permissions and any sandbox or system policy."));
     const QVector<QPair<QString, QString>> identityFields {{"card", tr("Device name")}, {"driver", tr("Driver")}, {"bus", tr("Bus information")}};
     for (const auto &entry : identityFields) {
         const QString value = report.value(entry.first).toString();

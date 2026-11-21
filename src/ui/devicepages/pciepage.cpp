@@ -165,7 +165,7 @@ void PciePage::rebuild()
     bool validType = false;
     const uint number = type.value.toUInt(&validType);
     validType = validType && type.state == ReadState::Available;
-    QString typeText = propertyReadValue(type);
+    QString typeText = administrativeReadValue(type);
     if (type.state == ReadState::Error && type.error == EPROTO)
         typeText = tr("Malformed PCI capability data");
     else if (type.state == ReadState::Error && type.error == EMSGSIZE)
@@ -185,10 +185,10 @@ void PciePage::rebuild()
         }
     }
     auto *connection = group(tr("Connection"));
-    field(connection, tr("Connection type"), typeText, snapshot_.pcieTypeSource);
-    if (snapshot_.pcieTypeRequiresRoot) {
-        field(connection, tr("Access"), tr("Run the application as root or with sudo to read this device's PCIe connection type."), snapshot_.pcieTypeSource);
-    }
+    QString typeSource = snapshot_.pcieTypeSource;
+    if (type.state == ReadState::PermissionDenied)
+        typeSource += '\n' + administrativeReadHint(type);
+    field(connection, tr("Connection type"), typeText, typeSource);
     // Both root-complex types lack conventional PCIe link registers. This
     // identifies connection topology, not GPU integration or performance.
     const bool internal = validType && (number == 9 || number == 10);

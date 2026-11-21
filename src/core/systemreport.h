@@ -26,7 +26,7 @@ QString systemMokText(const SystemProperties &snapshot);
 struct SystemCertificateReport { QString title; SystemFields fields; };
 SystemCertificateReport systemCertificateReport(const MokCertificate &certificate, int index, int count);
 
-QString systemMotherboardValue(const Attribute &value);
+QString systemMotherboardValue(const QString &key, const Attribute &value);
 QString systemMokOmitted(int count);
 QStringList systemPropertyHeaders();
 QString systemMemoryStatus(const FirmwareMemoryInformation &memory);

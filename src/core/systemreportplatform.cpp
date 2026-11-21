@@ -66,7 +66,8 @@ QString systemOsValue(const SystemProperties &snapshot, const QString &key, cons
         return devices.join("\n\n");
     }
 
-    if (value.state != ReadState::Available) return propertyReadValue(value);
+    if (value.state != ReadState::Available)
+        return key == "secure_boot" ? administrativeReadValue(value) : propertyReadValue(value);
     if (key == "secure_boot") return value.value == "enabled" ? Text::tr("Enabled") : Text::tr("Disabled");
     if (key == "boot")
         return value.value == "uefi" ? Text::tr("UEFI")
@@ -82,7 +83,7 @@ QString systemOsValue(const SystemProperties &snapshot, const QString &key, cons
 QString systemMokText(const SystemProperties &snapshot)
 {
     const MokCertificates &mok = snapshot.mok;
-    if (mok.status.state != ReadState::Available) return propertyReadValue(mok.status);
+    if (mok.status.state != ReadState::Available) return administrativeReadValue(mok.status);
     QStringList certificates;
     const auto known = [](const QString &text) { return text.isEmpty() ? Text::tr("Unavailable") : text; };
     for (const MokCertificate &certificate : mok.certificates)
@@ -152,9 +153,10 @@ SystemCertificateReport systemCertificateReport(const MokCertificate &certificat
         {Text::tr("Expires:"), date}}};
 }
 
-QString systemMotherboardValue(const Attribute &value)
+QString systemMotherboardValue(const QString &key, const Attribute &value)
 {
-    return value.state == ReadState::Available ? value.value : propertyReadValue(value);
+    if (value.state == ReadState::Available) return value.value;
+    return key == "tpm_firmware" ? administrativeReadValue(value) : propertyReadValue(value);
 }
 QString systemMokOmitted(int count)
 {

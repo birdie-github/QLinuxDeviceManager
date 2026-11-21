@@ -86,7 +86,6 @@ void pcieProperties(DeviceProperties &result, int fd)
     for (auto it = values.cbegin(); it != values.cend(); ++it)
         put(result, "sysfs/" + it.key(), it.value(), result.device.path + '/' + it.key());
     result.pcieTypeSource = result.device.path + "/config";
-    result.pcieTypeRequiresRoot = geteuid() != 0;
     result.pcieType = pcieDeviceType(fd, result.pcieTypeSource);
 }
 void batteryProperties(DeviceProperties &result, int fd)

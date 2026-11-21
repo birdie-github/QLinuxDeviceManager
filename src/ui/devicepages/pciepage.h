@@ -16,7 +16,6 @@ struct PciePageSnapshot {
     bool pcieApplicable = false;
     Attribute pcieType;
     QString pcieTypeSource;
-    bool pcieTypeRequiresRoot = false;
     QHash<QString, Attribute> values;
     QHash<QString, QString> sources;
 };

@@ -369,8 +369,12 @@ StoragePresentation storagePresentation(const StorageProperties &snapshot, const
     std::sort(result.volumes.begin(), result.volumes.end(), byName);
     std::sort(result.health.begin(), result.health.end(), byName);
     QStringList notes;
-    for (const StorageField &note : snapshot.notes)
-        notes.append(tr(note.label) + ": " + storageFieldValue(note) + '\n' + note.source);
+    for (const StorageField &note : snapshot.notes) {
+        QString text = tr(note.label) + ": " + storageFieldValue(note) + '\n' + note.source;
+        if (note.id == "service" && note.value.state == ReadState::PermissionDenied)
+            text += '\n' + tr("The system D-Bus policy denied access to UDisks2 metadata.");
+        notes.append(text);
+    }
     result.notes = notes.join("\n\n");
     return result;
 }

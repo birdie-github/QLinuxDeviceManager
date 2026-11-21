@@ -79,6 +79,9 @@ EfiSnapshot readEfiSnapshot(const Device &device)
 
 QString efiSnapshotText(const Attribute &status, const QByteArray &bytes, bool truncated)
 {
+    if (status.state == ReadState::PermissionDenied)
+        return QCoreApplication::translate("PropertiesDialog",
+            "Permission denied. The EFI variable viewer only reads world-readable files, even when run as root.");
     if (status.state != ReadState::Available) return propertyReadValue(status);
     QString text = bytes.isEmpty() ? QCoreApplication::translate("PropertiesDialog", "Empty file") : efiHexDump(bytes);
     if (truncated) text += '\n' + QCoreApplication::translate("PropertiesDialog", "Truncated: first 65536 bytes shown.");

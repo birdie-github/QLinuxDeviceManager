@@ -71,6 +71,8 @@ void SystemOperatingSystemPage::setSnapshot(const SystemProperties &snapshot)
         QString source = snapshot_.sources.value(key);
         if (key == "secure_boot")
             source += '\n' + tr("Firmware SecureBoot state; does not establish shim validation or kernel lockdown policy.");
+        if (key == "secure_boot" && snapshot_.values.value(key).state == ReadState::PermissionDenied)
+            source += '\n' + administrativeReadHint(snapshot_.values.value(key));
         if (key == "gpu_rebar")
             source += '\n' + tr("GPU capability and current OS resource allocation are separate from the firmware setting. "
                 "A small BAR is not proof of disabled ReBAR; a large BAR is not proof of driver use. "

@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QStringList>
 #include <cerrno>
+#include <unistd.h>
 
 QString propertyReadValue(const Attribute &a)
 {
@@ -27,6 +28,29 @@ QString propertyReadValue(const Attribute &a)
     }
     return {};
 }
+static bool suggestRootForRead(const Attribute &attribute)
+{
+    return attribute.state == ReadState::PermissionDenied && geteuid() != 0;
+}
+
+QString administrativeReadValue(const Attribute &attribute)
+{
+    return suggestRootForRead(attribute)
+        ? QCoreApplication::translate("PropertiesDialog", "Requires root access")
+        : propertyReadValue(attribute);
+}
+
+QString administrativeReadHint(const Attribute &attribute)
+{
+    if (suggestRootForRead(attribute))
+        return QCoreApplication::translate("PropertiesDialog",
+            "To read this property, run the application as root (for example, with sudo).");
+    if (attribute.state == ReadState::PermissionDenied)
+        return QCoreApplication::translate("PropertiesDialog",
+            "Access is blocked even as root. Check the system's access policy.");
+    return {};
+}
+
 QVector<PropertyEntry> commonPropertyEntries(const CommonProperties &snapshot, bool removed,
                                            PropertyPresentation presentation)
 {

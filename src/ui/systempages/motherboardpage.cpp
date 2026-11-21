@@ -66,8 +66,12 @@ void SystemMotherboardPage::setSnapshot(const SystemProperties &snapshot)
 {
     snapshot_ = snapshot;
     for (auto it = fields_.cbegin(); it != fields_.cend(); ++it) {
-        it.value()->setText(systemMotherboardValue(snapshot_.values.value(it.key())));
-        it.value()->setToolTip(propertyToolTip(snapshot_.sources.value(it.key())));
+        const auto value = snapshot_.values.value(it.key());
+        it.value()->setText(systemMotherboardValue(it.key(), value));
+        QString source = snapshot_.sources.value(it.key());
+        if (it.key() == "tpm_firmware" && value.state == ReadState::PermissionDenied)
+            source += '\n' + administrativeReadHint(value);
+        it.value()->setToolTip(propertyToolTip(source));
     }
     rebuildMok();
     const auto &records = snapshot_.expansionSlots.records;
@@ -80,6 +84,7 @@ void SystemMotherboardPage::setSnapshot(const SystemProperties &snapshot)
     expansionTable_->setVisible(!records.isEmpty());
     if (!records.isEmpty()) expansionTable_->fitContents();
     expansionStatus_->setText(expansionSlotStatus());
+    expansionStatus_->setToolTip(propertyToolTip(administrativeReadHint(snapshot_.expansionSlots.firmwareStatus)));
 }
 QStringList SystemMotherboardPage::expansionSlotHeaders() const
 {
@@ -151,18 +156,18 @@ QStringList SystemMotherboardPage::expansionSlotCells(const ExpansionSlot &slot)
 
 QString SystemMotherboardPage::expansionSlotStatus() const
 {
-    const auto source = [&](const Attribute &status) {
-        return status.state == ReadState::Available ? tr("Read") : propertyReadValue(status);
-    };
+    const auto &firmware = snapshot_.expansionSlots.firmwareStatus;
+    const auto &kernel = snapshot_.expansionSlots.kernelStatus;
     return tr("SMBIOS Type 9: %1 · Linux PCI slots: %2")
-        .arg(source(snapshot_.expansionSlots.firmwareStatus), source(snapshot_.expansionSlots.kernelStatus));
+        .arg(firmware.state == ReadState::Available ? tr("Read") : administrativeReadValue(firmware),
+             kernel.state == ReadState::Available ? tr("Read") : propertyReadValue(kernel));
 }
 
 QString SystemMotherboardPage::copyText() const
 {
     QStringList lines;
     for (const auto &field : systemFields(SystemPage::Motherboard))
-        lines.append(field.second + ": " + systemMotherboardValue(snapshot_.values.value(field.first)));
+        lines.append(field.second + ": " + systemMotherboardValue(field.first, snapshot_.values.value(field.first)));
     lines.append(systemMokTitle() + ": " + mokText());
     lines.append(tr("Expansion slots"));
     if (!snapshot_.expansionSlots.records.isEmpty()) {
@@ -184,10 +189,12 @@ void SystemMotherboardPage::rebuildMok()
         delete item;
     }
     const MokCertificates &mok = snapshot_.mok;
-    const QString scope = snapshot_.sources.value("mok") + '\n'
+    QString scope = snapshot_.sources.value("mok") + '\n'
         + tr("Exposed runtime MOK certificates. Issuer and expiration are certificate metadata, "
              "not verification of the signer or proof that this key signed the running kernel. Dates are UTC. "
              "Firmware db certificates and pending enrollments are not included.");
+    if (mok.status.state == ReadState::PermissionDenied)
+        scope += '\n' + administrativeReadHint(mok.status);
     int row = 0;
     const auto hint = [&scope](QLabel *value, const QString &details) {
         value->setToolTip("<qt>" + (scope + "\n\n" + details).toHtmlEscaped().replace('\n', "<br>") + "</qt>");

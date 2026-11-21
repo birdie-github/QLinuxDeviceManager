@@ -67,7 +67,10 @@ void NetworkPage::setSnapshot(const QVector<NetworkProperties> &interfaces,
             const auto wifiField = [&](const char *caption, const char *key, const QString &extra = QString()) {
                 field(form, QCoreApplication::translate("Wireless", caption),
                     wirelessPropertyText(QLatin1String(key), wireless.values.value(QLatin1String(key))),
-                    wireless.sources.value(QLatin1String(key)) + extra);
+                    wireless.sources.value(QLatin1String(key)) + extra
+                    + (wireless.values.value(QLatin1String(key)).state == ReadState::PermissionDenied
+                        ? '\n' + tr("Access to this information is controlled by the network service or kernel policy.")
+                        : QString()));
             };
             field(form, tr("Interface"), tr("802.11 Wi-Fi"), interface.path);
             wifiField(QT_TRANSLATE_NOOP("Wireless", "Operating mode"), "mode");

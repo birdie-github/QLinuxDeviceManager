@@ -4,7 +4,7 @@ PropertyPage systemMotherboardPage(const SystemProperties &snapshot)
 {
     SystemFields fields;
     for (const auto &field : systemFields(SystemPage::Motherboard))
-        fields.append({field.second, systemMotherboardValue(snapshot.values.value(field.first))});
+        fields.append({field.second, systemMotherboardValue(field.first, snapshot.values.value(field.first))});
     SystemReport report;
     report.fields(fields);
     const auto &mok = snapshot.mok;
