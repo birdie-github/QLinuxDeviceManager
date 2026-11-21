@@ -6,14 +6,17 @@ FINAL CUT's upstream installation instructions at https://github.com/gansm/final
 Check discovery with `pkg-config --modversion finalcut`. For a custom prefix,
 add its pkgconfig directory to `PKG_CONFIG_PATH`.
 
-The existing project development dependencies are still required to configure
-this combined build. A desktop session is not required to run the TUI.
+Build just the TUI with Qt 6 Core and Network development files, libudev,
+pkg-config, and FINAL CUT. libkmod is optional and adds module metadata.
 
 ```sh
-cmake -S . -B build -DTUI=ON
-cmake --build build --target qlinuxdevicemanager qlinuxdevicemanager-tui
-./build/qlinuxdevicemanager-tui
+cmake -S . -B build-tui -DGUI=OFF -DTUI=ON
+cmake --build build-tui
+./build-tui/qlinuxdevicemanager-tui
 ```
+
+For a combined build, use `-DTUI=ON` with `GUI` enabled (the default).
+The combined build also needs the desktop frontend's development dependencies.
 
 ## Static FINAL CUT builds
 
@@ -38,8 +41,8 @@ both shared and static FINAL CUT libraries are installed. With only
 Embedding FINAL CUT removes its runtime library dependency, while Qt and any
 GPM/terminal libraries linked dynamically remain runtime dependencies.
 
-TUI defaults to OFF. Missing FINAL CUT skips only the TUI target with a warning;
-the GUI retains its existing installation conventions.
+TUI defaults to OFF. A TUI-only configure requires FINAL CUT. In a combined
+build, missing FINAL CUT skips the TUI target with a warning.
 
 F2 switches devices by type / connection. Arrow keys navigate; Enter toggles
 branches and opens properties for leaf devices. Right/Left still expand/collapse.

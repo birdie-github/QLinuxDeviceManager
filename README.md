@@ -275,6 +275,7 @@ No Icons8 artwork is included until authorized downloads are added.
 ### Optional terminal frontend
 
 A snapshot-only FINAL CUT proof of concept can be enabled with `-DTUI=ON`.
+For a terminal-only build, use `-DGUI=OFF -DTUI=ON`.
 It shares device discovery with the GUI and provides type/connection trees and
 General/Driver/Details properties, on-demand filtering, All Devices visibility,
 and System Information. See [TUI build and usage](doc/TUI.md).
