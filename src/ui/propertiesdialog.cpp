@@ -147,7 +147,7 @@ void PropertiesDialog::rebuildResources()
 
 void PropertiesDialog::rebuildAudio()
 {
-    const bool applicable = device().category == "audio" || device().subsystem == "sound";
+    const bool applicable = device().category == "audio" || device().subsystem == "sound" || device().subsystem == "hdaudio";
     setPageVisible(audioPage_, applicable, tr("Audio"), 2);
     if (applicable) audioPage_->setSnapshot(snapshot_.audio, device().path);
     else audioPage_->clear();

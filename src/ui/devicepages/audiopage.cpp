@@ -46,6 +46,23 @@ void AudioPage::setSnapshot(const AudioProperties &data, const QString &devicePa
     const auto availability = [](int state) {
         return state == 1 ? tr("Unavailable") : state == 2 ? tr("Available") : tr("Unknown");
     };
+    for (const auto &codec : data.codecs) {
+        auto *hardware = report.group(tr("HDA codec — %1").arg(codec.node));
+        const auto field = [&](const QString &label, const char *key, const Attribute &attribute) {
+            report.field(hardware, label, propertyReadValue(attribute), codec.path + '/' + QLatin1String(key));
+        };
+        report.field(hardware, tr("Hardware path"), codec.path);
+        field(tr("Vendor"), "vendor_name", codec.vendor);
+        field(tr("Codec name"), "chip_name", codec.chip);
+        field(tr("Codec ID"), "vendor_id", codec.id);
+        field(tr("Subsystem ID"), "subsystem_id", codec.subsystemId);
+        field(tr("Revision ID"), "revision_id", codec.revision);
+    }
+    if (data.codecStatus.state == ReadState::Error || data.codecStatus.state == ReadState::PermissionDenied) {
+        auto *hardware = report.group(tr("HDA codec collection"));
+        report.field(hardware, tr("Query status"), propertyReadValue(data.codecStatus),
+                     QStringLiteral("/sys/bus/hdaudio/devices"));
+    }
     auto *session = report.group(tr("Audio session"));
     QString status;
     if (!data.applicable) status = tr("Not collected yet");

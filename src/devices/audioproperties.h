@@ -24,7 +24,13 @@ struct AudioCard {
     QVector<AudioPort> ports;
     QVector<AudioEndpoint> endpoints;
 };
+struct HdaCodecIdentity {
+    QString node, path;
+    Attribute vendor, chip, id, subsystemId, revision;
+};
 struct AudioProperties {
+    Attribute codecStatus;
+    QVector<HdaCodecIdentity> codecs;
     bool applicable = false;
     Attribute status;
     QString diagnostic, server, version;

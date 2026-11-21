@@ -284,7 +284,7 @@ DeviceProperties collectDeviceProperties(const Device &device, bool cachedStorag
         if (cachedStorageService && d.subsystem == "bluetooth" && bluetoothControllerName(d.sysname)
             && !QThread::currentThread()->isInterruptionRequested())
             result.bluetooth = collectBluetoothProperties(d);
-        if (cachedStorageService && (d.category == "audio" || d.subsystem == "sound")
+        if (cachedStorageService && (d.category == "audio" || d.subsystem == "sound" || d.subsystem == "hdaudio")
             && !QThread::currentThread()->isInterruptionRequested())
             result.audio = collectAudioProperties(d);
     });
@@ -292,6 +292,8 @@ DeviceProperties collectDeviceProperties(const Device &device, bool cachedStorag
         result.bluetooth.invalidate({result.state, {}, result.error});
     if (result.state != ReadState::Available && result.audio.applicable) {
         result.audio.cards.clear();
+        result.audio.codecs.clear();
+        result.audio.codecStatus = {result.state, {}, result.error};
         result.audio.status = {result.state, {}, result.error};
     }
     return result;

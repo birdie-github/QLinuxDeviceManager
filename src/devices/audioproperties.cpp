@@ -1,8 +1,11 @@
 #include "audioproperties.h"
+#include "directoryscan.h"
+#include "propertyreadhelpers.h"
+#include <QFileInfo>
+#include <QRegularExpression>
 #include <cerrno>
 #ifdef QLDM_HAVE_PULSE
 #include <QElapsedTimer>
-#include <QFileInfo>
 #include <QThread>
 #include <pulse/pulseaudio.h>
 #include <cstring>
@@ -199,15 +202,69 @@ private:
 }
 #endif
 
+namespace {
+void collectHdaCodecs(const Device &device, AudioProperties &result)
+{
+    const QString selected = QFileInfo(device.path).canonicalFilePath();
+    if (selected.isEmpty()) return;
+    const QString directory = QStringLiteral("/sys/bus/hdaudio/devices");
+    const auto devices = boundedDirectoryNames(directory, 256, {QStringLiteral("hdaudioC*D*")});
+    if (devices.error) {
+        result.codecStatus = PropertyRead::failure(devices.error);
+        return;
+    }
+    const QRegularExpression codecName(QStringLiteral("^hdaudioC([0-9]+)D[0-9]+$"));
+    const auto contains = [](const QString &parent, const QString &path) {
+        return path == parent || path.startsWith(parent + '/');
+    };
+    for (const QString &name : devices.names) {
+        if (QThread::currentThread()->isInterruptionRequested()) break;
+        const auto match = codecName.match(name);
+        if (!match.hasMatch()) continue;
+        const QString link = directory + '/' + name;
+        const QString path = QFileInfo(link).canonicalFilePath();
+        if (!path.startsWith("/sys/devices/")) continue;
+        bool associated = contains(selected, path);
+        if (!associated && device.subsystem == "sound") {
+            const QString cardLink = QStringLiteral("/sys/class/sound/card%1").arg(match.captured(1));
+            const QString card = QFileInfo(cardLink).canonicalFilePath();
+            const QString controller = QFileInfo(cardLink + "/device").canonicalFilePath();
+            // A card number alone is insufficient: corroborate the common controller.
+            associated = !card.isEmpty() && !controller.isEmpty()
+                && contains(card, selected) && contains(controller, card) && contains(controller, path);
+        }
+        if (!associated) continue;
+        const QByteArray encoded = QFile::encodeName(path);
+        const PropertyRead::Descriptor fd(open(encoded.constData(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW));
+        if (fd.fd < 0) {
+            result.codecStatus = PropertyRead::failure(errno);
+            continue;
+        }
+        const auto read = [&](const char *key) { return PropertyRead::readText(fd.fd, key); };
+        HdaCodecIdentity codec {name, path, read("vendor_name"), read("chip_name"), read("vendor_id"),
+                               read("subsystem_id"), read("revision_id")};
+        struct stat opened {}, current {};
+        if (fstat(fd.fd, &opened) != 0 || stat(encoded.constData(), &current) != 0
+            || opened.st_dev != current.st_dev || opened.st_ino != current.st_ino
+            || QFileInfo(link).canonicalFilePath() != path) {
+            result.codecStatus = PropertyRead::failure(EAGAIN);
+            continue;
+        }
+        result.codecs.append(codec);
+    }
+}
+}
+
 AudioProperties collectAudioProperties(const Device &device)
 {
-    if (device.category != "audio" && device.subsystem != "sound") return {};
+    if (device.category != "audio" && device.subsystem != "sound" && device.subsystem != "hdaudio") return {};
 #ifdef QLDM_HAVE_PULSE
-    return Query(device).run();
+    AudioProperties result = Query(device).run();
 #else
     AudioProperties result;
     result.applicable = true;
     result.status = {ReadState::Unsupported, {}, 0};
-    return result;
 #endif
+    collectHdaCodecs(device, result);
+    return result;
 }
