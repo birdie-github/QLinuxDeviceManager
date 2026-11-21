@@ -1,6 +1,6 @@
 #pragma once
 
-#include "device.h"
+#include "commonproperties.h"
 #include "usbproperties.h"
 #include "deviceresources.h"
 #include "storageproperties.h"
@@ -20,10 +20,7 @@ struct BatteryProperties {
 };
 
 // Owned raw results. Display labels, translations and hex formatting belong to UI.
-struct DeviceProperties {
-    Device device;
-    QHash<QString, Attribute> values;
-    QHash<QString, QString> sources;
+struct DeviceProperties : CommonProperties {
     DeviceResources resources;
     StorageProperties storage;
     QVector<NetworkProperties> network;
@@ -41,8 +38,6 @@ struct DeviceProperties {
     bool pcieTypeRequiresRoot = false;
     QByteArray efiBytes;
     bool efiTruncated = false;
-    ReadState state = ReadState::Unavailable;
-    int error = 0;
     quint64 request = 0;
 };
 

@@ -138,7 +138,7 @@ QVector<PropertyEntry> propertyEntries(const DeviceProperties &snapshot, bool re
             add("storage/link/" + QString::number(index++), QCoreApplication::translate("Storage", edge.label),
                 edge.from + "\n→ " + edge.to, edge.source, false, 3);
     }
-    entries += commonPropertyEntries({snapshot.device, snapshot.values, snapshot.sources, snapshot.state}, removed);
+    entries += commonPropertyEntries(snapshot, removed);
     // Interpreted facts plus curated raw values, keeping provenance beside each.
     add("parent", QCoreApplication::translate("PropertiesDialog", "Parent device path"), d.parentPath.isEmpty() ? QCoreApplication::translate("PropertiesDialog", "Unavailable") : d.parentPath, QCoreApplication::translate("PropertiesDialog", "Recorded ancestry"), efi, 2, d.parentPath.isEmpty() ? ReadState::Unavailable : ReadState::Available);
     add("raw_name", QCoreApplication::translate("PropertiesDialog", "Original name"), d.name, d.nameSource, true);

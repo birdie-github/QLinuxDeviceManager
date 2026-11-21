@@ -210,6 +210,7 @@ add_library(qldm-core STATIC
     src/core/inventory.h src/core/inventory.cpp src/core/connectionparents.cpp
     src/core/typeprojection.h src/core/typeprojection.cpp
     src/core/commonproperties.h src/core/commonproperties.cpp src/core/commonpropertywording.h
+    src/core/commonpropertyreader.h src/core/commonpropertyreader.cpp src/core/propertyreadhelpers.h
     src/core/systemreport.h src/core/systemreportplatform.cpp
     src/core/systemreportprocessor.cpp src/core/systemreportmemory.cpp
     src/devices/secureboot.h src/devices/secureboot.cpp
@@ -268,7 +269,6 @@ if(TUI)
             src/tui/propertypages.h src/tui/propertypages.cpp
             src/tui/devicepages/resourcespage.h src/tui/devicepages/resourcespage.cpp
             src/tui/devicepages/usbpage.h src/tui/devicepages/usbpage.cpp
-            src/tui/devicepages/efipage.h
             src/tui/devicetree.h src/tui/devicetree.cpp)
         target_include_directories(qlinuxdevicemanager-tui PRIVATE src/tui)
         target_link_libraries(qlinuxdevicemanager-tui PRIVATE
@@ -377,6 +377,7 @@ if(BUILD_TESTING)
         src/core/connectionparents.cpp src/core/inventory.h
         src/core/typeprojection.h src/core/typeprojection.cpp
         src/core/commonproperties.h src/core/commonproperties.cpp src/core/commonpropertywording.h
+        src/core/commonpropertyreader.h src/core/commonpropertyreader.cpp src/core/propertyreadhelpers.h
         src/ui/icontheme.cpp src/ui/icontheme.h
         src/ui/devicefilter.cpp src/ui/devicefilter.h)
     target_include_directories(device-search-test PRIVATE src/core src/devices src/ui

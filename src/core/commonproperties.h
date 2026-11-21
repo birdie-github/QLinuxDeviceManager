@@ -20,6 +20,7 @@ struct CommonProperties {
     QHash<QString, Attribute> values;
     QHash<QString, QString> sources;
     ReadState state = ReadState::Unavailable;
+    int error = 0;
 };
 QString propertyReadValue(const Attribute &attribute);
 QVector<PropertyEntry> commonPropertyEntries(const CommonProperties &snapshot, bool removed = false,
