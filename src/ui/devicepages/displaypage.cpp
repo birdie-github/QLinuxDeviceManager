@@ -4,6 +4,7 @@
 #include "propertypage.h"
 #include "propertyreport.h"
 #include "propertytext.h"
+#include "reporttable.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -92,6 +93,39 @@ void DisplayPage::setSnapshot(const DisplayProperties &data, const MonitorProper
                 field(capabilities, tr("Declared color depth"), depth.state == ReadState::Available
                     ? tr("%1 bits per color component").arg(depth.value) : propertyReadValue(depth), monitor.sources.value("depth"));
             }
+        }
+        if (!monitor.timings.isEmpty()) {
+            auto *advertised = group(tr("EDID advertised timings"));
+            const QStringList headers {tr("Resolution"), tr("Refresh"), tr("Origin"), tr("Designation")};
+            auto *table = new ReportTable(monitor.timings.size(), headers.size(), advertised->parentWidget());
+            table->setHorizontalHeaderLabels(headers);
+            copy.append(headers.join('\t'));
+            for (int row = 0; row < monitor.timings.size(); ++row) {
+                const auto &timing = monitor.timings.at(row);
+                QString origin;
+                switch (timing.origin) {
+                case MonitorTiming::Origin::BaseDetailed: origin = tr("EDID base block"); break;
+                case MonitorTiming::Origin::CtaDetailed: origin = tr("CTA detailed timing"); break;
+                case MonitorTiming::Origin::CtaVideo: origin = tr("CTA VIC %1").arg(timing.vic); break;
+                case MonitorTiming::Origin::CtaVideo420Only: origin = tr("CTA VIC %1 (4:2:0 only)").arg(timing.vic); break;
+                }
+                const QString resolution = timing.width > 0
+                    ? tr("%1 × %2").arg(timing.width).arg(timing.height) + (timing.interlaced ? "i" : "")
+                    : tr("Unavailable");
+                const QString rate = timing.refreshHz > 0
+                    ? tr("%1 Hz").arg(QLocale().toString(timing.refreshHz, 'f', 2)) : tr("Unavailable");
+                const QStringList cells {resolution, rate, origin,
+                    timing.preferred ? tr("Preferred") : timing.native ? tr("Native") : QString()};
+                for (int column = 0; column < cells.size(); ++column)
+                    table->setItem(row, column, new QTableWidgetItem(cells.at(column)));
+                copy.append(cells.join('\t'));
+            }
+            advertised->addWidget(table, advertised->rowCount(), 0, 1, 2);
+            field(advertised, tr("Scope"), tr("Detailed timings and CTA video codes from cached EDID. "
+                "CTA video code rates are reference rates. Interlaced entries show field rate. "
+                "Decoding CTA video codes requires libdisplay-info."));
+            if (monitor.timingsTruncated)
+                field(advertised, tr("Status"), tr("Only the first 256 advertised timings are shown."));
         }
         auto *reportedModes = group(tr("Kernel-reported modes"));
         hardwareField(reportedModes, tr("Mode names"), "modes");

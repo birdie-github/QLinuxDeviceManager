@@ -9,9 +9,15 @@
 extern "C" {
 #include <libdisplay-info/info.h>
 #include <libdisplay-info/edid.h>
+#if __has_include(<libdisplay-info/cta-vic.h>)
+#include <libdisplay-info/cta-vic.h>
+#else
+#include <libdisplay-info/cta.h>
+#endif
 }
 #endif
 #include <cerrno>
+#include <cstdint>
 #include <cstring>
 #include <cstdlib>
 #include <memory>
@@ -71,6 +77,86 @@ Attribute ownedString(char *text)
     return result;
 }
 #endif
+void collectAdvertisedTimings(MonitorProperties &result, const QByteArray &bytes)
+{
+    const auto append = [&](const MonitorTiming &timing) {
+        // Keep the widget and copied report bounded even with 255 extensions.
+        if (result.timings.size() < 256) result.timings.append(timing);
+        else result.timingsTruncated = true;
+    };
+    const auto detail = [&](int offset, MonitorTiming::Origin origin, bool preferred, bool native) {
+        const unsigned clock = byte(bytes, offset) | (byte(bytes, offset + 1) << 8);
+        if (!clock) return; // Monitor descriptor or padding.
+        const auto dimension = [&](int low, int high, bool blanking) {
+            const unsigned nibble = byte(bytes, offset + high);
+            return byte(bytes, offset + low) | ((blanking ? nibble & 15 : nibble >> 4) << 8);
+        };
+        const int width = dimension(2, 4, false), lines = dimension(5, 7, false);
+        if (!width || !lines) return;
+        const int hTotal = width + dimension(3, 4, true);
+        const bool interlaced = byte(bytes, offset + 17) & 0x80;
+        const double vTotal = lines + dimension(6, 7, true) + (interlaced ? 0.5 : 0);
+        append({origin, width, interlaced ? lines * 2 : lines, clock * 10000.0 / (hTotal * vTotal),
+                interlaced, preferred, native});
+    };
+    const auto video = [&](unsigned code, bool only420) {
+        const bool native = !only420 && code >= 129 && code <= 192;
+        const auto vic = static_cast<std::uint8_t>(native ? code & 127 : code);
+        if (!vic || vic == 128 || vic >= 254) return;
+        MonitorTiming timing {only420 ? MonitorTiming::Origin::CtaVideo420Only : MonitorTiming::Origin::CtaVideo};
+        timing.vic = vic;
+        timing.native = native;
+#ifdef QLDM_HAVE_DISPLAY_INFO
+#if __has_include(<libdisplay-info/cta-vic.h>)
+        const auto *format = di_cta_vic_video_format_from_vic({vic});
+#else
+        const auto *format = di_cta_video_format_from_vic(vic);
+#endif
+        if (format) {
+            timing.width = format->h_active;
+            timing.height = format->v_active;
+            timing.interlaced = format->interlaced;
+            const int hTotal = format->h_active + format->h_front + format->h_sync + format->h_back;
+            const double vBlank = format->v_front + format->v_sync + format->v_back;
+            const double vTotal = (format->interlaced ? format->v_active / 2.0 + 0.5 : format->v_active) + vBlank;
+            timing.refreshHz = format->pixel_clock_hz / (hTotal * vTotal);
+        }
+#endif
+        append(timing);
+    };
+
+    for (int offset = 54; offset < 126; offset += 18)
+        detail(offset, MonitorTiming::Origin::BaseDetailed,
+               offset == 54 && (byte(bytes, 24) & 0x02), false);
+    for (int extension = 128; extension < bytes.size(); extension += 128) {
+        if (result.timingsTruncated) break;
+        if (byte(bytes, extension) != 0x02) continue;
+        const int start = byte(bytes, extension + 2);
+        if (start < 4 || start > 127) continue;
+        const int revision = byte(bytes, extension + 1);
+        if (revision >= 3) {
+            for (int cursor = 4; cursor < start;) {
+                const unsigned header = byte(bytes, extension + cursor++);
+                const int end = cursor + (header & 31);
+                if (end > start) break;
+                if ((header >> 5) == 2) {
+                    for (int i = cursor; i < end; ++i) video(byte(bytes, extension + i), false);
+                } else if ((header >> 5) == 7 && cursor < end && byte(bytes, extension + cursor) == 0x0e) {
+                    for (int i = cursor + 1; i < end; ++i) video(byte(bytes, extension + i), true);
+                }
+                cursor = end;
+            }
+        }
+        const unsigned nativeCount = revision >= 2 ? byte(bytes, extension + 3) & 15 : 0;
+        unsigned detailedIndex = 0;
+        for (int offset = start; offset + 18 <= 127; offset += 18) {
+            const int descriptor = extension + offset;
+            if (!byte(bytes, descriptor) && !byte(bytes, descriptor + 1)) continue;
+            detail(descriptor, MonitorTiming::Origin::CtaDetailed, false, detailedIndex++ < nativeCount);
+        }
+    }
+}
+
 void decodeDescriptor(MonitorProperties &result, const QByteArray &bytes, const QString &path)
 {
     if (bytes.isEmpty()) { result.descriptor = {}; return; }
@@ -86,6 +172,7 @@ void decodeDescriptor(MonitorProperties &result, const QByteArray &bytes, const 
         result.descriptor = {ReadState::Unsupported, version, 0};
         return;
     }
+    collectAdvertisedTimings(result, bytes);
 #ifndef QLDM_HAVE_DISPLAY_INFO
     result.descriptor = {ReadState::Unsupported, {}, 0};
 #else
