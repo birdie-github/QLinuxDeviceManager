@@ -36,7 +36,7 @@ static bool suggestRootForRead(const Attribute &attribute)
 QString administrativeReadValue(const Attribute &attribute)
 {
     return suggestRootForRead(attribute)
-        ? QCoreApplication::translate("PropertiesDialog", "Requires root access")
+        ? QCoreApplication::translate("PropertiesDialog", "⚠️ Requires root access")
         : propertyReadValue(attribute);
 }
 
