@@ -21,7 +21,7 @@ public:
     int captionWidthHint() const;
     void setCaptionWidth(int width);
 private:
-    QString displayValue(const QString &key, const Attribute &value, bool compact = false) const;
+    QString displayValue(const QString &key, const Attribute &value) const;
     QGridLayout *form_ = nullptr;
     QVector<QLabel *> captionsWidgets_;
     QHash<QString, QVector<QLabel *>> fields_;

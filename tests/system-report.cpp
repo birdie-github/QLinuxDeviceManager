@@ -44,9 +44,11 @@ int main(int argc, char **argv)
         members.append({cpu, "0", QString::number(cpu % 2), 0, available("4000000")});
     snapshot.cpuGroups.append({members});
     snapshot.cpuCaches = {{1, "Data", 32768, {0, 2}}, {1, "Data", 32768, {1, 3}}};
-    const QString compact = systemProcessorValue(snapshot, "cache_topology", available("present"), true);
-    const QString detailed = systemProcessorValue(snapshot, "cache_topology", available("present"), false);
-    check(compact.contains("Private per core") && detailed.contains("0,2") && detailed.contains("1,3"),
+    snapshot.values["cache_topology"] = available("present");
+    const auto compact = systemProcessorTable(snapshot, "cache_topology", true);
+    const auto detailed = systemProcessorTable(snapshot, "cache_topology");
+    const QString sharing = detailed.rows.value(0).value(2);
+    check(compact.rows.value(0).value(2) == "Private per core" && sharing.contains("0,2") && sharing.contains("1,3"),
           "Compact SMT topology retains explicit domains in detailed output");
     return failures ? 1 : 0;
 }

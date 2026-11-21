@@ -10,7 +10,7 @@ namespace {
 struct Text { Q_DECLARE_TR_FUNCTIONS(SystemDialog) };
 }
 
-QString systemProcessorValue(const SystemProperties &snapshot, const QString &key, const Attribute &value, bool compact)
+QString systemProcessorValue(const SystemProperties &snapshot, const QString &key, const Attribute &value)
 {
     if (key == "logical") {
         const Attribute online = snapshot.values.value("online");
@@ -27,14 +27,44 @@ QString systemProcessorValue(const SystemProperties &snapshot, const QString &ke
         if (value.value == "notimplemented") return Text::tr("Status reporting not implemented by kernel");
         return Text::tr("Unknown (%1)").arg(value.value);
     }
-    // Tab-separated cells are shared by the native views and Copy All.
-    const auto tableText = [](const QVector<QStringList> &rows) {
+    if (key == "instruction_sets") {
+        const QStringList groups = value.value.split('\n');
         QStringList lines;
-        for (const auto &row : rows) lines.append(row.join('\t'));
+        for (const QString &group : groups) {
+            const QStringList parts = group.split('\t');
+            lines.append(groups.size() == 1 ? parts.value(1)
+                : Text::tr("Logical CPUs %1: %2").arg(parts.value(0), parts.value(1)));
+        }
+        return lines.join("\n\n");
+    }
+    if (key == "caches") {
+        QStringList lines;
+        for (const QString &raw : value.value.split('\n')) {
+            const QStringList parts = raw.split('\t');
+            const QString kind = parts.value(0);
+            QString type = kind.section(' ', 1);
+            if (type == "Data") type = Text::tr("data");
+            else if (type == "Instruction") type = Text::tr("instruction");
+            else if (type == "Unified") type = Text::tr("unified");
+            lines.append(Text::tr("%1 %2: %3 (%4 unique instances)")
+                .arg(kind.section(' ', 0, 0), type,
+                     QLocale().formattedDataSize(parts.value(1).toLongLong()), parts.value(2)));
+        }
         return lines.join('\n');
-    };
+    }
+    return value.value;
+}
+
+SystemProcessorTable systemProcessorTable(const SystemProperties &snapshot, const QString &key, bool compact)
+{
+    SystemProcessorTable table;
+    const Attribute value = snapshot.values.value(key);
+    if (value.state != ReadState::Available) {
+        table.status = propertyReadValue(value);
+        return table;
+    }
     if (key == "core_groups") {
-        QVector<QStringList> rows {{Text::tr("Core group"), Text::tr("Cores / threads"), Text::tr("Maximum frequency"), Text::tr("Logical CPUs")}};
+        table.headers = {Text::tr("Core group"), Text::tr("Cores / threads"), Text::tr("Maximum frequency"), Text::tr("Logical CPUs")};
         const Attribute sockets = snapshot.values.value("sockets");
         const bool showPackage = sockets.state != ReadState::Available || sockets.value.toUInt() != 1;
         for (const CpuCoreGroup &group : snapshot.cpuGroups) {
@@ -64,11 +94,9 @@ QString systemProcessorValue(const SystemProperties &snapshot, const QString &ke
                 : minimum == maximum ? Text::tr("%1 GHz").arg(ghz(maximum))
                 : Text::tr("%1–%2 GHz").arg(ghz(minimum), ghz(maximum));
             const QString name = showPackage ? Text::tr("%1 (package %2)").arg(kind, first.package) : kind;
-            rows.append({name, Text::tr("%1 / %2").arg(threads.size()).arg(cpus.size()), frequency, cpuListText(cpus)});
+            table.rows.append({name, Text::tr("%1 / %2").arg(threads.size()).arg(cpus.size()), frequency, cpuListText(cpus)});
         }
-        return rows.size() == 1 ? Text::tr("Unavailable") : tableText(rows);
-    }
-    if (key == "cache_topology") {
+    } else if (key == "cache_topology") {
         // Keep each sharing domain explicit; aggregate equal-sized cache instances.
         QMap<QString, QVector<CpuCacheRecord>> kinds;
         for (const auto &cache : snapshot.cpuCaches)
@@ -83,7 +111,7 @@ QString systemProcessorValue(const SystemProperties &snapshot, const QString &ke
                 onlineCpus.insert(member.cpu);
             }
         }
-        QVector<QStringList> rows {{Text::tr("Cache"), Text::tr("Configuration"), Text::tr("Sharing (logical CPUs)")}};
+        table.headers = {Text::tr("Cache"), Text::tr("Configuration"), Text::tr("Sharing (logical CPUs)")};
         for (auto it = kinds.cbegin(); it != kinds.cend(); ++it) {
             auto instances = it.value();
             std::sort(instances.begin(), instances.end(), [](const auto &a, const auto &b) {
@@ -126,35 +154,10 @@ QString systemProcessorValue(const SystemProperties &snapshot, const QString &ke
                     domains = Text::tr("Shared by all online cores");
             }
             const QString size = QLocale().formattedDataSize(static_cast<qlonglong>(cache.bytes), 0, QLocale::DataSizeIecFormat);
-            rows.append({Text::tr("L%1 %2").arg(cache.level).arg(type),
+            table.rows.append({Text::tr("L%1 %2").arg(cache.level).arg(type),
                          instances.size() == 1 ? size : Text::tr("%1 × %2").arg(instances.size()).arg(size), domains});
         }
-        return rows.size() == 1 ? Text::tr("Unavailable") : tableText(rows);
     }
-    if (key == "instruction_sets") {
-        const QStringList groups = value.value.split('\n');
-        QStringList lines;
-        for (const QString &group : groups) {
-            const QStringList parts = group.split('\t');
-            lines.append(groups.size() == 1 ? parts.value(1)
-                : Text::tr("Logical CPUs %1: %2").arg(parts.value(0), parts.value(1)));
-        }
-        return lines.join("\n\n");
-    }
-    if (key == "caches") {
-        QStringList lines;
-        for (const QString &raw : value.value.split('\n')) {
-            const QStringList parts = raw.split('\t');
-            const QString kind = parts.value(0);
-            QString type = kind.section(' ', 1);
-            if (type == "Data") type = Text::tr("data");
-            else if (type == "Instruction") type = Text::tr("instruction");
-            else if (type == "Unified") type = Text::tr("unified");
-            lines.append(Text::tr("%1 %2: %3 (%4 unique instances)")
-                .arg(kind.section(' ', 0, 0), type,
-                     QLocale().formattedDataSize(parts.value(1).toLongLong()), parts.value(2)));
-        }
-        return lines.join('\n');
-    }
-    return value.value;
+    if (table.rows.isEmpty()) table.status = Text::tr("Unavailable");
+    return table;
 }

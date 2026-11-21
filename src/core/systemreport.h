@@ -12,7 +12,14 @@ SystemFields systemMemoryFields();
 QString systemMemoryScope();
 QString systemMemoryTitle(int recordIndex);
 QString systemOsValue(const SystemProperties &snapshot, const QString &key, const Attribute &value);
-QString systemProcessorValue(const SystemProperties &snapshot, const QString &key, const Attribute &value, bool compact = false);
+QString systemProcessorValue(const SystemProperties &snapshot, const QString &key, const Attribute &value);
+struct SystemProcessorTable {
+    QStringList headers;
+    QVector<QStringList> rows;
+    QString status;
+};
+SystemProcessorTable systemProcessorTable(const SystemProperties &snapshot, const QString &key,
+                                          bool compact = false);
 QString systemRamSummaryValue(const SystemProperties &snapshot, const QString &key);
 QString systemMemoryValue(const QString &key, const Attribute &value);
 QString systemMokText(const SystemProperties &snapshot);

@@ -81,15 +81,14 @@ void SystemProcessorPage::setCaptionWidth(int width)
 {
     form_->setColumnMinimumWidth(0, width);
 }
-QString SystemProcessorPage::displayValue(const QString &key, const Attribute &value, bool compact) const
+QString SystemProcessorPage::displayValue(const QString &key, const Attribute &value) const
 {
-    return systemProcessorValue(snapshot_, key, value, compact);
+    return systemProcessorValue(snapshot_, key, value);
 }
 void SystemProcessorPage::setSnapshot(const SystemProperties &snapshot)
 {
     snapshot_ = snapshot;
     for (const QString &key : order_) {
-        const QString text = displayValue(key, snapshot_.values.value(key));
         QString source = snapshot_.sources.value(key);
         if (key == "smt")
             source += '\n' + tr("SMT/HT support and policy reported by the kernel; core-group thread counts include online CPUs only.");
@@ -106,21 +105,21 @@ void SystemProcessorPage::setSnapshot(const SystemProperties &snapshot)
         const QString hint = "<qt>" + source.toHtmlEscaped().replace('\n', "<br>") + "</qt>";
         if (ReportTable *view = tables_.value(key, nullptr)) {
             view->clear();
-            const bool available = snapshot_.values.value(key).state == ReadState::Available;
-            const QStringList lines = displayValue(key, snapshot_.values.value(key), true).split('\n');
-            const QStringList detailedLines = text.split('\n');
-            const QStringList headers = lines.constFirst().split('\t');
-            const bool hasRows = available && lines.size() > 1;
-            view->setColumnCount(hasRows ? headers.size() : 1);
-            view->setRowCount(hasRows ? lines.size() - 1 : 1);
+            const auto table = systemProcessorTable(snapshot_, key, true);
+            const bool hasRows = !table.rows.isEmpty();
+            SystemProcessorTable detailed;
+            if (key == "cache_topology" && hasRows)
+                detailed = systemProcessorTable(snapshot_, key);
+            view->setColumnCount(hasRows ? table.headers.size() : 1);
+            view->setRowCount(hasRows ? table.rows.size() : 1);
             view->horizontalHeader()->setVisible(hasRows);
-            if (hasRows) view->setHorizontalHeaderLabels(headers);
+            if (hasRows) view->setHorizontalHeaderLabels(table.headers);
             for (int row = 0; row < view->rowCount(); ++row) {
-                const QStringList cells = hasRows ? lines[row + 1].split('\t') : QStringList{text};
+                const QStringList cells = hasRows ? table.rows.at(row) : QStringList{table.status};
                 for (int column = 0; column < cells.size(); ++column) {
                     auto *item = new QTableWidgetItem(cells[column]);
-                    if (key == "cache_topology" && hasRows && column == 2)
-                        item->setToolTip(detailedLines.value(row + 1).split('\t').value(column));
+                    if (!detailed.rows.isEmpty() && column == 2)
+                        item->setToolTip(detailed.rows.at(row).at(column));
                     view->setItem(row, column, item);
                 }
             }
@@ -128,7 +127,7 @@ void SystemProcessorPage::setSnapshot(const SystemProperties &snapshot)
             view->setToolTip(hint);
         }
         for (QLabel *value : fields_.value(key)) {
-            value->setText(text);
+            value->setText(displayValue(key, snapshot_.values.value(key)));
             value->setToolTip(hint);
         }
     }
@@ -141,8 +140,19 @@ void SystemProcessorPage::setSnapshot(const SystemProperties &snapshot)
 QString SystemProcessorPage::copyText() const
 {
     QStringList lines;
-    for (const QString &key : order_)
-        lines.append(captions_.value(key) + (key == "core_groups" || key == "cache_topology" ? ":\n" : ": ")
-                     + displayValue(key, snapshot_.values.value(key)));
+    for (const QString &key : order_) {
+        if (tables_.contains(key)) {
+            lines.append(captions_.value(key) + ':');
+            const auto table = systemProcessorTable(snapshot_, key);
+            if (table.rows.isEmpty()) {
+                lines.append(table.status);
+            } else {
+                lines.append(table.headers.join('\t'));
+                for (const auto &row : table.rows) lines.append(row.join('\t'));
+            }
+        } else {
+            lines.append(captions_.value(key) + ": " + displayValue(key, snapshot_.values.value(key)));
+        }
+    }
     return lines.join('\n');
 }
